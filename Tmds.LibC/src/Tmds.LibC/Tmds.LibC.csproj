@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <BuildOutputTargetFolder>ref</BuildOutputTargetFolder>
+
+    <!-- use glibc x64 for ref compilation -->
+    <CLibrary>glibc</CLibrary>
+    <Architecture>x64</Architecture>
+  </PropertyGroup>
+
+  <Import Project="../Sources/Sources.targets" />
+
+  <ItemGroup>
+    <None Include="..\Tmds.LibC.linux-glibc-x64\bin\$(Configuration)\$(TargetFramework)\Tmds.LibC.dll" Pack = "true">
+      <PackagePath>runtimes/linux-x64/lib/netstandard2.0</PackagePath>
+    </None>
+    <None Include="..\Tmds.LibC.linux-glibc-arm64\bin\$(Configuration)\$(TargetFramework)\Tmds.LibC.dll" Pack = "true">
+      <PackagePath>runtimes/linux-arm64/lib/netstandard2.0</PackagePath>
+    </None>
+    <None Include="..\Tmds.LibC.linux-glibc-arm32\bin\$(Configuration)\$(TargetFramework)\Tmds.LibC.dll" Pack = "true">
+      <PackagePath>runtimes/linux-arm/lib/netstandard2.0</PackagePath>
+    </None>
+  </ItemGroup>
+
+  <Target Name="BuildPlatform" BeforeTargets="Restore">
+    <Exec Command="dotnet build -c $(Configuration) ../Tmds.LibC.linux-glibc-x64" />
+    <Exec Command="dotnet build -c $(Configuration) ../Tmds.LibC.linux-glibc-arm64" />
+    <Exec Command="dotnet build -c $(Configuration) ../Tmds.LibC.linux-glibc-arm32" />
+  </Target>
+
+</Project>
