@@ -99,11 +99,6 @@ namespace Equix
                         var physical = g.First();
                         var logical = g.Last();
 
-                        if(coreInfo.Count >=8)
-                        {
-                            logical = physical;
-                        }
-
                         bool hasLogical = physical != logical;
                         logicalFound |= hasLogical;
 
