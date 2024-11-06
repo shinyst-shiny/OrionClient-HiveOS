@@ -6,14 +6,15 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Windows.Win32;
 using Windows.Win32.System.SystemInformation;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace Equix
 {
     public unsafe static class SystemInformation
     {
-        public static (int phsyical, int logical) GetCoreInformation()
+        public static List<CoreInfo> GetCoreInformation()
         {
+            List<CoreInfo> coreInfo = new List<CoreInfo>();
+
             if (OperatingSystem.IsWindows())
             {
                 uint length = 0;
@@ -25,62 +26,123 @@ namespace Equix
                 {
                     if (PInvoke.GetLogicalProcessorInformation(c, ref length))
                     {
-                        int physicalCores = 0;
+                        bool logicalFound = false;
+
                         for (int i = 0; i < pCoreInfo.Length; ++i)
                         {
                             ref SYSTEM_LOGICAL_PROCESSOR_INFORMATION info = ref pCoreInfo[i];
 
                             if (info.Relationship == LOGICAL_PROCESSOR_RELATIONSHIP.RelationProcessorCore)
                             {
-                                ++physicalCores;
+                                double log = Math.Log2(info.ProcessorMask);
+                                bool hasLogical = false;
+
+                                if (log != Math.Floor(log))
+                                {
+                                    log = Math.Floor(log) - 1;
+                                    hasLogical = true;
+                                    logicalFound |= hasLogical;
+                                }
+
+                                ulong physicalMask = 1ul << (int)log;
+
+                                //These checks won't be able to find efficiency cores when hyperthreading is disabled for the performance cores
+                                CoreInfo core = new CoreInfo
+                                {
+                                    PhysicalMask = info.ProcessorMask & physicalMask,
+                                    LogicalMask = info.ProcessorMask & (physicalMask << 1),
+                                    IsPCore = !(logicalFound && !hasLogical)
+                                };
+
+                                coreInfo.Add(core);
                             }
                         }
 
-                        physicalCores = physicalCores == 0 ? Environment.ProcessorCount / 2 : physicalCores;
 
-                        return (physicalCores, Environment.ProcessorCount);
+                        foreach (var a in coreInfo)
+                        {
+                            Console.WriteLine($"{a.PhysicalMask:X}, {a.LogicalMask:X}, {a.IsPCore}");
+                        }
+                        return (coreInfo);
                     }
                 }
             }
             else if (OperatingSystem.IsLinux())
             {
-                int physicalCores = Environment.ProcessorCount / 2;
-                int logicalCores = Environment.ProcessorCount;
-
                 try
                 {
                     string[] lines = File.ReadAllLines("/proc/cpuinfo");
-                    Regex physicalIdRegex = new Regex(@"^physical id\s+:\s+(\d+)");
-                    Regex logicalCoresRegex = new Regex(@"^siblings\s+:\s+(.+)");
+                    Regex processorRegex = new Regex(@"^processor\s+:\s+(\d+)");
+                    Regex coreIdRegex = new Regex(@"^core id\s+:\s+(.+)");
 
-                    foreach(var line in lines)
+                    int currentProcessor = -1;
+                    List<(int processor, int coreId)> info = new List<(int processor, int coreId)>();
+
+                    foreach (var line in lines)
                     {
-                        Match physicalCoreMatch = physicalIdRegex.Match(line);
-                        Match logicalCoreMatch = logicalCoresRegex.Match(line);
+                        Match processorMatch = processorRegex.Match(line);
+                        Match coreIdMatch = coreIdRegex.Match(line);
 
-                        if (physicalCoreMatch.Success && int.TryParse(physicalCoreMatch.Groups[1].Value, out int c))
+                        if (processorMatch.Success && int.TryParse(processorMatch.Groups[1].Value, out int c))
                         {
-                            physicalCores = c;
+                            currentProcessor = c;
                         }
 
-                        if (logicalCoreMatch.Success && int.TryParse(physicalCoreMatch.Groups[1].Value, out c))
+                        if (coreIdMatch.Success && int.TryParse(coreIdMatch.Groups[1].Value, out int id))
                         {
-                            logicalCores = c;
+                            info.Add((currentProcessor, id));
+
+                            currentProcessor = -1;
                         }
+
                     }
 
-                    return (physicalCores, logicalCores);
+                    bool logicalFound = false;
+
+                    foreach (var g in info.GroupBy(x => x.coreId))
+                    {
+                        var physical = g.First();
+                        var logical = g.Last();
+
+                        if(coreInfo.Count >=8)
+                        {
+                            logical = physical;
+                        }
+
+                        bool hasLogical = physical != logical;
+                        logicalFound |= hasLogical;
+
+                        coreInfo.Add(new CoreInfo
+                        {
+                            PhysicalMask = 1ul << physical.processor,
+                            LogicalMask = hasLogical ? 1ul << logical.processor : 0,
+                            IsPCore = !(logicalFound && !hasLogical)
+                        });
+                    }
+
+                    return coreInfo;
 
                 }
                 catch
                 {
                     Console.WriteLine("Here for testing");
 
-                    return (Environment.ProcessorCount / 2, Environment.ProcessorCount);
+                    return coreInfo;
                 }
             }
 
-            return (Environment.ProcessorCount / 2, Environment.ProcessorCount);
+            return (coreInfo);
         }
+    }
+
+    public class CoreInfo
+    {
+        public ulong PhysicalMask { get; set; }
+        public ulong LogicalMask { get; set; }
+        public bool IsPCore { get; set; } = true;
+        public bool HasLogical => LogicalMask > 0;
+        public ulong FullMask => PhysicalMask | LogicalMask;
+
+        public int ThreadCount => HasLogical ? 2 : 1;
     }
 }

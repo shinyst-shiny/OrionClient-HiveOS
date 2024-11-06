@@ -153,19 +153,54 @@ namespace OrionClientLib.Modules
 
         private async Task<int> ThreadCountAsync()
         {
-            (int physicalCores, int logicalCores) = SystemInformation.GetCoreInformation();
+            List<CoreInfo> coreInfo = SystemInformation.GetCoreInformation();
 
-            List<(int, string)> choices =
-            [
-                (logicalCores, "(100% usage) [green]Recommended[/]"),
-                (physicalCores, "(physical cores only)"),
-                (1, "(single thread)"),
-                (0, "Custom")
-            ];
+            List<(int, string)> choices = new List<(int, string)>();
 
-            if(!choices.Any(x => x.Item1 == _settings.CPUThreads))
+            int totalThreads = Environment.ProcessorCount;
+
+            if (coreInfo.Count == 0)
             {
-                choices.Add((_settings.CPUThreads, "[[Current]]"));
+                choices.Add((Environment.ProcessorCount, "(100% usage) [green]Recommended[/]"));
+                choices.Add((1, "(single thread)"));
+                choices.Add((0, "Custom"));
+            }
+            else
+            {
+                totalThreads = coreInfo.Sum(x => x.ThreadCount);
+                bool hasECores = coreInfo.Any(x => !x.IsPCore);
+
+
+                choices.Add((totalThreads, "(100% usage) [green]Recommended[/]"));
+
+                if (coreInfo.Count != totalThreads)
+                {
+                    choices.Add((coreInfo.Count, "(physical cores only)"));
+                }
+                //CPU has efficiency cores
+                if (hasECores)
+                {
+                    List<CoreInfo> pCores = coreInfo.Where(x => x.IsPCore).ToList();
+                    int totalPerformanceThreads = pCores.Sum(x => x.ThreadCount);
+
+                    if (coreInfo.Count == totalThreads)
+                    {
+                        choices.Add((pCores.Sum(x => x.ThreadCount), "(performance cores only)"));
+                    }
+
+                    if (pCores.Count != totalPerformanceThreads)
+                    {
+                        choices.Add((pCores.Count, "(physical performance cores only)"));
+                    }
+                }
+
+                choices.Add((1, "(single thread)"));
+                choices.Add((0, "Custom"));
+
+                if (!choices.Any(x => x.Item1 == _settings.CPUThreads))
+                {
+                    choices.Add((_settings.CPUThreads, "[[Current]]"));
+                }
             }
 
             SelectionPrompt<(int, string)> selectionPrompt = new SelectionPrompt<(int, string)>();
@@ -188,14 +223,14 @@ namespace OrionClientLib.Modules
             {
                 while (true)
                 {
-                    TextPrompt<int> textPrompt = new TextPrompt<int>($"Total threads (min: 1, max: {logicalCores}):");
+                    TextPrompt<int> textPrompt = new TextPrompt<int>($"Total threads (min: 1, max: {totalThreads}):");
                     textPrompt.DefaultValue(_settings.CPUThreads);
 
                     int result = await textPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
 
                     AnsiConsole.Clear();
 
-                    if (result > 0 && result <= logicalCores)
+                    if (result > 0 && result <= totalThreads)
                     {
                         _settings.CPUThreads = result;
                         break;
