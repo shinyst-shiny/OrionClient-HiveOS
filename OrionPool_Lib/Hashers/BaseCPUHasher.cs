@@ -77,7 +77,7 @@ namespace OrionClientLib.Hashers
             }
 
             //Set process affinity
-            if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux())
+            if (OperatingSystem.IsWindows())
             {
                 Process currentProcess = Process.GetCurrentProcess();
 
@@ -99,7 +99,7 @@ namespace OrionClientLib.Hashers
                     {
                         ++threads;
                     }
-
+                    //1431655765
                     int loopCount = Math.Min(coreInformation.Count, threads);
 
 
@@ -194,7 +194,7 @@ namespace OrionClientLib.Hashers
             }
 
             //Reset affinity
-            if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux())
+            if (OperatingSystem.IsWindows())
             {
                 Process currentProcess = Process.GetCurrentProcess();
 
