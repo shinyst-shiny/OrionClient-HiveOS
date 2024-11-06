@@ -58,11 +58,6 @@ namespace Equix
                             }
                         }
 
-
-                        foreach (var a in coreInfo)
-                        {
-                            Console.WriteLine($"{a.PhysicalMask:X}, {a.LogicalMask:X}, {a.IsPCore}");
-                        }
                         return (coreInfo);
                     }
                 }

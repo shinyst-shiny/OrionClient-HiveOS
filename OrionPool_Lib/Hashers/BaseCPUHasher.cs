@@ -1,8 +1,11 @@
 ﻿using DrillX.Solver;
+using Equix;
 using NLog;
 using OrionClientLib.Hashers.Models;
 using OrionClientLib.Pools;
 using OrionClientLib.Pools.Models;
+using OrionClientLib.Utilities;
+using Spectre.Console;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -45,6 +48,8 @@ namespace OrionClientLib.Hashers
         private int _threads = Environment.ProcessorCount;
         private Task _taskRunner;
 
+        private nint _currentAffinity;
+
         public bool Initialize(IPool pool, int threads)
         {
             if (Initialized)
@@ -55,6 +60,7 @@ namespace OrionClientLib.Hashers
             _pool = pool;
             _running = true;
             _threads = threads;
+            _info = new HasherInfo();
 
             if (_pool != null)
             {
@@ -68,6 +74,63 @@ namespace OrionClientLib.Hashers
             while (_solverQueue.Count < Environment.ProcessorCount)
             {
                 _solverQueue.Enqueue(new Solver());
+            }
+
+            //Set process affinity
+            if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux())
+            {
+                Process currentProcess = Process.GetCurrentProcess();
+
+                currentProcess.PriorityClass = ProcessPriorityClass.AboveNormal;
+                _currentAffinity = currentProcess.ProcessorAffinity;
+
+                List<CoreInfo> coreInformation = SystemInformation.GetCoreInformation();
+                int totalThreads = coreInformation.Sum(x => x.ThreadCount);
+
+                if(threads != totalThreads)
+                {
+                    nint processorMask = 0;
+
+                    int totalLogical = Math.Clamp(threads - coreInformation.Count, 0, coreInformation.Count);
+
+                    //Extra thread for the UI
+                    //TODO: Modify to use dedicated threads with a specific affinity
+                    if (threads < coreInformation.Count)
+                    {
+                        ++threads;
+                    }
+
+                    int loopCount = Math.Min(coreInformation.Count, threads);
+
+
+
+                    for (int i =0; i < loopCount; i++)
+                    {
+                        CoreInfo cInfo = coreInformation[i];
+
+                        AddThreadAffinity(cInfo.PhysicalMask);
+
+                        if(totalLogical > 0 && cInfo.HasLogical)
+                        {
+                            AddThreadAffinity(cInfo.LogicalMask);
+
+                            --totalLogical;
+                        }
+
+                        void AddThreadAffinity(ulong mask)
+                        {
+                            if(threads <= 0)
+                            {
+                                return;
+                            }
+
+                            processorMask |= (nint)mask;
+                            --threads;
+                        }
+                    }
+
+                    currentProcess.ProcessorAffinity = processorMask;
+                }
             }
 
             return true;
@@ -128,6 +191,15 @@ namespace OrionClientLib.Hashers
                 {
                     lastError = ex;
                 }
+            }
+
+            //Reset affinity
+            if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux())
+            {
+                Process currentProcess = Process.GetCurrentProcess();
+
+                currentProcess.ProcessorAffinity = _currentAffinity;
+                currentProcess.PriorityClass = ProcessPriorityClass.Normal;
             }
 
             //Attempts to dispose everything before throwing an error
