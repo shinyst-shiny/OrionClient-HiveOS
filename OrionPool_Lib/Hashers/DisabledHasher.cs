@@ -36,6 +36,16 @@ namespace OrionClientLib.Hashers
             return true;
         }
 
+        public void PauseMining()
+        {
+
+        }
+
+        public void ResumeMining()
+        {
+
+        }
+
         public void SetThreads(int totalThreads)
         {
 

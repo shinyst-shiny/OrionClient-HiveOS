@@ -30,6 +30,7 @@ namespace OrionClientLib.Pools
         public string Description { get; private set; } = "Example pool sample";
 
         //Features displayed on pool list
+        //Currently not displayed anywhere
         public Dictionary<string, string> Features => new Dictionary<string, string>
         {
             { "Feature 1 example", "Example feature description"},
@@ -40,6 +41,8 @@ namespace OrionClientLib.Pools
 
         public event EventHandler<NewChallengeInfo> OnChallengeUpdate;
         public event EventHandler<string[]> OnMinerUpdate;
+        public event EventHandler PauseMining;
+        public event EventHandler ResumeMining;
 
         private IRpcClient _rpcClient = ClientFactory.GetClient(Cluster.MainNet);
         //private IRpcClient _rpcClient = ClientFactory.GetClient(RPC_URL);
@@ -50,7 +53,7 @@ namespace OrionClientLib.Pools
         private System.Timers.Timer _sw;
         private int _challengeId = 0;
         private DifficultyInfo _bestDifficulty;
-        private ExamplePoolSettings _settings = new ExamplePoolSettings();
+        private ExamplePoolSettings _settings;
 
         public string[] TableHeaders()
         {
@@ -59,11 +62,18 @@ namespace OrionClientLib.Pools
             return ["Time", "Difficulty", "Ore Reward"];
         }
 
-        public async Task<bool> ConnectAsync(Wallet wallet, string publicKey)
+        public void SetWalletInfo(Wallet wallet, string publicKey)
         {
+            //This can be called multiple times
+
+            _settings ??= new ExamplePoolSettings(PoolName);
+
             //wallet is when a private key is needed. This can be null
             //publicKey is when only the public key is needed
+        }
 
+        public async Task<bool> ConnectAsync(CancellationToken token)
+        {
             //Handle any connection logic to the pool
 
 
@@ -118,7 +128,7 @@ namespace OrionClientLib.Pools
             return true;
         }
 
-        public async Task<double> GetFeeAsync()
+        public async Task<double> GetFeeAsync(CancellationToken token)
         {
             //Returns current pool fee
             return 0;
@@ -127,10 +137,11 @@ namespace OrionClientLib.Pools
         public async Task<bool> SetupAsync(CancellationToken token, bool initialSetup = false)
         {
             //Called when someone selects the pool through the "Run Setup" menu or selects "Start Mining"
+
             //initialSetup is true when pool is selected through "Run Setup". Allowing user to change already set options is best
 
             //Handle any setup required
-                //Can be things like verifying registered status, ata creationg, etc
+            //Can be things like verifying registered status, ata creationg, etc
 
             //Load current saved settings
             await _settings.LoadAsync();
@@ -183,6 +194,10 @@ namespace OrionClientLib.Pools
 
         private class ExamplePoolSettings : PoolSettings
         {
+            public ExamplePoolSettings(string poolName) : base(poolName)
+            {
+            }
+
             public string ExampleSetting { get; set; }
         }
     }

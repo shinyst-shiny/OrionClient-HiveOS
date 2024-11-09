@@ -284,10 +284,16 @@ namespace OrionClientLib.Modules
 
             if(chosenPool != null)
             {
-                if(!await chosenPool.SetupAsync(_cts.Token, true))
+                (Wallet wallet, string publicKey) = await _data.Settings.GetWalletAsync();
+
+                chosenPool.SetWalletInfo(wallet, publicKey);
+
+                if (!await chosenPool.SetupAsync(_cts.Token, true))
                 {
                     return _currentStep;
                 }
+
+                AnsiConsole.Clear();
             }
 
             _settings.Pool = chosenPool?.PoolName;
@@ -502,41 +508,39 @@ namespace OrionClientLib.Modules
         {
             Base58Encoder encoder = new Base58Encoder();
 
-            while (true)
+            TextPrompt<string> publicKeyPrompt = new TextPrompt<string>("Public Key:");
+            publicKeyPrompt.Validate((str) =>
             {
-                TextPrompt<string> publicKeyPrompt = new TextPrompt<string>("Public Key:");
-                publicKeyPrompt.DefaultValue(current);
-                string publicKey = await publicKeyPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
-
-                AnsiConsole.Clear();
-
-                if(String.IsNullOrEmpty(publicKey))
-                {
-                    _settings.PublicKey = null;
-
-                    return;
-                }
-
                 try
                 {
-                    byte[] key = encoder.DecodeData(publicKey);
-
-                    if(key.Length == 32)
+                    if (encoder.DecodeData(str).Length != 32)
                     {
-                        _settings.HasPrivateKey = false;
-                        _settings.KeyFile = null;
-                        _settings.PublicKey = publicKey;
-
-                        return;
+                        return false;
                     }
                 }
                 catch
                 {
-                    //Bad key
-                    continue;
+                    return false;
                 }
 
+                return true;
+            });
+
+            publicKeyPrompt.DefaultValue(current);
+            string publicKey = await publicKeyPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
+
+            AnsiConsole.Clear();
+
+            if (String.IsNullOrEmpty(publicKey))
+            {
+                _settings.PublicKey = null;
+
+                return;
             }
+
+            _settings.HasPrivateKey = false;
+            _settings.KeyFile = null;
+            _settings.PublicKey = publicKey;
         }
     }
 }

@@ -42,7 +42,7 @@ namespace OrionClient
         {
             Console.Clear();
 
-            if(!IsSupported())
+            if (!IsSupported())
             {
                 Console.WriteLine($"Only x64 Windows/Linux is currently supported");
 
@@ -58,7 +58,7 @@ namespace OrionClient
 
             _pools = new List<IPool>
             {
-                new ExamplePool()
+                new Ec1ipsePool()
             };
 
             _modules = new List<IModule>
@@ -226,7 +226,6 @@ namespace OrionClient
 
             prompt.Title($"Wallet: {publicKey ?? "N/A"}\nHasher: CPU - {cpuHasher?.Name ?? "N/A"} ({_settings.CPUThreads} threads), GPU - {gpuHasher?.Name ?? "N/A"}\nPool: {pool?.DisplayName ?? "N/A"}");
 
-            prompt.EnableSearch();
             prompt.UseConverter((module) =>
             {
                 if(module is PoolModule && pool != null)
@@ -252,9 +251,14 @@ namespace OrionClient
                     }
                 }
 
-                if(module is PoolModule && pool == null)
+                if(module is PoolModule)
                 {
-                    continue;
+                    if (pool == null)
+                    {
+                        continue;
+                    }
+
+                    pool.SetWalletInfo(wallet, publicKey);
                 }
 
                 prompt.AddChoice(module);

@@ -19,12 +19,15 @@ namespace OrionClientLib.Pools
 
         public event EventHandler<NewChallengeInfo> OnChallengeUpdate;
         public event EventHandler<string[]> OnMinerUpdate;
+        public event EventHandler PauseMining;
+        public event EventHandler ResumeMining;
 
+        public void SetWalletInfo(Wallet wallet, string publicKey);
         public Task<bool> SetupAsync(CancellationToken token, bool initialSetup = false);
 
-        public Task<bool> ConnectAsync(Wallet wallet, string publicKey);
+        public Task<bool> ConnectAsync(CancellationToken token);
         public Task<bool> DisconnectAsync();
-        public Task<double> GetFeeAsync();
+        public Task<double> GetFeeAsync(CancellationToken token);
         public Task OptionsAsync(CancellationToken token);
 
         public string[] TableHeaders();

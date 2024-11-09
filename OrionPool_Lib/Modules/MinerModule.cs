@@ -58,6 +58,8 @@ namespace OrionClientLib.Modules
                 await pool.DisconnectAsync();
 
                 pool.OnMinerUpdate -= Pool_OnMinerUpdate;
+                pool.ResumeMining -= Pool_ResumeMining;
+                pool.PauseMining -= Pool_PauseMining;
 
                 if (cpuHasher != null)
                 {
@@ -97,12 +99,20 @@ namespace OrionClientLib.Modules
 
             _logger.Log(LogLevel.Debug, $"Checking setup requirements for '{pool.PoolName}'");
 
+            (Wallet wallet, string publicKey) = await data.Settings.GetWalletAsync();
+
+            pool.SetWalletInfo(wallet, publicKey);
+
             if (!await pool.SetupAsync(_cts.Token))
             {
                 return false;
             }
 
+            AnsiConsole.Clear();
+
             pool.OnMinerUpdate += Pool_OnMinerUpdate;
+            pool.ResumeMining += Pool_ResumeMining;
+            pool.PauseMining += Pool_PauseMining;
 
             if(cpuHasher != null)
             {
@@ -130,11 +140,25 @@ namespace OrionClientLib.Modules
 
             _logger.Log(LogLevel.Debug, $"Connecting to pool '{pool.PoolName}'");
 
-            (Wallet wallet, string publicKey) = await data.Settings.GetWalletAsync();
-
-            await pool.ConnectAsync(wallet, publicKey);
+            await pool.ConnectAsync(_cts.Token);
 
             return true;
+        }
+
+        private void Pool_PauseMining(object? sender, EventArgs e)
+        {
+            (IHasher cpu, IHasher gpu) = _currentData.GetChosenHasher();
+
+            cpu?.PauseMining();
+            gpu?.PauseMining();
+        }
+
+        private void Pool_ResumeMining(object? sender, EventArgs e)
+        {
+            (IHasher cpu, IHasher gpu) = _currentData.GetChosenHasher();
+
+            cpu?.ResumeMining();
+            gpu?.ResumeMining();
         }
 
         private void Hasher_OnHashrateUpdate(object? sender, Hashers.Models.HashrateInfo e)

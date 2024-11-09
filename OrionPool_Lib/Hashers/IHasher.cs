@@ -25,5 +25,7 @@ namespace OrionClientLib.Hashers
         public bool Initialize(IPool pool, int threads);
         public Task StopAsync();
         public void SetThreads(int totalThreads);
+        public void PauseMining();
+        public void ResumeMining();
     }
 }

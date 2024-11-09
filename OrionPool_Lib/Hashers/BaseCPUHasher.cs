@@ -22,7 +22,7 @@ namespace OrionClientLib.Hashers
 {
     public abstract class BaseCPUHasher : IHasher
     {
-        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        protected static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         public IHasher.Hardware HardwareType => IHasher.Hardware.CPU;
         public bool Initialized => _taskRunner?.IsCompleted == false;
@@ -41,6 +41,8 @@ namespace OrionClientLib.Hashers
 
         protected IPool _pool;
         protected ManualResetEvent _newChallengeWait = new ManualResetEvent(false);
+        protected ManualResetEvent _pauseMining = new ManualResetEvent(true);
+
         protected bool ResettingChallenge => !_newChallengeWait.WaitOne(1);
 
         protected ConcurrentQueue<Solver> _solverQueue = new ConcurrentQueue<Solver>();
@@ -81,7 +83,7 @@ namespace OrionClientLib.Hashers
             {
                 Process currentProcess = Process.GetCurrentProcess();
 
-                currentProcess.PriorityClass = ProcessPriorityClass.AboveNormal;
+                //currentProcess.PriorityClass = ProcessPriorityClass.AboveNormal;
                 _currentAffinity = currentProcess.ProcessorAffinity;
 
                 List<CoreInfo> coreInformation = SystemInformation.GetCoreInformation();
@@ -160,6 +162,7 @@ namespace OrionClientLib.Hashers
 
             _info.NewChallenge(startNonce, endNonce, challenge.ToArray(), challengeId);
             _newChallengeWait.Set();
+            _pauseMining.Set();
             _challengeStartTime = _sw.Elapsed;
             _logger.Log(LogLevel.Debug, $"New challenge. Challenge Id: {challengeId}. Range: {startNonce} - {endNonce}");
 
@@ -199,7 +202,7 @@ namespace OrionClientLib.Hashers
                 Process currentProcess = Process.GetCurrentProcess();
 
                 currentProcess.ProcessorAffinity = _currentAffinity;
-                currentProcess.PriorityClass = ProcessPriorityClass.Normal;
+                //currentProcess.PriorityClass = ProcessPriorityClass.Normal;
             }
 
             //Attempts to dispose everything before throwing an error
@@ -215,7 +218,7 @@ namespace OrionClientLib.Hashers
             {
                 _executing = false;
 
-                while (!_newChallengeWait.WaitOne(1000) && _running)
+                while ((!_newChallengeWait.WaitOne(500) || !_pauseMining.WaitOne(0)) && _running)
                 {
                 }
 
@@ -361,5 +364,15 @@ namespace OrionClientLib.Hashers
         }
 
         public abstract bool IsSupported();
+
+        public void PauseMining()
+        {
+            _pauseMining.Reset();
+        }
+
+        public void ResumeMining()
+        {
+            _pauseMining.Set();
+        }
     }
 }
