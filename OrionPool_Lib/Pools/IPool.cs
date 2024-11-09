@@ -9,6 +9,9 @@ using System.Threading.Tasks;
 
 namespace OrionClientLib.Pools
 {
+    [Flags]
+    public enum Coin { Ore, Coal };
+
     public interface IPool
     {
         public string PoolName { get; }
@@ -16,6 +19,7 @@ namespace OrionClientLib.Pools
         public string Description { get; }
         public Dictionary<string, string> Features { get; }
         public bool HideOnPoolList { get; }
+        public Coin Coins { get; }
 
         public event EventHandler<NewChallengeInfo> OnChallengeUpdate;
         public event EventHandler<string[]> OnMinerUpdate;

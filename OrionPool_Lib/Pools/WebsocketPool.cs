@@ -19,6 +19,7 @@ namespace OrionClientLib.Pools
         public abstract string PoolName { get; }
         public abstract string DisplayName { get; }
         public abstract string Description { get; }
+        public abstract Coin Coins { get; }
 
         public abstract Dictionary<string, string> Features { get; }
 

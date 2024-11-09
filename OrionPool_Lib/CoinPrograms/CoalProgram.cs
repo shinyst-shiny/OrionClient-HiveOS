@@ -10,9 +10,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace OrionClientLib.CoinPrograms.Ore
+namespace OrionClientLib.CoinPrograms
 {
-    public class OreProgram
+    public class CoalProgram
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private static readonly PublicKey SlotHashesKey = new("SysvarS1otHashes111111111111111111111111111");
@@ -43,26 +43,16 @@ namespace OrionClientLib.CoinPrograms.Ore
         public static PublicKey ConfigAddress;
         public static PublicKey TreasuryId;
         public static PublicKey TreasuryATAId;
-        public static PublicKey TreasuryOreATAId;
+        public static PublicKey TreasuryCoalATAId;
         public static PublicKey MintId;
-        public static PublicKey ProgramId = new PublicKey("oreV2ZymfyeXgNgBdqMkumTqqAprVqgBWQfoYkrtKWQ");
+        public static PublicKey ProgramId = new PublicKey("EG67mGGTxMGuPxDLWeccczVecycmpj2SokzpWeBoGVTf");
         public static readonly PublicKey NoopId = new PublicKey("noop8ytexvkpCuqbf6FB89BSuNemHtPRqaNC31GWivW");
 
-        public static readonly PublicKey OreMintAddress = new PublicKey("oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp");
-        public static readonly PublicKey OreISC = new PublicKey("meUwDp23AaxhiNKaQCyJ2EAF2T4oe1gSkEkGXSRVdZb");
-        public static readonly PublicKey OreSol = new PublicKey("DrSS5RM7zUd9qjUEdDaf31vnDUSbCrMto6mjqTrHFifN");
+        public static readonly double CoalDecimals = Math.Pow(10, 11);
 
-        public static readonly Dictionary<PublicKey, (string, int)> BoostMints = new Dictionary<PublicKey, (string, int)>
-        {
-            { OreMintAddress, ("Ore", 11) },
-            { OreISC, ("Ore-ISC", 11) },
-            { OreSol, ("Ore-SOL", 11) }
-        };
-
-        public static readonly double OreDecimals = Math.Pow(10, 11);
         private static readonly byte[] MintNoise = new byte[] { 89, 157, 88, 232, 243, 249, 197, 132, 199, 49, 19, 234, 91, 94, 150, 41 };
 
-        static OreProgram()
+        static CoalProgram()
         {
             Initialize(ProgramId);
         }
@@ -90,7 +80,6 @@ namespace OrionClientLib.CoinPrograms.Ore
             ConfigAddress = b;
 
             TreasuryATAId = AssociatedTokenAccountProgram.DeriveAssociatedTokenAccount(TreasuryId, MintId);
-            TreasuryOreATAId = AssociatedTokenAccountProgram.DeriveAssociatedTokenAccount(TreasuryId, OreMintAddress);
         }
 
         public static (PublicKey key, uint nonce) GetProofKey(PublicKey signer, PublicKey programId)

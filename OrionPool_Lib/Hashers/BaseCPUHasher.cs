@@ -286,7 +286,11 @@ namespace OrionClientLib.Hashers
                 //Higher difficulty found, notify pool
                 if (_info.DifficultyInfo.BestDifficulty > prevDifficulty)
                 {
-                    _pool?.DifficultyFound(_info.DifficultyInfo.GetUpdateCopy());
+                    //Check that we aren't paused
+                    if (_pauseMining.WaitOne(0))
+                    {
+                        _pool?.DifficultyFound(_info.DifficultyInfo.GetUpdateCopy());
+                    }
                 }
 
                 _info.CurrentNonce += _info.BatchSize;

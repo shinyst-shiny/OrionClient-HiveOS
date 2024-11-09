@@ -19,7 +19,7 @@ namespace OrionClientLib.Pools.HQPool
         public byte[] Challenge { get; private set; }
         public ulong BestNonce { get; private set; }
         public uint MinerSuppliedDifficulty { get; private set; }
-        public uint MinerEarnedRewards { get; private set; }
+        public double MinerEarnedRewards { get; private set; }
         public double MinerPercentage { get; private set; }
 
         public void Deserialize(ArraySegment<byte> data)
@@ -33,8 +33,8 @@ namespace OrionClientLib.Pools.HQPool
             Challenge = data.Slice(41, 32).ToArray();
             BestNonce = BinaryPrimitives.ReadUInt64LittleEndian(data.Slice(73, 8));
             MinerSuppliedDifficulty = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(81, 4));
-            MinerEarnedRewards = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(85, 4));
-            MinerPercentage = BinaryPrimitives.ReadDoubleLittleEndian(data.Slice(89, 4));
+            MinerEarnedRewards = BinaryPrimitives.ReadDoubleLittleEndian(data.Slice(85, 8));
+            MinerPercentage = BinaryPrimitives.ReadDoubleLittleEndian(data.Slice(93, 8));
         }
 
         public ArraySegment<byte> Serialize()

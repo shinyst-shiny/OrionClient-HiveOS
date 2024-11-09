@@ -4,8 +4,9 @@ using Newtonsoft.Json;
 using NLog;
 using Org.BouncyCastle.Asn1.Cmp;
 using Org.BouncyCastle.Bcpg.OpenPgp;
-using OrionClientLib.CoinPrograms.Ore;
+using OrionClientLib.CoinPrograms;
 using OrionClientLib.Hashers.Models;
+using OrionClientLib.Modules.Models;
 using OrionClientLib.Pools.HQPool;
 using OrionClientLib.Pools.Models;
 using Solnet.Wallet;
@@ -50,11 +51,8 @@ namespace OrionClientLib.Pools
 
         private HttpClient _client;
         private MinerPoolInformation _minerInformation = new MinerPoolInformation();
-        private int _challengeId = 0;
         private HQPoolSettings _poolSettings;
         private ulong _timestamp = 0;
-        private System.Timers.Timer _cutOffTimer;
-        private byte[] _challenge = null;
 
         private int _currentBestDifficulty = 0;
 
@@ -173,6 +171,10 @@ namespace OrionClientLib.Pools
             {
                 var balanceInfo = await GetBalanceAsync(token);
                 _minerInformation.Balance = balanceInfo.success ? balanceInfo.balance : _minerInformation.Balance;
+
+                var rewardInfo = await GetRewardAsync(token);
+                _minerInformation.MiningRewards = rewardInfo.success ? rewardInfo.reward : _minerInformation.MiningRewards;
+
                 _minerInformation.UpdateStakes(await GetStakingInformationAsync(token));
             });
         }
@@ -191,19 +193,23 @@ namespace OrionClientLib.Pools
 
                 builder.AppendLine();
 
-                builder.AppendLine($"{"Wallet Balance".PadRight(14)} {_minerInformation.Balance} ore");
-                builder.AppendLine($"{"Total Rewards".PadRight(14)} {_minerInformation.TotalRewards:0.00000000000} ore {(_minerInformation.ChangeSinceRefresh > 0 ? $"([green]+{_minerInformation.ChangeSinceRefresh:0.00000000000} in {_minerInformation.TimeSinceLastUpdate.TotalMinutes:0.00}m[/])" : String.Empty)}");
+                builder.AppendLine($"{"Wallet Balance".PadRight(14)} {_minerInformation.Balance} {Coins}");
+                builder.AppendLine($"{"Unclaimed Mining Rewards".PadRight(14)} {_minerInformation.MiningRewards:0.00000000000} {Coins}");
+                builder.AppendLine($"{"Unclaimed Stake Rewards".PadRight(14)} {_minerInformation.TotalRewards:0.00000000000} {Coins} {(_minerInformation.ChangeSinceRefresh > 0 ? $"([green]+{_minerInformation.ChangeSinceRefresh:0.00000000000} in {_minerInformation.TimeSinceLastUpdate.TotalMinutes:0.00}m[/])" : String.Empty)}");
 
-                builder.AppendLine();
-                builder.AppendLine($"Stake Info:");
-
-                if (_minerInformation.Stakes != null)
+                if (_minerInformation.Stakes?.Count > 0)
                 {
-                    foreach (var stakeInfo in _minerInformation.Stakes)
-                    {
-                        OreProgram.BoostMints.TryGetValue(new PublicKey(stakeInfo.MintPubkey), out (string name, int decimals) data);
+                    builder.AppendLine();
+                    builder.AppendLine($"Stake Info:");
 
-                        builder.AppendLine($"   {(data.name ?? "??").PadRight(11)} {stakeInfo.StakedBalance / Math.Pow(10, !String.IsNullOrEmpty(data.name) ? data.decimals : 11)}");
+                    if (_minerInformation.Stakes != null)
+                    {
+                        foreach (var stakeInfo in _minerInformation.Stakes)
+                        {
+                            OreProgram.BoostMints.TryGetValue(new PublicKey(stakeInfo.MintPubkey), out (string name, int decimals) data);
+
+                            builder.AppendLine($"   {(data.name ?? "??").PadRight(11)} {stakeInfo.StakedBalance / Math.Pow(10, !String.IsNullOrEmpty(data.name) ? data.decimals : 11)}");
+                        }
                     }
                 }
 
@@ -400,6 +406,11 @@ namespace OrionClientLib.Pools
             return await GetF64DataAsync("balance", token);
         }
 
+        private async Task<(double reward, bool success)> GetRewardAsync(CancellationToken token)
+        {
+            return await GetF64DataAsync("rewards", token);
+        }
+
         private async Task<List<PoolStake>> GetStakingInformationAsync(CancellationToken token)
         {
             using var response = await _client.GetAsync($"/v2/miner/boost/stake-accounts?pubkey={_publicKey}", token);
@@ -424,17 +435,33 @@ namespace OrionClientLib.Pools
         
         public override string[] TableHeaders()
         {
-            return ["Date", "Diff", "Ore", "Pool Diff", "Pool Ore", "Miner %"];
+            return ["Time", "Id", "Diff", Coins.ToString(), "Pool Diff", $"Pool {Coins}", "Miner %"];
+        }
+
+        private int GenerateChallengeId(byte[] data)
+        {
+            unchecked
+            {
+                const int p = 16777619;
+                int hash = (int)2166136261;
+
+                for (int i = 0; i < data.Length; i++)
+                {
+                    hash = (hash ^ data[i]) * p;
+                }
+
+                //Reduce to an easier number
+                return Math.Abs(hash % 65536);
+            }
         }
 
         private void HandleNewChallenge(ChallengeResponse challengeResponse)
         {
             _currentBestDifficulty = 0;
-            _challenge = challengeResponse.Challenge;
 
             OnChallengeUpdate?.Invoke(this, new NewChallengeInfo
             {
-                ChallengeId = Interlocked.Increment(ref _challengeId),
+                ChallengeId = GenerateChallengeId(challengeResponse.Challenge),
                 Challenge = challengeResponse.Challenge,
                 StartNonce = challengeResponse.StartNonce,
                 EndNonce = challengeResponse.EndNonce
@@ -443,7 +470,15 @@ namespace OrionClientLib.Pools
 
         private void HandleSubmissionResult(PoolSubmissionResponse submissionResponse)
         {
-            _logger.Log(LogLevel.Error, $"GOT POOL RESULTS");
+            OnMinerUpdate?.Invoke(this, [
+                DateTime.Now.ToShortTimeString(), 
+                GenerateChallengeId(submissionResponse.Challenge).ToString(),
+                $"{submissionResponse.MinerSuppliedDifficulty}",
+                $"{submissionResponse.MinerEarnedRewards:0.00000000000}",
+                submissionResponse.Difficulty.ToString(),
+                $"{submissionResponse.TotalRewards:0.00000000000}",
+                $"{submissionResponse.MinerPercentage:0.#####}%"
+            ]);
         }
 
         private async Task<bool> SendReadyUp(bool updateTime = true)
@@ -505,6 +540,7 @@ namespace OrionClientLib.Pools
         {
             public double Balance { get; set; }
             public List<PoolStake> Stakes { get; set; }
+            public double MiningRewards { get; set; }
 
             public double TotalRewards => Stakes?.Sum(x => x.RewardsBalance / OreProgram.OreDecimals) ?? 0;
             public TimeSpan TimeSinceLastUpdate => _currentUpdate - _oldUpdate;

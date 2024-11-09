@@ -39,6 +39,8 @@ namespace OrionClientLib.Pools
 
         public bool HideOnPoolList => false;
 
+        public Coin Coins => Coin.Ore;
+
         public event EventHandler<NewChallengeInfo> OnChallengeUpdate;
         public event EventHandler<string[]> OnMinerUpdate;
         public event EventHandler PauseMining;

@@ -8,9 +8,10 @@ namespace OrionClientLib.Pools
 {
     public class Ec1ipsePool : OreHQPool
     {
-        public override string PoolName { get; } = "Ec1ipse [[Unofficial]]";
+        public override string PoolName { get; } = "Ec1ipse Pool [[Unofficial]]";
         public override string DisplayName => PoolName;
-        public override string Description { get; } = "Unofficial pool implemented provided by Ecl1ipse. 5% commission";
+        public override string Description => $"[green]{Coins}[/] pool using Ore-HQ pool implementation. 5% commission";
+        public override Coin Coins { get; } = Coin.Ore;
 
         public override Dictionary<string, string> Features { get; } = new Dictionary<string, string>();
 

@@ -8,9 +8,10 @@ namespace OrionClientLib.Pools
 {
     public class ShinystPool : OreHQPool
     {
-        public override string PoolName { get; } = "Shinyst [[Unofficial]]";
+        public override string PoolName { get; } = "Shinyst Pool";
         public override string DisplayName => PoolName;
-        public override string Description { get; } = "Unofficial pool implemented provided by Shinyst. 5% commission";
+        public override string Description => $"[Cyan]{Coins}[/] pool using Ore-HQ implementation";
+        public override Coin Coins { get; } = Coin.Coal;
 
         public override Dictionary<string, string> Features { get; } = new Dictionary<string, string>();
 
