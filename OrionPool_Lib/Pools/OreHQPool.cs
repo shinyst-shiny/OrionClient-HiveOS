@@ -488,47 +488,14 @@ namespace OrionClientLib.Pools
             info.BestSolution.CopyTo(nonce, 0);
             BinaryPrimitives.WriteUInt64LittleEndian(nonce.AsSpan().Slice(16, 8), info.BestNonce);
 
-            //var test = new DiffSubmissionRequest
-            //{
-            //    Digest = info.BestSolution,
-            //    Nonce = info.BestNonce,
-            //    PublicKey = _wallet.Account.PublicKey,
-            //    Signature = _wallet.Account.Sign(nonce)
-            //}.Serialize();
-
-
-            //var solutionBytes = test[1..17];
-            //var noncess = test[17..25];
-            //var pubKey = test[25..57];
-            //var sigBytes = test[57..];
-
-            //var fullA = test[1..25];
-
-            //var aa = new PublicKey(pubKey);
-            //var aaa = aa.Verify(fullA.ToArray(), sigBytes.ToArray());
-
-            //byte[] fullChallenge = new byte[40];
-            //_challenge.CopyTo(fullChallenge, 0);
-            //noncess.CopyTo(fullChallenge, 32);
-
-            //HashX.TryBuild(fullChallenge, out HashX tester);
-
-            //tester.InitCompiler();
-
-            //using Solver solver = new Solver();
-            //var resutl = solver.Verify(tester, MemoryMarshal.Cast<byte, EquixSolution>(info.BestSolution.AsSpan())[0]);
-
-            //tester.DestroyCompiler();
-
-
-
+            Base58Encoder encoder = new Base58Encoder();
 
             bool result = await SendMessageAsync(new DiffSubmissionRequest
             {
                 Digest = info.BestSolution,
                 Nonce = info.BestNonce,
                 PublicKey = _wallet.Account.PublicKey,
-                Signature = _wallet.Account.Sign(nonce)
+                B58Signature = encoder.EncodeData(_wallet.Account.Sign(nonce))
             });
 
             return result;
