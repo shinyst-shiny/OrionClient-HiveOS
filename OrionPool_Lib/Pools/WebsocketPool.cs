@@ -43,6 +43,7 @@ namespace OrionClientLib.Pools
         public virtual async Task<bool> ConnectAsync(CancellationToken token)
         {
             _webSocket = new ClientWebSocket();
+            _cts = new CancellationTokenSource();
 
             if (!String.IsNullOrEmpty(_authorization))
             {
@@ -76,7 +77,11 @@ namespace OrionClientLib.Pools
 
                 //Give it 1 second to disconnect 
                 CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
-                await _webSocket?.CloseAsync(WebSocketCloseStatus.NormalClosure, null, cts.Token);
+
+                if (_webSocket?.State == WebSocketState.Open)
+                {
+                    await _webSocket?.CloseAsync(WebSocketCloseStatus.NormalClosure, null, cts.Token);
+                }
 
                 _webSocket?.Dispose();
 

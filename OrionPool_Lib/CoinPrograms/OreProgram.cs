@@ -51,7 +51,7 @@ namespace OrionClientLib.CoinPrograms
         public static readonly PublicKey OreISC = new PublicKey("meUwDp23AaxhiNKaQCyJ2EAF2T4oe1gSkEkGXSRVdZb");
         public static readonly PublicKey OreSol = new PublicKey("DrSS5RM7zUd9qjUEdDaf31vnDUSbCrMto6mjqTrHFifN");
 
-        public static readonly Dictionary<PublicKey, (string, int)> BoostMints = new Dictionary<PublicKey, (string, int)>();
+        public static readonly Dictionary<PublicKey, (string name, int decimals)> BoostMints = new Dictionary<PublicKey, (string, int)>();
 
         public static readonly double OreDecimals = Math.Pow(10, 11);
         private static readonly byte[] MintNoise = new byte[] { 89, 157, 88, 232, 243, 249, 197, 132, 199, 49, 19, 234, 91, 94, 150, 41 };

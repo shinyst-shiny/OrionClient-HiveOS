@@ -29,5 +29,9 @@ namespace OrionClientLib.Pools.HQPool
 
         [JsonProperty("staked_balance")]
         public long StakedBalance { get; set; }
+
+        public string PoolName { get; set; }
+        public double Decimals { get; set; }
+        public double RewardsUI => RewardsBalance / Decimals;
     }
 }

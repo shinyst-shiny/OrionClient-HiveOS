@@ -186,7 +186,7 @@ namespace OrionClientLib.Modules
             }
 
             //Allows 10 rows
-            if (_poolInfoTable.Rows.Count > 10)
+            if (_poolInfoTable.Rows.Count >= 10)
             {
                 _poolInfoTable.RemoveRow(_poolInfoTable.Rows.Count - 1);
             }

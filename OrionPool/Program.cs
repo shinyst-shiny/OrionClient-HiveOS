@@ -58,8 +58,8 @@ namespace OrionClient
 
             _pools = new List<IPool>
             {
-                new Ec1ipsePool(),
-                new ShinystPool()
+                new Ec1ipseOrePool(),
+                new ShinystCoalPool()
             };
 
             _modules = new List<IModule>

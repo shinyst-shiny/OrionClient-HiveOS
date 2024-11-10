@@ -6,11 +6,11 @@ using System.Threading.Tasks;
 
 namespace OrionClientLib.Pools
 {
-    public class ShinystPool : OreHQPool
+    public class ShinystCoalPool : OreHQPool
     {
-        public override string PoolName { get; } = "Shinyst Pool";
+        public override string PoolName { get; } = "Coal Pool";
         public override string DisplayName => PoolName;
-        public override string Description => $"[Cyan]{Coins}[/] pool using Ore-HQ implementation";
+        public override string Description => $"[Cyan]{Coins}[/] pool using Ore-HQ implementation. Operator (discord): Shinyst";
         public override Coin Coins { get; } = Coin.Coal;
 
         public override Dictionary<string, string> Features { get; } = new Dictionary<string, string>();

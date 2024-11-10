@@ -35,7 +35,6 @@ namespace OrionClientLib.Pools
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-
         public override event EventHandler<NewChallengeInfo> OnChallengeUpdate;
         public override event EventHandler<string[]> OnMinerUpdate;
         public override event EventHandler PauseMining;
@@ -45,16 +44,22 @@ namespace OrionClientLib.Pools
         public abstract override string DisplayName { get; }
         public abstract override string Description { get; }
         public abstract override Dictionary<string, string> Features { get; }
+        public abstract override Coin Coins { get; }
 
         public abstract override bool HideOnPoolList { get; }
         public override Uri WebsocketUrl => new Uri($"wss://{HostName}/v2/ws?timestamp={_timestamp}");
+        public virtual double MiniumumRewardPayout => 0;
+
 
         private HttpClient _client;
-        private MinerPoolInformation _minerInformation = new MinerPoolInformation();
+        private MinerPoolInformation _minerInformation;
         private HQPoolSettings _poolSettings;
         private ulong _timestamp = 0;
 
         private int _currentBestDifficulty = 0;
+        private string _errorMessage = String.Empty;
+
+        #region Overrides
 
         public override async void DifficultyFound(DifficultyInfo info)
         {
@@ -142,6 +147,7 @@ namespace OrionClientLib.Pools
 
         public override void SetWalletInfo(Wallet wallet, string publicKey)
         {
+            _minerInformation ??= new MinerPoolInformation(Coins);
             _poolSettings ??= new HQPoolSettings(PoolName);
             _client ??= new HttpClient
             {
@@ -149,6 +155,39 @@ namespace OrionClientLib.Pools
             };
 
             base.SetWalletInfo(wallet, publicKey);
+        }
+
+        public override async Task<bool> SetupAsync(CancellationToken token, bool initialSetup = false)
+        {
+            bool isComplete = true;
+
+            await AnsiConsole.Status().StartAsync($"Setting up {PoolName} pool", async ctx =>
+            {
+                if (_wallet == null)
+                {
+                    AnsiConsole.MarkupLine("[red]A full keypair is required to sign message for this pool. Private keys are never sent to the server[/]\n");
+
+                    isComplete = false;
+                }
+                else
+                {
+                    try
+                    {
+                        if (!await RegisterAsync(token))
+                        {
+                            AnsiConsole.MarkupLine($"[red]Failed to signup to pool[/]\n");
+
+                            isComplete = false;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        AnsiConsole.MarkupLine($"[red]Failed to complete setup. Reason: {ex.Message}[/]\n");
+                    }
+                }
+            });
+
+            return isComplete;
         }
 
         public override async Task OptionsAsync(CancellationToken token)
@@ -165,19 +204,14 @@ namespace OrionClientLib.Pools
             await DisplayOptionsAsync(token);
         }
 
-        private async Task RefreshStakeBalancesAsync(CancellationToken token)
+        public override string[] TableHeaders()
         {
-            await AnsiConsole.Status().StartAsync($"Grabbing balance information", async ctx =>
-            {
-                var balanceInfo = await GetBalanceAsync(token);
-                _minerInformation.Balance = balanceInfo.success ? balanceInfo.balance : _minerInformation.Balance;
-
-                var rewardInfo = await GetRewardAsync(token);
-                _minerInformation.MiningRewards = rewardInfo.success ? rewardInfo.reward : _minerInformation.MiningRewards;
-
-                _minerInformation.UpdateStakes(await GetStakingInformationAsync(token));
-            });
+            return ["Time", "Id", "Diff", Coins.ToString(), "Pool Diff", $"Pool {Coins}", "Miner %"];
         }
+
+        #endregion
+
+        #region Display Options
 
         private async Task DisplayOptionsAsync(CancellationToken token)
         {
@@ -193,9 +227,14 @@ namespace OrionClientLib.Pools
 
                 builder.AppendLine();
 
-                builder.AppendLine($"{"Wallet Balance".PadRight(14)} {_minerInformation.Balance} {Coins}");
-                builder.AppendLine($"{"Unclaimed Mining Rewards".PadRight(14)} {_minerInformation.MiningRewards:0.00000000000} {Coins}");
-                builder.AppendLine($"{"Unclaimed Stake Rewards".PadRight(14)} {_minerInformation.TotalRewards:0.00000000000} {Coins} {(_minerInformation.ChangeSinceRefresh > 0 ? $"([green]+{_minerInformation.ChangeSinceRefresh:0.00000000000} in {_minerInformation.TimeSinceLastUpdate.TotalMinutes:0.00}m[/])" : String.Empty)}");
+                builder.AppendLine($"{"Wallet Balance".PadRight(14)} {_minerInformation.WalletBalance} {Coins}");
+                builder.AppendLine($"{"Unclaimed Mining Rewards".PadRight(14)} {_minerInformation.TotalMiningRewards} {Coins} " +
+                    $"{(_minerInformation.TotalMiningRewards.BalanceChangeSinceUpdate > 0 ? $"([green]+{_minerInformation.TotalMiningRewards.BalanceChangeSinceUpdate:0.00000000000}[/])" : String.Empty)}" +
+                    $"{(_minerInformation.TotalMiningRewards.TotalChange > 0 ? $"[[[Cyan]+{_minerInformation.TotalMiningRewards.TotalChange:0.00000000000} since start[/]]]" : String.Empty)}");
+               
+                builder.AppendLine($"{"Unclaimed Stake Rewards".PadRight(14)} {_minerInformation.StakeBalance} {Coins} " +
+                    $"{(_minerInformation.StakeBalance.BalanceChangeSinceUpdate > 0 ? $"([green]+{_minerInformation.StakeBalance.BalanceChangeSinceUpdate:0.00000000000}" : String.Empty)}" +
+                    $"{(_minerInformation.StakeBalance.TotalChange > 0 ? $"[[[Cyan]+{_minerInformation.StakeBalance.TotalChange:0.00000000000} since start[/]]]" : String.Empty)}");
 
                 if (_minerInformation.Stakes?.Count > 0)
                 {
@@ -213,14 +252,31 @@ namespace OrionClientLib.Pools
                     }
                 }
 
+                if (!String.IsNullOrEmpty(_errorMessage))
+                {
+                    builder.AppendLine($"\n[red]Error: {_errorMessage}[/]");
+
+                    _errorMessage = String.Empty;
+                }
+
                 SelectionPrompt<string> choices = new SelectionPrompt<string>();
                 choices.Title(builder.ToString());
 
-                const string claimBalance = "Claim Balance";
+                const string claimRewardBalance = "Claim Mining Rewards";
+                const string claimStakeBalance = "Claim Staking Rewards";
                 const string changeWallet = "Change Claim Wallet";
                 const string refreshBalance = "Refresh Balance";
 
-                choices.AddChoice(claimBalance);
+                if (_minerInformation.TotalMiningRewards.CurrentBalance > MiniumumRewardPayout)
+                {
+                    choices.AddChoice(claimRewardBalance);
+                }
+
+                if (_minerInformation.Stakes?.Any(x => x.RewardsUI > MiniumumRewardPayout) == true)
+                {
+                    choices.AddChoice(claimStakeBalance);
+                }
+
                 choices.AddChoice(refreshBalance);
                 choices.AddChoice(changeWallet);
                 choices.AddChoice("Exit");
@@ -233,7 +289,10 @@ namespace OrionClientLib.Pools
                         await RefreshStakeBalancesAsync(token);
                         break;
                     case changeWallet:
-                        await SetClaimWalletAsync(token);
+                        await SetClaimWalletOptionAsync(token);
+                        break;
+                    case claimStakeBalance:
+                        await ClaimStakeOptionAsync(token);
                         break;
                     default:
                         return;
@@ -243,86 +302,65 @@ namespace OrionClientLib.Pools
             }
 
         }
-        
-        private async Task SetClaimWalletAsync(CancellationToken token)
+
+        private async Task SetClaimWalletOptionAsync(CancellationToken token)
         {
             Base58Encoder encoder = new Base58Encoder();
 
-            while(true)
+            TextPrompt<string> textPrompt = new TextPrompt<string>("Set wallet to claim rewards to. Type [yellow]clear[/] to remove. Default: ");
+            textPrompt.DefaultValue(_poolSettings.ClaimWallet);
+            textPrompt.Validate((str) =>
             {
-                TextPrompt<string> textPrompt = new TextPrompt<string>("Set wallet to claim rewards to. Type [yellow]clear[/] to remove. Default: ");
-                textPrompt.DefaultValue(_poolSettings.ClaimWallet);
-                textPrompt.Validate((str) =>
+                if (str.ToLower() == "clear")
                 {
-                    if(str.ToLower() == "clear")
-                    {
-                        return true;
-                    }
+                    return true;
+                }
 
-                    try
-                    {
-                        if (encoder.DecodeData(str).Length != 32)
-                        {
-                            return false;
-                        }
-                    }
-                    catch
+                try
+                {
+                    if (encoder.DecodeData(str).Length != 32)
                     {
                         return false;
                     }
-
-                    return true;
-                });
-
-                string result = await textPrompt.ShowAsync(AnsiConsole.Console, token);
-
-                if(result?.ToLower() == "clear")
-                {
-                    _poolSettings.ClaimWallet = null;
                 }
-                else
+                catch
                 {
-                    _poolSettings.ClaimWallet = result;
+                    return false;
                 }
 
-                await _poolSettings.SaveAsync();
-
-                break;
-            }
-        }
-
-        public override async Task<bool> SetupAsync(CancellationToken token, bool initialSetup = false)
-        {
-            bool isComplete = true;
-
-            await AnsiConsole.Status().StartAsync($"Setting up {PoolName} pool", async ctx =>
-            {
-                if(_wallet == null)
-                {
-                    AnsiConsole.MarkupLine("[red]A full keypair is required to sign message for this pool. Private keys are never sent to the server[/]\n");
-
-                    isComplete = false;
-                }
-                else
-                {
-                    try
-                    {
-                        if(!await RegisterAsync(token))
-                        {
-                            AnsiConsole.MarkupLine($"[red]Failed to signup to pool[/]\n");
-
-                            isComplete = false;
-                        }
-                    }
-                    catch(Exception ex)
-                    {
-                        AnsiConsole.MarkupLine($"[red]Failed to complete setup. Reason: {ex.Message}[/]\n");
-                    }
-                }
+                return true;
             });
 
-            return isComplete;
+            string result = await textPrompt.ShowAsync(AnsiConsole.Console, token);
+
+            if (result?.ToLower() == "clear")
+            {
+                _poolSettings.ClaimWallet = null;
+            }
+            else
+            {
+                _poolSettings.ClaimWallet = result;
+            }
+
+            await _poolSettings.SaveAsync();
         }
+
+        private async Task ClaimStakeOptionAsync(CancellationToken token)
+        {
+            SelectionPrompt<PoolStake> selectionPrompt = new SelectionPrompt<PoolStake>();
+            selectionPrompt.Title($"Choose staking pool to claim from");
+
+            foreach(var stakePool in _minerInformation.Stakes)
+            {
+
+            }
+
+            _errorMessage = "Testing error message";
+        }
+
+        #endregion
+
+        #region HTTP Requests
 
         private async Task<bool> RegisterAsync(CancellationToken token)
         {
@@ -371,6 +409,30 @@ namespace OrionClientLib.Pools
 
                 return false;
             }
+        }
+
+        private async Task RefreshStakeBalancesAsync(CancellationToken token)
+        {
+            await AnsiConsole.Status().StartAsync($"Grabbing balance information", async ctx =>
+            {
+                var balanceInfo = await GetBalanceAsync(token);
+
+                if (balanceInfo.success)
+                {
+                    _minerInformation.UpdateWalletBalance(balanceInfo.balance);
+
+                }
+
+                var rewardInfo = await GetRewardAsync(token);
+
+                if (rewardInfo.success)
+                {
+                    _minerInformation.UpdateMiningRewards(rewardInfo.reward);
+
+                }
+
+                _minerInformation.UpdateStakes(await GetStakingInformationAsync(token));
+            });
         }
 
         private async Task<(double value, bool success)> GetF64DataAsync(string endpoint, CancellationToken token)
@@ -432,28 +494,10 @@ namespace OrionClientLib.Pools
                 return null;
             }
         }
-        
-        public override string[] TableHeaders()
-        {
-            return ["Time", "Id", "Diff", Coins.ToString(), "Pool Diff", $"Pool {Coins}", "Miner %"];
-        }
 
-        private int GenerateChallengeId(byte[] data)
-        {
-            unchecked
-            {
-                const int p = 16777619;
-                int hash = (int)2166136261;
+        #endregion
 
-                for (int i = 0; i < data.Length; i++)
-                {
-                    hash = (hash ^ data[i]) * p;
-                }
-
-                //Reduce to an easier number
-                return Math.Abs(hash % 65536);
-            }
-        }
+        #region WS Responses
 
         private void HandleNewChallenge(ChallengeResponse challengeResponse)
         {
@@ -480,6 +524,27 @@ namespace OrionClientLib.Pools
                 $"{submissionResponse.MinerPercentage:0.#####}%"
             ]);
         }
+
+        private int GenerateChallengeId(byte[] data)
+        {
+            unchecked
+            {
+                const int p = 16777619;
+                int hash = (int)2166136261;
+
+                for (int i = 0; i < data.Length; i++)
+                {
+                    hash = (hash ^ data[i]) * p;
+                }
+
+                //Reduce to an easier number
+                return Math.Abs(hash % 65536);
+            }
+        }
+
+        #endregion
+
+        #region WS Requests
 
         private async Task<bool> SendReadyUp(bool updateTime = true)
         {
@@ -536,35 +601,62 @@ namespace OrionClientLib.Pools
             return result;
         }
 
+        #endregion
+
+        #region Classes
+
         private class MinerPoolInformation
         {
-            public double Balance { get; set; }
+            public BalanceTracker<double> StakeBalance { get; private set; } = new BalanceTracker<double>();
+            public BalanceTracker<double> TotalMiningRewards { get; private set; } = new BalanceTracker<double>();
+            public BalanceTracker<double> WalletBalance { get; private set; } = new BalanceTracker<double>();
+
             public List<PoolStake> Stakes { get; set; }
-            public double MiningRewards { get; set; }
 
-            public double TotalRewards => Stakes?.Sum(x => x.RewardsBalance / OreProgram.OreDecimals) ?? 0;
-            public TimeSpan TimeSinceLastUpdate => _currentUpdate - _oldUpdate;
+            private Coin _coin;
 
-            public double ChangeSinceRefresh => Math.Max(TotalRewards - oldBalance, 0);
-            private double oldBalance = 0;
-            private DateTime _oldUpdate = DateTime.UtcNow;
-            private DateTime _currentUpdate = DateTime.UtcNow;
+            public MinerPoolInformation(Coin coin)
+            {
+                _coin = coin;
+            }
 
             public void UpdateStakes(List<PoolStake> stakes)
             {
-                bool isFirst = Stakes == null;
-
-                _oldUpdate = _currentUpdate;
-                _currentUpdate = DateTime.Now;
-
-                oldBalance = TotalRewards;
                 Stakes = stakes;
 
-                if (isFirst)
+                double totalStakeRewards = 0;
+
+                var stakeMints = _coin == Coin.Ore ? OreProgram.BoostMints : null;
+
+                if(stakeMints == null)
                 {
-                    _oldUpdate = DateTime.UtcNow;
-                    oldBalance = TotalRewards;
+                    return;
                 }
+
+                var boostAccounts = _coin == Coin.Ore ? OreProgram.BoostMints : null;
+                
+                foreach(PoolStake stake in stakes)
+                {
+                    if(boostAccounts != null && boostAccounts.TryGetValue(new PublicKey(stake.MintPubkey), out var d))
+                    {
+                        stake.PoolName = d.name;
+                        stake.Decimals = d.decimals;
+                    }
+
+                    totalStakeRewards += stake.RewardsBalance / (_coin == Coin.Ore ? OreProgram.OreDecimals : CoalProgram.CoalDecimals);
+                }
+
+                StakeBalance.Update(totalStakeRewards);
+            }
+
+            public void UpdateMiningRewards(double rewards)
+            {
+                TotalMiningRewards.Update(rewards);
+            }
+
+            public void UpdateWalletBalance(double balance)
+            {
+                WalletBalance.Update(balance);
             }
         }
 
@@ -576,5 +668,7 @@ namespace OrionClientLib.Pools
             {
             }
         }
+
+        #endregion
     }
 }
