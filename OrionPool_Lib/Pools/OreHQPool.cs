@@ -5,6 +5,7 @@ using Newtonsoft.Json.Linq;
 using NLog;
 using Org.BouncyCastle.Asn1.Cmp;
 using Org.BouncyCastle.Bcpg.OpenPgp;
+using Org.BouncyCastle.Crypto.Signers;
 using OrionClientLib.CoinPrograms;
 using OrionClientLib.Hashers.Models;
 using OrionClientLib.Modules.Models;
@@ -143,6 +144,8 @@ namespace OrionClientLib.Pools
             _authorization = $"Basic {Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_publicKey}:{sig}"))}";
             bool result = await base.ConnectAsync(token);
 
+            await RefreshStakeBalancesAsync(false, token);
+
             return result && await SendReadyUp(false);
         }
 
@@ -195,7 +198,7 @@ namespace OrionClientLib.Pools
         {
             await _poolSettings.LoadAsync();
 
-            await RefreshStakeBalancesAsync(token);
+            await RefreshStakeBalancesAsync(true, token);
 
             if(token.IsCancellationRequested)
             {
@@ -207,7 +210,7 @@ namespace OrionClientLib.Pools
 
         public override string[] TableHeaders()
         {
-            return ["Time", "Id", "Diff", Coins.ToString(), "Pool Diff", $"Pool {Coins}", "Miner %"];
+            return ["Time", "Id", "Diff", "Mining Rewards", "Staking Rewards", $"Pool Rewards", "Unclaimed Rewards", "Unclaimed Stake"];
         }
 
         #endregion
@@ -233,9 +236,9 @@ namespace OrionClientLib.Pools
                     $"{(_minerInformation.TotalMiningRewards.BalanceChangeSinceUpdate > 0 ? $"([green]+{_minerInformation.TotalMiningRewards.BalanceChangeSinceUpdate:0.00000000000}[/])" : String.Empty)}" +
                     $"{(_minerInformation.TotalMiningRewards.TotalChange > 0 ? $"[[[Cyan]+{_minerInformation.TotalMiningRewards.TotalChange:0.00000000000} since start[/]]]" : String.Empty)}");
                
-                builder.AppendLine($"{"Unclaimed Stake Rewards".PadRight(14)} {_minerInformation.StakeBalance} {Coins} " +
-                    $"{(_minerInformation.StakeBalance.BalanceChangeSinceUpdate > 0 ? $"([green]+{_minerInformation.StakeBalance.BalanceChangeSinceUpdate:0.00000000000}[/])" : String.Empty)}" +
-                    $"{(_minerInformation.StakeBalance.TotalChange > 0 ? $"[[[Cyan]+{_minerInformation.StakeBalance.TotalChange:0.00000000000} since start[/]]]" : String.Empty)}");
+                builder.AppendLine($"{"Unclaimed Stake Rewards".PadRight(14)} {_minerInformation.TotalStakeRewards} {Coins} " +
+                    $"{(_minerInformation.TotalStakeRewards.BalanceChangeSinceUpdate > 0 ? $"([green]+{_minerInformation.TotalStakeRewards.BalanceChangeSinceUpdate:0.00000000000}[/])" : String.Empty)}" +
+                    $"{(_minerInformation.TotalStakeRewards.TotalChange > 0 ? $"[[[Cyan]+{_minerInformation.TotalStakeRewards.TotalChange:0.00000000000} since start[/]]]" : String.Empty)}");
 
                 if (_minerInformation.Stakes?.Count > 0)
                 {
@@ -287,7 +290,7 @@ namespace OrionClientLib.Pools
                 switch (choice)
                 {
                     case refreshBalance:
-                        await RefreshStakeBalancesAsync(token);
+                        await RefreshStakeBalancesAsync(true, token);
                         break;
                     case changeWallet:
                         await SetClaimWalletOptionAsync(token);
@@ -468,9 +471,21 @@ namespace OrionClientLib.Pools
             }
         }
 
-        private async Task RefreshStakeBalancesAsync(CancellationToken token)
+        private async Task RefreshStakeBalancesAsync(bool displayUI, CancellationToken token)
         {
-            await AnsiConsole.Status().StartAsync($"Grabbing balance information", async ctx =>
+            if (displayUI)
+            {
+                await AnsiConsole.Status().StartAsync($"Grabbing balance information", async ctx =>
+                {
+                    await Update();
+                });
+            }
+            else
+            {
+                await Update();
+            }
+
+            async Task Update()
             {
                 var balanceInfo = await GetBalanceAsync(token);
 
@@ -489,7 +504,7 @@ namespace OrionClientLib.Pools
                 }
 
                 _minerInformation.UpdateStakes(await GetStakingInformationAsync(token));
-            });
+            }
         }
 
         private async Task<(double value, bool success)> GetF64DataAsync(string endpoint, CancellationToken token)
@@ -607,16 +622,21 @@ namespace OrionClientLib.Pools
             });
         }
 
-        private void HandleSubmissionResult(PoolSubmissionResponse submissionResponse)
+        private async void HandleSubmissionResult(PoolSubmissionResponse submissionResponse)
         {
+            CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+
+            await RefreshStakeBalancesAsync(false, cts.Token);
+
             OnMinerUpdate?.Invoke(this, [
                 DateTime.Now.ToShortTimeString(), 
                 GenerateChallengeId(submissionResponse.Challenge).ToString(),
-                $"{submissionResponse.MinerSuppliedDifficulty}",
+                $"{submissionResponse.MinerSuppliedDifficulty}/{submissionResponse.Difficulty}",
                 $"{submissionResponse.MinerEarnedRewards:0.00000000000}",
-                submissionResponse.Difficulty.ToString(),
+                $"{_minerInformation.TotalStakeRewards.BalanceChangeSinceUpdate:0.00000000000}",
                 $"{submissionResponse.TotalRewards:0.00000000000}",
-                $"{submissionResponse.MinerPercentage:0.#####}%"
+                $"{_minerInformation.TotalMiningRewards:0.00000000000}",
+                $"{_minerInformation.TotalStakeRewards:0.00000000000}",
             ]);
         }
 
@@ -702,7 +722,7 @@ namespace OrionClientLib.Pools
 
         private class MinerPoolInformation
         {
-            public BalanceTracker<double> StakeBalance { get; private set; } = new BalanceTracker<double>();
+            public BalanceTracker<double> TotalStakeRewards { get; private set; } = new BalanceTracker<double>();
             public BalanceTracker<double> TotalMiningRewards { get; private set; } = new BalanceTracker<double>();
             public BalanceTracker<double> WalletBalance { get; private set; } = new BalanceTracker<double>();
 
@@ -741,7 +761,7 @@ namespace OrionClientLib.Pools
                     totalStakeRewards += stake.RewardsBalance / (_coin == Coin.Ore ? OreProgram.OreDecimals : CoalProgram.CoalDecimals);
                 }
 
-                StakeBalance.Update(totalStakeRewards);
+                TotalStakeRewards.Update(totalStakeRewards);
             }
 
             public void UpdateMiningRewards(double rewards)

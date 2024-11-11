@@ -213,7 +213,7 @@ namespace OrionClientLib.Modules
             _hashrateTable.UpdateCell(index, 4, e.SolutionsPerSecond.ToString());
             _hashrateTable.UpdateCell(index, 5, e.HighestDifficulty.ToString());
             _hashrateTable.UpdateCell(index, 6, e.ChallengeId.ToString());
-            _hashrateTable.UpdateCell(index, 7, $"{e.TotalTime.TotalSeconds:0.00}s");
+            //_hashrateTable.UpdateCell(index, 7, $"{e.TotalTime.TotalSeconds:0.00}s");
         }
 
         private void GenerateUI()
@@ -226,19 +226,20 @@ namespace OrionClientLib.Modules
                 new Layout("hashrate"),
                 new Layout("poolInfo")
                 );
-
+            _uiLayout["hashrate"].Ratio = 65;
+            _uiLayout["poolInfo"].Ratio = 100;
+            
             _hashrateTable = new Table();
-            _hashrateTable.Expand();
             _hashrateTable.Title = new TableTitle($"Pool: {pool.DisplayName}");
 
             _hashrateTable.AddColumn(new TableColumn("Hasher").Centered());
             _hashrateTable.AddColumn(new TableColumn("Threads").Centered());
             _hashrateTable.AddColumn(new TableColumn("Status").Centered());
-            _hashrateTable.AddColumn(new TableColumn("Average Hashrate").Centered());
-            _hashrateTable.AddColumn(new TableColumn("Current Hashrate").Centered());
-            _hashrateTable.AddColumn(new TableColumn("Best Difficulty").Centered());
-            _hashrateTable.AddColumn(new TableColumn("Challenge Id").Centered());
-            _hashrateTable.AddColumn(new TableColumn("Challenge Time").Centered());
+            _hashrateTable.AddColumn(new TableColumn("Avg Hashrate").Centered());
+            _hashrateTable.AddColumn(new TableColumn("Cur Hashrate").Centered());
+            _hashrateTable.AddColumn(new TableColumn("Diff").Centered());
+            _hashrateTable.AddColumn(new TableColumn("Id").Centered());
+            //_hashrateTable.AddColumn(new TableColumn("Challenge Time").Centered());
 
             _poolInfoTable = new Table();
             _poolInfoTable.Title = new TableTitle("Pool Info");
@@ -250,11 +251,13 @@ namespace OrionClientLib.Modules
                 _poolInfoTable.Columns[i].Centered();
             }
 
+            _poolInfoTable.Expand();
+
             _uiLayout["hashrate"].Update(_hashrateTable);
             _uiLayout["poolInfo"].Update(_poolInfoTable);
 
             //Add CPU
-            _hashrateTable.AddRow(cpuHasher?.Name, "-", "-", "-", "-", "-", "-", "-");
+            _hashrateTable.AddRow(cpuHasher?.Name, "-", "-", "-", "-", "-", "-");
 
 
             if (gpuHasher != null)
