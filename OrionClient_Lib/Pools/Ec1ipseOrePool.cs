@@ -16,7 +16,7 @@ namespace OrionClientLib.Pools
         public override Dictionary<string, string> Features { get; } = new Dictionary<string, string>();
 
         public override bool HideOnPoolList { get; } = false;
-        public override string HostName { get; } = "ec1ipse.me";
+        public override string HostName { get; protected set; } = "ec1ipse.me";
 
         public override double MiniumumRewardPayout => 0.05;
     }

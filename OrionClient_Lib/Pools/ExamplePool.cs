@@ -166,7 +166,7 @@ namespace OrionClientLib.Pools
             return (true, String.Empty);
         }
 
-        public async Task OptionsAsync(CancellationToken token)
+        public async Task<(bool, string)> OptionsAsync(CancellationToken token)
         {
             //This is called when the user clicks the pool in the initial menu
             //You can use this to setup custom calls (staking, balance, claim, etc)
@@ -181,6 +181,8 @@ namespace OrionClientLib.Pools
 
             //Use cancellation token given as it will allow the user to go back to main menu with Ctrl+C
             string choice = await selectionPrompt.ShowAsync(AnsiConsole.Console, token);
+
+            return default;
         }
 
         private void SetRandomChallenge()

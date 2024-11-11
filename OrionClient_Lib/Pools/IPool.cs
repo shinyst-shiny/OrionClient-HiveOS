@@ -33,7 +33,7 @@ namespace OrionClientLib.Pools
         public Task<bool> ConnectAsync(CancellationToken token);
         public Task<bool> DisconnectAsync();
         public Task<double> GetFeeAsync(CancellationToken token);
-        public Task OptionsAsync(CancellationToken token);
+        public Task<(bool success, string errorMessage)> OptionsAsync(CancellationToken token);
 
         public string[] TableHeaders();
         public void DifficultyFound(DifficultyInfo info);

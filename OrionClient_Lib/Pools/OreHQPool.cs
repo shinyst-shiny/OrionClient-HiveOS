@@ -56,13 +56,13 @@ namespace OrionClientLib.Pools
         public virtual double MiniumumRewardPayout => 0;
 
 
-        private HttpClient _client;
-        private MinerPoolInformation _minerInformation;
-        private HQPoolSettings _poolSettings;
-        private ulong _timestamp = 0;
+        protected HttpClient _client;
+        protected MinerPoolInformation _minerInformation;
+        protected HQPoolSettings _poolSettings;
+        protected ulong _timestamp = 0;
 
-        private int _currentBestDifficulty = 0;
-        private string _errorMessage = String.Empty;
+        protected int _currentBestDifficulty = 0;
+        protected string _errorMessage = String.Empty;
 
         #region Overrides
 
@@ -156,10 +156,14 @@ namespace OrionClientLib.Pools
         {
             _minerInformation ??= new MinerPoolInformation(Coins);
             _poolSettings ??= new HQPoolSettings(PoolName);
-            _client ??= new HttpClient
+
+            if (!String.IsNullOrEmpty(HostName))
             {
-                BaseAddress = new Uri($"https://{WebsocketUrl.Host}")
-            };
+                _client ??= new HttpClient
+                {
+                    BaseAddress = new Uri($"https://{WebsocketUrl.Host}")
+                };
+            }
 
             base.SetWalletInfo(wallet, publicKey);
         }
@@ -191,6 +195,7 @@ namespace OrionClientLib.Pools
                     catch (Exception ex)
                     {
                         errorMessage = $"Failed to complete setup. Reason: {ex.Message}";
+                        isComplete = false;
                     }
                 }
             });
@@ -198,18 +203,30 @@ namespace OrionClientLib.Pools
             return (isComplete, errorMessage);
         }
 
-        public override async Task OptionsAsync(CancellationToken token)
+        public override async Task<(bool, string)> OptionsAsync(CancellationToken token)
         {
             await _poolSettings.LoadAsync();
 
-            await RefreshStakeBalancesAsync(true, token);
+            if(WebsocketUrl == null)
+            {
+                return (false, $"Domain is empty");
+            }
+
+            (bool success, string errorMessage) balanceRefresh = await RefreshStakeBalancesAsync(true, token);
+
+            if(!balanceRefresh.success)
+            {
+                return (false, !String.IsNullOrEmpty(balanceRefresh.errorMessage) ? $"Failed to pull balance information. Error: {balanceRefresh.errorMessage}" : String.Empty);
+            }
 
             if(token.IsCancellationRequested)
             {
-                return;
+                return (false, String.Empty);
             }
 
             await DisplayOptionsAsync(token);
+
+            return (true, String.Empty);
         }
 
         public override string[] TableHeaders()
@@ -536,18 +553,31 @@ namespace OrionClientLib.Pools
             }
         }
 
-        protected virtual async Task RefreshStakeBalancesAsync(bool displayUI, CancellationToken token)
+        protected virtual async Task<(bool success, string errorMessage)> RefreshStakeBalancesAsync(bool displayUI, CancellationToken token)
         {
-            if (displayUI)
+            try
             {
-                await AnsiConsole.Status().StartAsync($"Grabbing balance information", async ctx =>
+                if (displayUI)
+                {
+                    await AnsiConsole.Status().StartAsync($"Grabbing balance information", async ctx =>
+                    {
+                        await Update();
+                    });
+                }
+                else
                 {
                     await Update();
-                });
+                }
+
+                return (true, String.Empty);
             }
-            else
+            catch(TaskCanceledException ex)
             {
-                await Update();
+                return (false, String.Empty);
+            }
+            catch(Exception ex)
+            {
+                return (false, ex.Message);
             }
 
             async Task Update()
@@ -900,6 +930,9 @@ namespace OrionClientLib.Pools
         protected class HQPoolSettings : PoolSettings
         {
             public string ClaimWallet { get; set; }
+
+            [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+            public string CustomDomain { get; set; }
 
             public HQPoolSettings(string poolName) : base(poolName)
             {

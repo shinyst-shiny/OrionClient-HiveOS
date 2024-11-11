@@ -25,7 +25,7 @@ namespace OrionClientLib.Pools
         public abstract Dictionary<string, string> Features { get; }
 
         public abstract bool HideOnPoolList { get; }
-        public abstract string HostName { get; }
+        public abstract string HostName { get; protected set; }
         public abstract Uri WebsocketUrl { get; }
 
         public abstract event EventHandler<NewChallengeInfo> OnChallengeUpdate;
@@ -186,7 +186,7 @@ namespace OrionClientLib.Pools
 
         public abstract Task<(bool, string)> SetupAsync(CancellationToken token, bool initialSetup = false);
 
-        public abstract Task OptionsAsync(CancellationToken token);
+        public abstract Task<(bool, string)> OptionsAsync(CancellationToken token);
         public abstract string[] TableHeaders();
         public abstract void OnMessage(ArraySegment<byte> buffer, WebSocketMessageType type);
     }

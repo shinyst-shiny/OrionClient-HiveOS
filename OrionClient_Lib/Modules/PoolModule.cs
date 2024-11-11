@@ -49,9 +49,7 @@ namespace OrionClientLib.Modules
                 return (false, $"A full keypair is required for this pool. Private keys are never sent to the server");
             }
 
-            await pool.OptionsAsync(_cts.Token);
-
-            return (true, String.Empty);
+            return await pool.OptionsAsync(_cts.Token);
         }
     }
 }

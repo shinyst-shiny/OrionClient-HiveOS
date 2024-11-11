@@ -16,6 +16,6 @@ namespace OrionClientLib.Pools
         public override Dictionary<string, string> Features { get; } = new Dictionary<string, string>();
 
         public override bool HideOnPoolList { get; } = false;
-        public override string HostName { get; } = "pool.coal-pool.xyz";
+        public override string HostName { get; protected set; } = "pool.coal-pool.xyz";
     }
 }

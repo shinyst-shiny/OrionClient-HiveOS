@@ -171,6 +171,11 @@ namespace OrionClientLib.Hashers
 
         public async Task StopAsync()
         {
+            if(!_running)
+            {
+                return;
+            }
+
             _running = false;
             _newChallengeWait.Reset();
 
