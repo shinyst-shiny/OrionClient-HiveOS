@@ -22,7 +22,9 @@ using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.WebSockets;
+using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
@@ -234,11 +236,11 @@ namespace OrionClientLib.Pools
                 builder.AppendLine();
 
                 builder.AppendLine($"{"Wallet Balance".PadRight(14)} {_minerInformation.WalletBalance} {Coins}");
-                builder.AppendLine($"{"Unclaimed Mining Rewards".PadRight(14)} {_minerInformation.TotalMiningRewards} {Coins} " +
+                builder.AppendLine($"{"Mining Rewards".PadRight(14)} {_minerInformation.TotalMiningRewards} {Coins} " +
                     $"{(_minerInformation.TotalMiningRewards.BalanceChangeSinceUpdate > 0 ? $"([green]+{_minerInformation.TotalMiningRewards.BalanceChangeSinceUpdate:0.00000000000}[/])" : String.Empty)}" +
                     $"{(_minerInformation.TotalMiningRewards.TotalChange > 0 ? $"[[[Cyan]+{_minerInformation.TotalMiningRewards.TotalChange:0.00000000000} since start[/]]]" : String.Empty)}");
                
-                builder.AppendLine($"{"Unclaimed Stake Rewards".PadRight(14)} {_minerInformation.TotalStakeRewards} {Coins} " +
+                builder.AppendLine($"{"Stake Rewards".PadRight(14)} {_minerInformation.TotalStakeRewards} {Coins} " +
                     $"{(_minerInformation.TotalStakeRewards.BalanceChangeSinceUpdate > 0 ? $"([green]+{_minerInformation.TotalStakeRewards.BalanceChangeSinceUpdate:0.00000000000}[/])" : String.Empty)}" +
                     $"{(_minerInformation.TotalStakeRewards.TotalChange > 0 ? $"[[[Cyan]+{_minerInformation.TotalStakeRewards.TotalChange:0.00000000000} since start[/]]]" : String.Empty)}");
 
@@ -260,7 +262,7 @@ namespace OrionClientLib.Pools
 
                 if (!String.IsNullOrEmpty(_errorMessage))
                 {
-                    builder.AppendLine($"\n[red]Error: {_errorMessage}[/]");
+                    builder.AppendLine($"\n{_errorMessage}");
 
                     _errorMessage = String.Empty;
                 }
@@ -299,6 +301,9 @@ namespace OrionClientLib.Pools
                         break;
                     case claimStakeBalance:
                         await ClaimStakeOptionAsync(token);
+                        break;
+                    case claimRewardBalance:
+                        await ClaimRewardsOptionAsync(token);
                         break;
                     default:
                         return;
@@ -389,6 +394,11 @@ namespace OrionClientLib.Pools
 
                 double claimAmount = await claimPrompt.ShowAsync(AnsiConsole.Console, token);
 
+                if(claimAmount == 0)
+                {
+                    return;
+                }
+
                 //Confirmation
                 string claimWallet = _poolSettings.ClaimWallet ?? _wallet.Account.PublicKey;
                 bool isSame = claimWallet == _wallet.Account.PublicKey;
@@ -417,6 +427,59 @@ namespace OrionClientLib.Pools
                     message = $"[yellow]Notice: User canceled claiming[/]";
                 }
 
+            }
+        }
+
+        private async Task ClaimRewardsOptionAsync(CancellationToken token)
+        {
+            string message = String.Empty;
+
+            await RefreshStakeBalancesAsync(true, token);
+
+            AnsiConsole.Clear();
+
+            //Display claim prompt
+            TextPrompt<double> claimPrompt = new TextPrompt<double>($"Enter claim amount between ({MiniumumRewardPayout}-{_minerInformation.TotalMiningRewards.CurrentBalance}): ");
+            claimPrompt.DefaultValue(_minerInformation.TotalMiningRewards.CurrentBalance);
+            claimPrompt.Validate((v) =>
+            {
+                return v == 0 || (v >= MiniumumRewardPayout && v <= _minerInformation.TotalMiningRewards.CurrentBalance);
+            });
+
+            double claimAmount = await claimPrompt.ShowAsync(AnsiConsole.Console, token);
+
+            if (claimAmount == 0)
+            {
+                return;
+            }
+
+            //Confirmation
+            string claimWallet = _poolSettings.ClaimWallet ?? _wallet.Account.PublicKey;
+            bool isSame = claimWallet == _wallet.Account.PublicKey;
+
+            ConfirmationPrompt confirmationPrompt = new ConfirmationPrompt($"Claim {claimAmount} {Coins} mining rewards to {claimWallet}" +
+                $"{(!isSame ? $"\n[yellow]Warning: Claim wallet {claimWallet} is different from mining wallet {_wallet.Account.PublicKey}. Continue?[/]" : String.Empty)}?");
+            confirmationPrompt.DefaultValue = false;
+
+            if (await confirmationPrompt.ShowAsync(AnsiConsole.Console, token))
+            {
+                ulong ulongClaimAmount = (ulong)(claimAmount * (Coins == Coin.Ore ? OreProgram.OreDecimals : CoalProgram.CoalDecimals));
+
+                //Try claim
+                (bool success, string message) claimResult = await ClaimMiningRewards(claimWallet, ulongClaimAmount, token);
+
+                if (claimResult.success)
+                {
+                    _errorMessage = $"[green]{claimResult.message}[/]";
+                }
+                else
+                {
+                    _errorMessage = $"[red]Failed to claim: {claimResult.message}[/]";
+                }
+            }
+            else
+            {
+                _errorMessage = $"[yellow]Notice: User canceled claiming[/]";
             }
         }
 
@@ -574,13 +637,69 @@ namespace OrionClientLib.Pools
             try
             {
                 using var response = await _client.PostAsync($"/v3/claim-stake-rewards?pubkey={claimWallet}&mint={mintId}&amount={amount}", null, token);
+                string data = await response.Content.ReadAsStringAsync();
 
-                if (!response.IsSuccessStatusCode)
+                if (!response.IsSuccessStatusCode && response.StatusCode != HttpStatusCode.TooManyRequests)
                 {
-                    return (false, $"Server returned status code {response.StatusCode}");
+                    return (false, String.IsNullOrEmpty(data) ? $"Server returned status code {response.StatusCode}" : data);
                 }
 
+                switch (data)
+                {
+                    case "SUCCESS":
+                        return (true, $"Successfully queued stake claim request to {claimWallet}. Balances will update after transaction is finalized");
+                    case "QUEUED":
+                        return (true, "Claim is already queued");
+                    default:
+                        if (ulong.TryParse(data, out ulong time))
+                        {
+                            ulong timeLeft = 1800 - time;
+                            ulong secs = timeLeft % 60;
+                            ulong mins = (timeLeft / 60) % 60;
+
+                            return (false, $"You cannot claim until the time is up. Time left until next claim available: {mins}m {secs}s");
+                        }
+
+                        return (false, data);
+                }
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Failed to claim stake rewards. Result: {ex.Message}");
+            }
+        }
+
+        private async Task<(bool success, string message)> ClaimMiningRewards(string claimWallet, ulong amount, CancellationToken token)
+        {
+            try
+            {
+                if(!await UpdateTimestampAsync(token))
+                {
+                    return (false, $"Failed to get timestamp from server");
+                }
+
+                Base58Encoder _encoder = new Base58Encoder();
+
+                byte[] tBytes = new byte[8+32+8];
+                BinaryPrimitives.WriteUInt64LittleEndian(tBytes, _timestamp);
+                _encoder.DecodeData(claimWallet).CopyTo(tBytes, 8);
+                BinaryPrimitives.WriteUInt64LittleEndian(tBytes.AsSpan().Slice(40, 8), amount);
+
+                byte[] sigBytes = _wallet.Sign(tBytes);
+                string sig = _encoder.EncodeData(sigBytes);
+
+                string authHeader = $"Basic {Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_publicKey}:{sig}"))}";
+
+                using var requestMessage = new HttpRequestMessage(HttpMethod.Post, $"/v2/claim?timestamp={_timestamp}&receiver_pubkey={claimWallet}&amount={amount}");
+                requestMessage.Headers.TryAddWithoutValidation("Authorization", authHeader);
+
+                using var response = await _client.SendAsync(requestMessage);
                 string data = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode && response.StatusCode != HttpStatusCode.TooManyRequests)
+                {
+                    return (false, String.IsNullOrEmpty(data) ? $"Server returned status code {response.StatusCode}" : data);
+                }
 
                 switch (data)
                 {
@@ -603,7 +722,7 @@ namespace OrionClientLib.Pools
             }
             catch (Exception ex)
             {
-                return (false, $"Failed to claim stake rewards. Result: {ex.Message}");
+                return (false, $"Unknown exception occurred while claiming. Result: {ex.Message}");
             }
         }
 
