@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.9.34723.18
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrionClient", "OrionPool\OrionClient.csproj", "{087C6596-1F76-427F-A29A-F697E417A360}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrionClient", "OrionClient\OrionClient.csproj", "{087C6596-1F76-427F-A29A-F697E417A360}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrionClientLib", "OrionPool_Lib\OrionClientLib.csproj", "{06948012-C5FF-45F8-81B9-74CFC5F83036}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrionClientLib", "OrionClient_Lib\OrionClientLib.csproj", "{06948012-C5FF-45F8-81B9-74CFC5F83036}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Equix", "Equix\Equix.csproj", "{D31DB4B6-177B-40F1-A5D3-2C27492538F4}"
 EndProject

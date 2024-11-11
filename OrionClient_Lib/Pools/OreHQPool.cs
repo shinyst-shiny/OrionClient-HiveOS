@@ -210,7 +210,7 @@ namespace OrionClientLib.Pools
 
         public override string[] TableHeaders()
         {
-            return ["Time", "Id", "Diff", "Mining Rewards", "Staking Rewards", $"Pool Rewards", "Unclaimed Rewards", "Unclaimed Stake"];
+            return ["Time", "Id", "Diff", "Mining Rewards", /*"Staking Rewards",*/ $"Pool Rewards", "Unclaimed Rewards", "Unclaimed Stake"];
         }
 
         #endregion
@@ -626,6 +626,7 @@ namespace OrionClientLib.Pools
         {
             CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
+            //This data takes ~20s to update properly, so everything is off by 1 update
             await RefreshStakeBalancesAsync(false, cts.Token);
 
             OnMinerUpdate?.Invoke(this, [
@@ -633,7 +634,7 @@ namespace OrionClientLib.Pools
                 GenerateChallengeId(submissionResponse.Challenge).ToString(),
                 $"{submissionResponse.MinerSuppliedDifficulty}/{submissionResponse.Difficulty}",
                 $"{submissionResponse.MinerEarnedRewards:0.00000000000}",
-                $"{_minerInformation.TotalStakeRewards.BalanceChangeSinceUpdate:0.00000000000}",
+                //$"{_minerInformation.TotalStakeRewards.BalanceChangeSinceUpdate:0.00000000000}",
                 $"{submissionResponse.TotalRewards:0.00000000000}",
                 $"{_minerInformation.TotalMiningRewards:0.00000000000}",
                 $"{_minerInformation.TotalStakeRewards:0.00000000000}",

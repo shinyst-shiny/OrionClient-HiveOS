@@ -226,7 +226,7 @@ namespace OrionClientLib.Modules
                 new Layout("hashrate"),
                 new Layout("poolInfo")
                 );
-            _uiLayout["hashrate"].Ratio = 65;
+            _uiLayout["hashrate"].Ratio = 75;
             _uiLayout["poolInfo"].Ratio = 100;
             
             _hashrateTable = new Table();
