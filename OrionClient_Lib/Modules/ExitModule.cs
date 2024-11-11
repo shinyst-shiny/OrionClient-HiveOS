@@ -26,9 +26,9 @@ namespace OrionClientLib.Modules
 
         }
 
-        public async Task<bool> InitializeAsync(Data data)
+        public async Task<(bool, string)> InitializeAsync(Data data)
         {
-            return true;
+            return (true, String.Empty);
         }
     }
 }

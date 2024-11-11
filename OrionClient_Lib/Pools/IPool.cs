@@ -20,6 +20,7 @@ namespace OrionClientLib.Pools
         public Dictionary<string, string> Features { get; }
         public bool HideOnPoolList { get; }
         public Coin Coins { get; }
+        public bool RequiresKeypair { get; }
 
         public event EventHandler<NewChallengeInfo> OnChallengeUpdate;
         public event EventHandler<string[]> OnMinerUpdate;
@@ -27,7 +28,7 @@ namespace OrionClientLib.Pools
         public event EventHandler ResumeMining;
 
         public void SetWalletInfo(Wallet wallet, string publicKey);
-        public Task<bool> SetupAsync(CancellationToken token, bool initialSetup = false);
+        public Task<(bool success, string errorMessage)> SetupAsync(CancellationToken token, bool initialSetup = false);
 
         public Task<bool> ConnectAsync(CancellationToken token);
         public Task<bool> DisconnectAsync();

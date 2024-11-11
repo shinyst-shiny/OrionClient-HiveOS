@@ -49,6 +49,7 @@ namespace OrionClientLib.Pools
         public abstract override Coin Coins { get; }
 
         public abstract override bool HideOnPoolList { get; }
+        public override bool RequiresKeypair { get; } = true;
         public override Uri WebsocketUrl => new Uri($"wss://{HostName}/v2/ws?timestamp={_timestamp}");
         public virtual double MiniumumRewardPayout => 0;
 
@@ -161,15 +162,16 @@ namespace OrionClientLib.Pools
             base.SetWalletInfo(wallet, publicKey);
         }
 
-        public override async Task<bool> SetupAsync(CancellationToken token, bool initialSetup = false)
+        public override async Task<(bool, string)> SetupAsync(CancellationToken token, bool initialSetup = false)
         {
             bool isComplete = true;
+            string errorMessage = String.Empty;
 
             await AnsiConsole.Status().StartAsync($"Setting up {PoolName} pool", async ctx =>
             {
                 if (_wallet == null)
                 {
-                    AnsiConsole.MarkupLine("[red]A full keypair is required to sign message for this pool. Private keys are never sent to the server[/]\n");
+                    errorMessage = "A full keypair is required to sign message for this pool. Private keys are never sent to the server";
 
                     isComplete = false;
                 }
@@ -179,19 +181,19 @@ namespace OrionClientLib.Pools
                     {
                         if (!await RegisterAsync(token))
                         {
-                            AnsiConsole.MarkupLine($"[red]Failed to signup to pool[/]\n");
+                            errorMessage = $"Failed to signup to pool";
 
                             isComplete = false;
                         }
                     }
                     catch (Exception ex)
                     {
-                        AnsiConsole.MarkupLine($"[red]Failed to complete setup. Reason: {ex.Message}[/]\n");
+                        errorMessage = $"Failed to complete setup. Reason: {ex.Message}";
                     }
                 }
             });
 
-            return isComplete;
+            return (isComplete, errorMessage);
         }
 
         public override async Task OptionsAsync(CancellationToken token)

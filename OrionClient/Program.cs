@@ -36,6 +36,8 @@ namespace OrionClient
         private static Layout _uiLayout;
         private static Table _logTable;
 
+        private static string _message = String.Empty;
+
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Settings))]
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Program))]
         static async Task Main(string[] args)
@@ -140,11 +142,19 @@ namespace OrionClient
                 _attemptedExit = false;
 
                 _currentModule = await DisplayModuleSelector(data);
+                _message = String.Empty;
 
                 try
                 {
-                    if (!await _currentModule.InitializeAsync(data))
+                    var result = await _currentModule.InitializeAsync(data);
+
+                    if (!result.success)
                     {
+                        if (!String.IsNullOrEmpty(result.errorMessage))
+                        {
+                            _message = $"[red]{result.errorMessage}[/]\n";
+                        }
+
                         _currentModule = null;
                     }
                 }
@@ -225,7 +235,9 @@ namespace OrionClient
             (IHasher cpuHasher, IHasher gpuHasher) = data.GetChosenHasher();
             IPool pool = data.GetChosenPool();
 
-            prompt.Title($"Wallet: {publicKey ?? "N/A"}\nHasher: CPU - {cpuHasher?.Name ?? "N/A"} ({_settings.CPUThreads} threads), GPU - {gpuHasher?.Name ?? "N/A"}\nPool: {pool?.DisplayName ?? "N/A"}");
+            prompt.Title($"Wallet: {publicKey ?? "N/A"}\nHasher: CPU - {cpuHasher?.Name ?? "N/A"} ({_settings.CPUThreads} threads), GPU - {gpuHasher?.Name ?? "N/A"}\nPool: {pool?.DisplayName ?? "N/A"}" +
+                $"{(!String.IsNullOrEmpty(_message) ? $"\n\n[red]Error: {_message}[/]\n" : String.Empty)}");
+            _message = String.Empty;
 
             prompt.UseConverter((module) =>
             {

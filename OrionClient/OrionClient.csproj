@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\OrionPool_Lib\OrionClientLib.csproj" />
+    <ProjectReference Include="..\OrionClient_Lib\OrionClientLib.csproj" />
   </ItemGroup>
 
   <ItemGroup>

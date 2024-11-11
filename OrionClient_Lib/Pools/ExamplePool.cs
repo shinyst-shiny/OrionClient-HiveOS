@@ -41,6 +41,9 @@ namespace OrionClientLib.Pools
 
         public Coin Coins => Coin.Ore;
 
+        //Whether or not a full keypair (public:private) key is required to run the pool
+        public bool RequiresKeypair => false;
+
         public event EventHandler<NewChallengeInfo> OnChallengeUpdate;
         public event EventHandler<string[]> OnMinerUpdate;
         public event EventHandler PauseMining;
@@ -136,7 +139,7 @@ namespace OrionClientLib.Pools
             return 0;
         }
 
-        public async Task<bool> SetupAsync(CancellationToken token, bool initialSetup = false)
+        public async Task<(bool, string)> SetupAsync(CancellationToken token, bool initialSetup = false)
         {
             //Called when someone selects the pool through the "Run Setup" menu or selects "Start Mining"
 
@@ -160,7 +163,7 @@ namespace OrionClientLib.Pools
                 AnsiConsole.Clear();
             }
 
-            return true;
+            return (true, String.Empty);
         }
 
         public async Task OptionsAsync(CancellationToken token)

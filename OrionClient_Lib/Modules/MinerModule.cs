@@ -81,7 +81,7 @@ namespace OrionClientLib.Modules
             _stop = true;
         }
 
-        public async Task<bool> InitializeAsync(Data data)
+        public async Task<(bool, string)> InitializeAsync(Data data)
         {
             _stop = false;
             _currentData = data;
@@ -90,9 +90,9 @@ namespace OrionClientLib.Modules
             IPool pool = _currentData.GetChosenPool();
             (IHasher cpuHasher, IHasher gpuHasher) = _currentData.GetChosenHasher();
 
-            if(pool == null)
+            if (pool == null)
             {
-                return false;
+                return (false, $"No pool selected");
             }
 
             GenerateUI();
@@ -104,11 +104,18 @@ namespace OrionClientLib.Modules
 
             (Wallet wallet, string publicKey) = await data.Settings.GetWalletAsync();
 
+            if (pool.RequiresKeypair && wallet == null)
+            {
+                return (false, $"A full keypair is required for this pool. Private keys are never sent to the server");
+            }
+
             pool.SetWalletInfo(wallet, publicKey);
 
-            if (!await pool.SetupAsync(_cts.Token))
+            var poolResult = await pool.SetupAsync(_cts.Token);
+
+            if (!poolResult.success)
             {
-                return false;
+                return poolResult;
             }
 
             AnsiConsole.Clear();
@@ -146,7 +153,7 @@ namespace OrionClientLib.Modules
 
             await pool.ConnectAsync(_cts.Token);
 
-            return true;
+            return (true, String.Empty);
         }
 
         private void Pool_OnChallengeUpdate(object? sender, NewChallengeInfo e)

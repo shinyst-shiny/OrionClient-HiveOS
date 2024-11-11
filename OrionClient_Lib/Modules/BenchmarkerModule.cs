@@ -32,7 +32,7 @@ namespace OrionClientLib.Modules
         private Table _render = null;
         private bool _finished = false;
 
-        public async Task<bool> InitializeAsync(Data data)
+        public async Task<(bool, string)> InitializeAsync(Data data)
         {
             _stop = false;
             _currentStep = Step.Initial;
@@ -55,7 +55,7 @@ namespace OrionClientLib.Modules
             };
         }
 
-        private async Task<bool> HandleHashSelection(Data data)
+        private async Task<(bool, string)> HandleHashSelection(Data data)
         {
             MultiSelectionPrompt<IHasher> hasherPrompt = new MultiSelectionPrompt<IHasher>();
             hasherPrompt.Title = "Choose hashers to benchmark";
@@ -69,15 +69,15 @@ namespace OrionClientLib.Modules
 
                 if (_chosenHashers.Count == 0)
                 {
-                    return false;
+                    return (false, String.Empty);
                 }
             }
             catch (TaskCanceledException)
             {
-                return false;
+                return (false, String.Empty);
             }
 
-            return true;
+            return (true, String.Empty);
         }
 
         private async Task<IRenderable> HandleBenchmarking(Data data)

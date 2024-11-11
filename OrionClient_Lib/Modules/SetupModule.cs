@@ -28,6 +28,7 @@ namespace OrionClientLib.Modules
         private Data _data;
         private Settings _settings => _data?.Settings;
         private CancellationTokenSource _cts;
+        private string _errorMessage = String.Empty;
 
         public SetupModule()
         {
@@ -51,7 +52,7 @@ namespace OrionClientLib.Modules
             _cts.Cancel();
         }
 
-        public async Task<bool> InitializeAsync(Data data)
+        public async Task<(bool, string)> InitializeAsync(Data data)
         {
             _cts = new CancellationTokenSource();
             _currentStep = 0;
@@ -75,10 +76,10 @@ namespace OrionClientLib.Modules
             {
                 await _settings.ReloadAsync();
 
-                return false;
+                return (false, "Setup cancelled by user");
             }
 
-            return true;
+            return (true, String.Empty);
         }
 
         private async Task<int> WalletSetupAsync()
@@ -250,7 +251,9 @@ namespace OrionClientLib.Modules
             IPool chosenPool = _data.GetChosenPool();
             
             SelectionPrompt<IPool> selectionPrompt = new SelectionPrompt<IPool>();
-            selectionPrompt.Title("Pool Selection");
+            selectionPrompt.Title($"Pool Selection{(!String.IsNullOrEmpty(_errorMessage) ? $"\n[red]Error: {_errorMessage}[/]\n" : String.Empty)}");
+            _errorMessage = String.Empty;
+
             selectionPrompt.UseConverter((pool) =>
             {
                 string chosenText = String.Empty;
@@ -288,8 +291,12 @@ namespace OrionClientLib.Modules
 
                 chosenPool.SetWalletInfo(wallet, publicKey);
 
-                if (!await chosenPool.SetupAsync(_cts.Token, true))
+                var poolSetup = await chosenPool.SetupAsync(_cts.Token, true);
+
+                if (!poolSetup.success)
                 {
+                    _errorMessage = poolSetup.errorMessage;
+
                     return _currentStep;
                 }
 

@@ -20,6 +20,7 @@ namespace OrionClientLib.Pools
         public abstract string DisplayName { get; }
         public abstract string Description { get; }
         public abstract Coin Coins { get; }
+        public abstract bool RequiresKeypair { get; }
 
         public abstract Dictionary<string, string> Features { get; }
 
@@ -183,7 +184,7 @@ namespace OrionClientLib.Pools
         public abstract void DifficultyFound(DifficultyInfo info);
         public abstract Task<double> GetFeeAsync(CancellationToken token);
 
-        public abstract Task<bool> SetupAsync(CancellationToken token, bool initialSetup = false);
+        public abstract Task<(bool, string)> SetupAsync(CancellationToken token, bool initialSetup = false);
 
         public abstract Task OptionsAsync(CancellationToken token);
         public abstract string[] TableHeaders();

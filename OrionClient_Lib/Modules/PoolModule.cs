@@ -1,5 +1,6 @@
 ﻿using OrionClientLib.Modules.Models;
 using OrionClientLib.Pools;
+using Solnet.Wallet;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using System;
@@ -29,7 +30,7 @@ namespace OrionClientLib.Modules
             _cts.Cancel();
         }
 
-        public async Task<bool> InitializeAsync(Data data)
+        public async Task<(bool, string)> InitializeAsync(Data data)
         {
             _currentData = data;
             _cts = new CancellationTokenSource();
@@ -38,12 +39,19 @@ namespace OrionClientLib.Modules
 
             if (pool == null)
             {
-                return false;
+                return (false, $"No pool is selected");
+            }
+
+            (Wallet wallet, string publicKey) = await _currentData.Settings.GetWalletAsync();
+
+            if (pool.RequiresKeypair && wallet == null)
+            {
+                return (false, $"A full keypair is required for this pool. Private keys are never sent to the server");
             }
 
             await pool.OptionsAsync(_cts.Token);
 
-            return true;
+            return (true, String.Empty);
         }
     }
 }

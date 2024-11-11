@@ -13,7 +13,7 @@ namespace OrionClientLib.Modules
     {
         public string Name { get; }
 
-        public Task<bool> InitializeAsync(Data data);
+        public Task<(bool success, string errorMessage)> InitializeAsync(Data data);
         public Task<ExecuteResult> ExecuteAsync(Data data);
         public Task ExitAsync();
     }
