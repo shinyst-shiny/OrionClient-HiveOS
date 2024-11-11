@@ -369,6 +369,13 @@ namespace OrionClientLib.Hashers
 
         public abstract bool IsSupported();
 
+        protected bool HasNativeFile()
+        {
+            string file = Path.Combine(AppContext.BaseDirectory, $"libequix.{(OperatingSystem.IsWindows() ? "dll" : "so")}");
+
+            return File.Exists(file);
+        }
+
         public void PauseMining()
         {
             _pauseMining.Reset();

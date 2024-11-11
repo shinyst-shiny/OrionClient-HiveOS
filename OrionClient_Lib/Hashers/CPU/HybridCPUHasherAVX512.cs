@@ -115,7 +115,7 @@ namespace OrionClientLib.Hashers.CPU
 
         public override bool IsSupported()
         {
-            return Avx512DQ.IsSupported;
+            return Avx512DQ.IsSupported && HasNativeFile();
         }
     }
 }
