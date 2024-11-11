@@ -27,6 +27,9 @@ cd OrionClient && dotnet publish -o Build
 
 # Release builds
 
+https://github.com/SL-x-TnT/OrionClient/releases
+- **Standalone** versions do not require net8 runtime to be installed
+  
 ## 1. Install net8 runtime (optional)
 Ubuntu
 ```
@@ -34,7 +37,3 @@ sudo apt-get update && sudo apt-get install -y dotnet-runtime-8.0
 ```
 Windows
 https://dotnet.microsoft.com/en-us/download/dotnet/8.0
-
-## Download Release Build
-https://github.com/SL-x-TnT/OrionClient/releases
-- **Standalone** versions do not require net8 runtime to be installed
