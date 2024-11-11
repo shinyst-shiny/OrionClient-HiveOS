@@ -1,6 +1,7 @@
 ﻿using DrillX;
 using DrillX.Solver;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using NLog;
 using Org.BouncyCastle.Asn1.Cmp;
 using Org.BouncyCastle.Bcpg.OpenPgp;
@@ -233,7 +234,7 @@ namespace OrionClientLib.Pools
                     $"{(_minerInformation.TotalMiningRewards.TotalChange > 0 ? $"[[[Cyan]+{_minerInformation.TotalMiningRewards.TotalChange:0.00000000000} since start[/]]]" : String.Empty)}");
                
                 builder.AppendLine($"{"Unclaimed Stake Rewards".PadRight(14)} {_minerInformation.StakeBalance} {Coins} " +
-                    $"{(_minerInformation.StakeBalance.BalanceChangeSinceUpdate > 0 ? $"([green]+{_minerInformation.StakeBalance.BalanceChangeSinceUpdate:0.00000000000}" : String.Empty)}" +
+                    $"{(_minerInformation.StakeBalance.BalanceChangeSinceUpdate > 0 ? $"([green]+{_minerInformation.StakeBalance.BalanceChangeSinceUpdate:0.00000000000}[/])" : String.Empty)}" +
                     $"{(_minerInformation.StakeBalance.TotalChange > 0 ? $"[[[Cyan]+{_minerInformation.StakeBalance.TotalChange:0.00000000000} since start[/]]]" : String.Empty)}");
 
                 if (_minerInformation.Stakes?.Count > 0)
@@ -347,15 +348,71 @@ namespace OrionClientLib.Pools
 
         private async Task ClaimStakeOptionAsync(CancellationToken token)
         {
-            SelectionPrompt<PoolStake> selectionPrompt = new SelectionPrompt<PoolStake>();
-            selectionPrompt.Title($"Choose staking pool to claim from");
+            string message = String.Empty;
 
-            foreach(var stakePool in _minerInformation.Stakes)
+            while (true)
             {
+                AnsiConsole.Clear();
+
+                SelectionPrompt<PoolStake> selectionPrompt = new SelectionPrompt<PoolStake>();
+
+                selectionPrompt.Title($"Choose staking pool to claim from {(!String.IsNullOrEmpty(message) ? $"\n\n{message}" : String.Empty)}");
+                selectionPrompt.UseConverter((pool) =>
+                {
+                    return pool == null ? "Exit" : $"{pool.PoolName}: {pool.RewardsUI} {Coins}";
+                });
+
+                selectionPrompt.AddChoices(_minerInformation.Stakes.Where(x => x.RewardsUI > MiniumumRewardPayout));
+                selectionPrompt.AddChoice(null);
+                message = String.Empty;
+
+                PoolStake result = await selectionPrompt.ShowAsync(AnsiConsole.Console, token);
+
+                //Exit
+                if (result == null)
+                {
+                    return;
+                }
+
+                //Display claim prompt
+                TextPrompt<double> claimPrompt = new TextPrompt<double>($"Enter claim amount between ({MiniumumRewardPayout}-{result.RewardsUI}): ");
+                claimPrompt.DefaultValue(result.RewardsUI);
+                claimPrompt.Validate((v) =>
+                {
+                    return v == 0 || (v >= MiniumumRewardPayout && v <= result.RewardsUI);
+                });
+
+                double claimAmount = await claimPrompt.ShowAsync(AnsiConsole.Console, token);
+
+                //Confirmation
+                string claimWallet = _poolSettings.ClaimWallet ?? _wallet.Account.PublicKey;
+                bool isSame = claimWallet == _wallet.Account.PublicKey;
+
+                ConfirmationPrompt confirmationPrompt = new ConfirmationPrompt($"Claim {claimAmount} {Coins} from {result.PoolName} pool to {claimWallet}" +
+                    $"{(!isSame ? $"\n[yellow]Warning: Claim wallet {claimWallet} is different from mining wallet {_wallet.Account.PublicKey}. Continue?[/]" : String.Empty)}?");
+                confirmationPrompt.DefaultValue = false;
+
+                if(await confirmationPrompt.ShowAsync(AnsiConsole.Console, token))
+                {
+                    //Try claim
+                    (bool success, string message) claimResult = await ClaimStakeRewards(claimWallet, result.MintPubkey, (ulong)(claimAmount * result.Decimals), token);
+
+                    if(claimResult.success)
+                    {
+                        message = $"[green]{claimResult.message}[/]";
+                        result.RewardsBalance -= (long)(claimAmount * result.Decimals);
+                    }
+                    else
+                    {
+                        message = $"[red]{claimResult.message}[/]";
+                    }
+                }
+                else
+                {
+                    message = $"[yellow]Notice: User canceled claiming[/]";
+                }
 
             }
-
-            _errorMessage = "Testing error message";
         }
 
         #endregion
@@ -492,6 +549,44 @@ namespace OrionClientLib.Pools
             catch
             {
                 return null;
+            }
+        }
+
+        private async Task<(bool success, string message)> ClaimStakeRewards(string claimWallet, string mintId, ulong amount, CancellationToken token)
+        {
+            try
+            {
+                using var response = await _client.PostAsync($"/v3/claim-stake-rewards?pubkey={claimWallet}&mint={mintId}&amount={amount}", null, token);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return (false, $"Server returned status code {response.StatusCode}");
+                }
+
+                string data = await response.Content.ReadAsStringAsync();
+
+                switch (data)
+                {
+                    case "SUCCESS":
+                        return (true, $"Successfully queued claim request to {claimWallet}. Balances will update after transaction is finalized");
+                    case "QUEUED":
+                        return (true, "Claim is already queued");
+                    default:
+                        if (ulong.TryParse(data, out ulong time))
+                        {
+                            ulong timeLeft = 1800 - time;
+                            ulong secs = timeLeft % 60;
+                            ulong mins = (timeLeft / 60) % 60;
+
+                            return (false, $"You cannot claim until the time is up. Time left until next claim available: {mins}m {secs}s");
+                        }
+
+                        return (false, data);
+                }
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Failed to claim stake rewards. Result: {ex.Message}");
             }
         }
 
@@ -640,7 +735,7 @@ namespace OrionClientLib.Pools
                     if(boostAccounts != null && boostAccounts.TryGetValue(new PublicKey(stake.MintPubkey), out var d))
                     {
                         stake.PoolName = d.name;
-                        stake.Decimals = d.decimals;
+                        stake.Decimals = Math.Pow(10, d.decimals);
                     }
 
                     totalStakeRewards += stake.RewardsBalance / (_coin == Coin.Ore ? OreProgram.OreDecimals : CoalProgram.CoalDecimals);
