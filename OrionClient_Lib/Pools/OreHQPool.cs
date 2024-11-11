@@ -109,7 +109,7 @@ namespace OrionClientLib.Pools
                 {
                     case OreHQResponseTypes.StartMining:
                         {
-                            ChallengeResponse challenge = new ChallengeResponse();
+                            OreHQChallengeResponse challenge = new OreHQChallengeResponse();
                             challenge.Deserialize(buffer);
 
                             HandleNewChallenge(challenge);
@@ -117,7 +117,7 @@ namespace OrionClientLib.Pools
                         break;
                     case OreHQResponseTypes.SubmissionResult:
                         {
-                            PoolSubmissionResponse submissionResponse = new PoolSubmissionResponse();
+                            OreHQPoolSubmissionResponse submissionResponse = new OreHQPoolSubmissionResponse();
                             submissionResponse.Deserialize(buffer);
 
                             HandleSubmissionResult(submissionResponse);
@@ -221,7 +221,7 @@ namespace OrionClientLib.Pools
 
         #region Display Options
 
-        private async Task DisplayOptionsAsync(CancellationToken token)
+        protected async Task DisplayOptionsAsync(CancellationToken token)
         {
             while (true)
             {
@@ -314,7 +314,7 @@ namespace OrionClientLib.Pools
 
         }
 
-        private async Task SetClaimWalletOptionAsync(CancellationToken token)
+        protected async Task SetClaimWalletOptionAsync(CancellationToken token)
         {
             Base58Encoder encoder = new Base58Encoder();
 
@@ -356,7 +356,7 @@ namespace OrionClientLib.Pools
             await _poolSettings.SaveAsync();
         }
 
-        private async Task ClaimStakeOptionAsync(CancellationToken token)
+        protected async Task ClaimStakeOptionAsync(CancellationToken token)
         {
             string message = String.Empty;
 
@@ -364,7 +364,7 @@ namespace OrionClientLib.Pools
             {
                 AnsiConsole.Clear();
 
-                SelectionPrompt<PoolStake> selectionPrompt = new SelectionPrompt<PoolStake>();
+                SelectionPrompt<OreHQPoolStake> selectionPrompt = new SelectionPrompt<OreHQPoolStake>();
 
                 selectionPrompt.Title($"Choose staking pool to claim from {(!String.IsNullOrEmpty(message) ? $"\n\n{message}" : String.Empty)}");
                 selectionPrompt.UseConverter((pool) =>
@@ -376,7 +376,7 @@ namespace OrionClientLib.Pools
                 selectionPrompt.AddChoice(null);
                 message = String.Empty;
 
-                PoolStake result = await selectionPrompt.ShowAsync(AnsiConsole.Console, token);
+                OreHQPoolStake result = await selectionPrompt.ShowAsync(AnsiConsole.Console, token);
 
                 //Exit
                 if (result == null)
@@ -430,7 +430,7 @@ namespace OrionClientLib.Pools
             }
         }
 
-        private async Task ClaimRewardsOptionAsync(CancellationToken token)
+        protected async Task ClaimRewardsOptionAsync(CancellationToken token)
         {
             string message = String.Empty;
 
@@ -487,7 +487,7 @@ namespace OrionClientLib.Pools
 
         #region HTTP Requests
 
-        private async Task<bool> RegisterAsync(CancellationToken token)
+        protected virtual async Task<bool> RegisterAsync(CancellationToken token)
         {
             using var response = await _client.PostAsync($"/v2/signup?miner={_publicKey}", null, token);
 
@@ -506,7 +506,7 @@ namespace OrionClientLib.Pools
             return false;
         }
 
-        protected async Task<bool> UpdateTimestampAsync(CancellationToken token)
+        protected virtual async Task<bool> UpdateTimestampAsync(CancellationToken token)
         {
             try
             {
@@ -536,7 +536,7 @@ namespace OrionClientLib.Pools
             }
         }
 
-        private async Task RefreshStakeBalancesAsync(bool displayUI, CancellationToken token)
+        protected virtual async Task RefreshStakeBalancesAsync(bool displayUI, CancellationToken token)
         {
             if (displayUI)
             {
@@ -572,7 +572,7 @@ namespace OrionClientLib.Pools
             }
         }
 
-        private async Task<(double value, bool success)> GetF64DataAsync(string endpoint, CancellationToken token)
+        protected virtual async Task<(double value, bool success)> GetF64DataAsync(string endpoint, CancellationToken token)
         {
             try
             {
@@ -600,17 +600,17 @@ namespace OrionClientLib.Pools
             }
         }
 
-        private async Task<(double balance, bool success)> GetBalanceAsync(CancellationToken token)
+        protected virtual async Task<(double balance, bool success)> GetBalanceAsync(CancellationToken token)
         {
             return await GetF64DataAsync("balance", token);
         }
 
-        private async Task<(double reward, bool success)> GetRewardAsync(CancellationToken token)
+        protected virtual async Task<(double reward, bool success)> GetRewardAsync(CancellationToken token)
         {
             return await GetF64DataAsync("rewards", token);
         }
 
-        private async Task<List<PoolStake>> GetStakingInformationAsync(CancellationToken token)
+        protected virtual async Task<List<OreHQPoolStake>> GetStakingInformationAsync(CancellationToken token)
         {
             using var response = await _client.GetAsync($"/v2/miner/boost/stake-accounts?pubkey={_publicKey}", token);
 
@@ -623,7 +623,7 @@ namespace OrionClientLib.Pools
 
             try
             {
-                return JsonConvert.DeserializeObject<List<PoolStake>>(data);
+                return JsonConvert.DeserializeObject<List<OreHQPoolStake>>(data);
 
             }
             catch
@@ -632,7 +632,7 @@ namespace OrionClientLib.Pools
             }
         }
 
-        private async Task<(bool success, string message)> ClaimStakeRewards(string claimWallet, string mintId, ulong amount, CancellationToken token)
+        protected virtual async Task<(bool success, string message)> ClaimStakeRewards(string claimWallet, string mintId, ulong amount, CancellationToken token)
         {
             try
             {
@@ -669,7 +669,7 @@ namespace OrionClientLib.Pools
             }
         }
 
-        private async Task<(bool success, string message)> ClaimMiningRewards(string claimWallet, ulong amount, CancellationToken token)
+        protected virtual async Task<(bool success, string message)> ClaimMiningRewards(string claimWallet, ulong amount, CancellationToken token)
         {
             try
             {
@@ -730,7 +730,7 @@ namespace OrionClientLib.Pools
 
         #region WS Responses
 
-        private void HandleNewChallenge(ChallengeResponse challengeResponse)
+        protected virtual void HandleNewChallenge(OreHQChallengeResponse challengeResponse)
         {
             _currentBestDifficulty = 0;
 
@@ -743,7 +743,7 @@ namespace OrionClientLib.Pools
             });
         }
 
-        private async void HandleSubmissionResult(PoolSubmissionResponse submissionResponse)
+        protected virtual async void HandleSubmissionResult(OreHQPoolSubmissionResponse submissionResponse)
         {
             CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
@@ -762,7 +762,7 @@ namespace OrionClientLib.Pools
             ]);
         }
 
-        private int GenerateChallengeId(byte[] data)
+        protected virtual int GenerateChallengeId(byte[] data)
         {
             unchecked
             {
@@ -783,7 +783,7 @@ namespace OrionClientLib.Pools
 
         #region WS Requests
 
-        private async Task<bool> SendReadyUp(bool updateTime = true)
+        protected virtual async Task<bool> SendReadyUp(bool updateTime = true)
         {
             PauseMining?.Invoke(this, EventArgs.Empty);
 
@@ -817,7 +817,7 @@ namespace OrionClientLib.Pools
             return result;
         }
 
-        private async Task<bool> SendPoolSubmission(DifficultyInfo info)
+        protected virtual async Task<bool> SendPoolSubmission(DifficultyInfo info)
         {
             _logger.Log(LogLevel.Debug, $"Sending solution. Diff: {info.BestDifficulty}. Challenge id: {info.ChallengeId}. Nonce: {info.BestNonce}");
 
@@ -842,13 +842,13 @@ namespace OrionClientLib.Pools
 
         #region Classes
 
-        private class MinerPoolInformation
+        protected class MinerPoolInformation
         {
             public BalanceTracker<double> TotalStakeRewards { get; private set; } = new BalanceTracker<double>();
             public BalanceTracker<double> TotalMiningRewards { get; private set; } = new BalanceTracker<double>();
             public BalanceTracker<double> WalletBalance { get; private set; } = new BalanceTracker<double>();
 
-            public List<PoolStake> Stakes { get; set; }
+            public List<OreHQPoolStake> Stakes { get; set; }
 
             private Coin _coin;
 
@@ -857,7 +857,7 @@ namespace OrionClientLib.Pools
                 _coin = coin;
             }
 
-            public void UpdateStakes(List<PoolStake> stakes)
+            public void UpdateStakes(List<OreHQPoolStake> stakes)
             {
                 Stakes = stakes;
 
@@ -872,7 +872,7 @@ namespace OrionClientLib.Pools
 
                 var boostAccounts = _coin == Coin.Ore ? OreProgram.BoostMints : null;
                 
-                foreach(PoolStake stake in stakes)
+                foreach(OreHQPoolStake stake in stakes)
                 {
                     if(boostAccounts != null && boostAccounts.TryGetValue(new PublicKey(stake.MintPubkey), out var d))
                     {
@@ -897,7 +897,7 @@ namespace OrionClientLib.Pools
             }
         }
 
-        private class HQPoolSettings : PoolSettings
+        protected class HQPoolSettings : PoolSettings
         {
             public string ClaimWallet { get; set; }
 

@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace OrionClientLib.Pools.Models
 {
-    internal class BalanceTracker<T> where T : INumber<T>
+    public class BalanceTracker<T> where T : INumber<T>
     {
         public T InitialBalance { get; private set; }
         public DateTime InitialTime { get; private set; }

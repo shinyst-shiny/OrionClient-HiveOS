@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace OrionClientLib.Pools.HQPool
 {
-    internal class PoolStake
+    public class OreHQPoolStake
     {
         [JsonProperty("id")]
         public int Id { get; set; }

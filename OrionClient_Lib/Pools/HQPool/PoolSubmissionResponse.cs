@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace OrionClientLib.Pools.HQPool
 {
-    internal class PoolSubmissionResponse : IMessage
+    public class OreHQPoolSubmissionResponse : IMessage
     {
         public uint Difficulty { get; private set; }
         public double TotalBalance { get; private set; }

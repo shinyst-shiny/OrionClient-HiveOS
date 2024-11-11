@@ -9,7 +9,7 @@ using System.Xml.Linq;
 
 namespace OrionClientLib.Pools.Models
 {
-    internal abstract class PoolSettings
+    public abstract class PoolSettings
     {
         protected readonly string _folder = Path.Combine(AppContext.BaseDirectory, "pool_data");
         protected string _filePath => Path.Combine(_folder, $"{_poolName ?? GetType().Name}_data.json");

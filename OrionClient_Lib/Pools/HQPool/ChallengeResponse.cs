@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace OrionClientLib.Pools.HQPool
 {
-    internal class ChallengeResponse : IMessage
+    public class OreHQChallengeResponse : IMessage
     {
         public byte[] Challenge { get; private set; }
         public ulong StartNonce { get; private set; }
