@@ -25,4 +25,8 @@
     <TrimmerRootAssembly Include="System.Management" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Hashers\GPU\" />
+  </ItemGroup>
+
 </Project>

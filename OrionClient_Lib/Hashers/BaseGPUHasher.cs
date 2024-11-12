@@ -2,10 +2,8 @@
 using Equix;
 using NLog;
 using OrionClientLib.Hashers.Models;
-using OrionClientLib.Pools;
 using OrionClientLib.Pools.Models;
-using OrionClientLib.Utilities;
-using Spectre.Console;
+using OrionClientLib.Pools;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -15,16 +13,15 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace OrionClientLib.Hashers
 {
-    public abstract class BaseCPUHasher : IHasher
+    public abstract class BaseGPUHasher : IHasher
     {
         protected static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-        public IHasher.Hardware HardwareType => IHasher.Hardware.CPU;
+        public IHasher.Hardware HardwareType => IHasher.Hardware.GPU;
         public bool Initialized => _taskRunner?.IsCompleted == false;
         public TimeSpan CurrentChallengeTime => _sw.Elapsed - _challengeStartTime;
 
@@ -78,63 +75,6 @@ namespace OrionClientLib.Hashers
                 _solverQueue.Enqueue(new Solver());
             }
 
-            //Set process affinity
-            if (OperatingSystem.IsWindows())
-            {
-                Process currentProcess = Process.GetCurrentProcess();
-
-                //currentProcess.PriorityClass = ProcessPriorityClass.AboveNormal;
-                _currentAffinity = currentProcess.ProcessorAffinity;
-
-                List<CoreInfo> coreInformation = SystemInformation.GetCoreInformation();
-                int totalThreads = coreInformation.Sum(x => x.ThreadCount);
-
-                if(threads != totalThreads)
-                {
-                    nint processorMask = 0;
-
-                    int totalLogical = Math.Clamp(threads - coreInformation.Count, 0, coreInformation.Count);
-
-                    //Extra thread for the UI
-                    //TODO: Modify to use dedicated threads with a specific affinity
-                    if (threads < coreInformation.Count)
-                    {
-                        ++threads;
-                    }
-                    //1431655765
-                    int loopCount = Math.Min(coreInformation.Count, threads);
-
-
-
-                    for (int i =0; i < loopCount; i++)
-                    {
-                        CoreInfo cInfo = coreInformation[i];
-
-                        AddThreadAffinity(cInfo.PhysicalMask);
-
-                        if(totalLogical > 0 && cInfo.HasLogical)
-                        {
-                            AddThreadAffinity(cInfo.LogicalMask);
-
-                            --totalLogical;
-                        }
-
-                        void AddThreadAffinity(ulong mask)
-                        {
-                            if(threads <= 0)
-                            {
-                                return;
-                            }
-
-                            processorMask |= (nint)mask;
-                            --threads;
-                        }
-                    }
-
-                    currentProcess.ProcessorAffinity = processorMask;
-                }
-            }
-
             return true;
         }
 
@@ -171,7 +111,7 @@ namespace OrionClientLib.Hashers
 
         public async Task StopAsync()
         {
-            if(!_running)
+            if (!_running)
             {
                 return;
             }

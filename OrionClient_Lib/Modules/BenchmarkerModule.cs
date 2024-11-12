@@ -128,7 +128,7 @@ namespace OrionClientLib.Modules
                 _logger.Log(LogLevel.Debug, $"Running hasher: {currentHasher.Name} for {_totalSeconds}s");
 
                 currentHasher.OnHashrateUpdate += CurrentHasher_OnHashrateUpdate;
-                currentHasher.Initialize(null, data.Settings.CPUThreads);
+                await currentHasher.InitializeAsync(null, data.Settings.CPUThreads);
                 byte[] challenge = new byte[32];
                 RandomNumberGenerator.Fill(challenge);
 

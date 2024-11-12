@@ -21,7 +21,7 @@ namespace OrionClientLib.Hashers
 
         public event EventHandler<HashrateInfo> OnHashrateUpdate;
 
-        public bool Initialize(IPool pool, int threads)
+        public async Task<bool> InitializeAsync(IPool pool, int threads)
         {
             return true;
         }
