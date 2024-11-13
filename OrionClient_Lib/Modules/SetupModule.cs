@@ -1,5 +1,8 @@
 ﻿using Equix;
 using Hardware.Info;
+using ILGPU.Runtime;
+using ILGPU.Runtime.Cuda;
+using ILGPU.Runtime.OpenCL;
 using Newtonsoft.Json;
 using OrionClientLib.Hashers;
 using OrionClientLib.Modules.Models;
@@ -34,6 +37,7 @@ namespace OrionClientLib.Modules
         {
             _steps.Add(WalletSetupAsync);
             _steps.Add(ChooseCPUHasherAsync);
+            _steps.Add(ChooseGPUHasherAsync);
             _steps.Add(ThreadCountAsync);
             _steps.Add(ChoosePoolAsync);
             _steps.Add(FinalConfirmationAsync);
@@ -129,7 +133,7 @@ namespace OrionClientLib.Modules
             (IHasher chosenHasher, IHasher gpuHasher) = _data.GetChosenHasher();
 
             SelectionPrompt<IHasher> selectionPrompt = new SelectionPrompt<IHasher>();
-            selectionPrompt.Title("Select hashing implementation. Run benchmark to see hashrates");
+            selectionPrompt.Title("Select CPU hashing implementation. Run benchmark to see hashrates");
             selectionPrompt.UseConverter((pool) =>
             {
                 string chosenText = String.Empty;
@@ -146,8 +150,89 @@ namespace OrionClientLib.Modules
 
             chosenHasher = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
 
-
             _settings.CPUHasher = chosenHasher.Name;
+
+            return _currentStep + 1;
+        }
+
+        //Reduce to single method later
+        private async Task<int> ChooseGPUHasherAsync()
+        {
+            (IHasher chosenHasher, IHasher gpuHasher) = _data.GetChosenHasher();
+
+            SelectionPrompt<IHasher> selectionPrompt = new SelectionPrompt<IHasher>();
+            selectionPrompt.Title("Select GPU hashing implementation. Run benchmark to see hashrates");
+            selectionPrompt.UseConverter((pool) =>
+            {
+                string chosenText = String.Empty;
+
+                if (pool == chosenHasher)
+                {
+                    chosenText = "[b][[Current]][/] ";
+                }
+
+                return $"{chosenText}{pool.Name} - {pool.Description}";
+            });
+
+            selectionPrompt.AddChoices(_data.Hashers.Where(x => x.HardwareType == IHasher.Hardware.GPU).OrderByDescending(x => x == chosenHasher));
+
+            chosenHasher = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
+
+            _settings.GPUHasher = chosenHasher.Name;
+
+            if(chosenHasher is DisabledHasher)
+            {
+                _settings.GPUHasher = chosenHasher.Name;
+
+                return _currentStep + 1;
+            }
+
+            IGPUHasher hasher = (IGPUHasher)chosenHasher;
+            List<Device> devices = hasher.GetDevices();
+
+            //Allow device selection
+            MultiSelectionPrompt<Device> deviceSelectionPrompt = new MultiSelectionPrompt<Device>();
+            deviceSelectionPrompt.Title("Select GPUs to use. Selecting different GPU types may cause performance issues");
+            deviceSelectionPrompt.UseConverter((device) =>
+            {
+                bool selected = _settings.GPUDevices.Contains(devices.IndexOf(device));
+
+                return $"{(selected ? "[b][[Current]][/] " : String.Empty)}{device.Name} - {device.AcceleratorType}";
+            });
+
+
+            //Shouldn't happen, but disable GPU hasher for now
+            if (devices == null)
+            {
+                _settings.GPUHasher = "Disabled";
+
+                return _currentStep + 1;
+            }
+
+            var groups = devices.OrderByDescending(x => x.NumMultiprocessors).GroupBy(x => x.Name);
+
+            foreach(var group in groups)
+            {
+                if (group.Count() == 1)
+                {
+                    deviceSelectionPrompt.AddChoice(group.First());
+                }
+                else
+                {
+                    deviceSelectionPrompt.AddChoiceGroup(group.First(), group);
+                }
+            }
+
+            List<Device> result = await deviceSelectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
+
+            List<int> chosenGPUs = new List<int>();
+
+            foreach (Device device in result)
+            {
+                chosenGPUs.Add(devices.IndexOf(device));
+            }
+
+            _settings.GPUDevices = chosenGPUs;
 
             return _currentStep + 1;
         }

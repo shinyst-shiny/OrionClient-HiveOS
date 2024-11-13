@@ -1,4 +1,5 @@
-﻿using OrionClientLib.Hashers.Models;
+﻿using ILGPU.Runtime;
+using OrionClientLib.Hashers.Models;
 using OrionClientLib.Pools;
 using System;
 using System.Collections.Generic;
@@ -20,6 +21,7 @@ namespace OrionClientLib.Hashers
 
 
         public event EventHandler<HashrateInfo> OnHashrateUpdate;
+
 
         public async Task<bool> InitializeAsync(IPool pool, int threads)
         {
@@ -62,8 +64,13 @@ namespace OrionClientLib.Hashers
         public override IHasher.Hardware HardwareType => IHasher.Hardware.CPU;
     }
 
-    public class DisabledGPUHasher : DisabledHasher
+    public class DisabledGPUHasher : DisabledHasher, IGPUHasher
     {
         public override IHasher.Hardware HardwareType => IHasher.Hardware.GPU;
+
+        public List<Device> GetDevices()
+        {
+            return new List<Device>();
+        }
     }
 }

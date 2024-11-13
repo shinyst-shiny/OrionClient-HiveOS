@@ -4,6 +4,7 @@ using Org.BouncyCastle.Crypto.Signers;
 using OrionClientLib;
 using OrionClientLib.Hashers;
 using OrionClientLib.Hashers.CPU;
+using OrionClientLib.Hashers.GPU;
 using OrionClientLib.Hashers.Models;
 using OrionClientLib.Modules;
 using OrionClientLib.Modules.Models;
@@ -81,6 +82,7 @@ namespace OrionClient
             AddSupportedHasher(new HybridCPUHasherAVX512());
             AddSupportedHasher(new NativeCPUHasher());
             AddSupportedHasher(new NativeCPUHasherAVX2());
+            AddSupportedHasher(new BaselineGPUHasher());
             AddSupportedHasher(new DisabledCPUHasher());
             AddSupportedHasher(new DisabledGPUHasher());
 

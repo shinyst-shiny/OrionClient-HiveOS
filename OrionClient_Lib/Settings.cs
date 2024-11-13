@@ -18,7 +18,8 @@ namespace OrionClientLib
         public int CPUThreads { get; set; } = 1;
         public string Pool { get; set; }
         public string CPUHasher { get; set; } = "Stock";
-        public string GPUHasher { get; set; } = "Stock";
+        public string GPUHasher { get; set; } = "Disabled";
+        public List<int> GPUDevices { get; set; } = new List<int>();
 
         public bool HasPrivateKey { get; set; }
         public string KeyFile { get; set; }

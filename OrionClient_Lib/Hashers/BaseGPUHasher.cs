@@ -14,10 +14,16 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using ILGPU;
+using ILGPU.IR;
+using ILGPU.Runtime.Cuda;
+using ILGPU.Runtime;
+using DrillX.Compiler;
+using DrillX;
 
 namespace OrionClientLib.Hashers
 {
-    public abstract class BaseGPUHasher : IHasher
+    public abstract class BaseGPUHasher : IHasher, IGPUHasher
     {
         protected static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -49,6 +55,10 @@ namespace OrionClientLib.Hashers
 
         private nint _currentAffinity;
 
+
+        private List<GPUDeviceHasher> _gpuDevices = new List<GPUDeviceHasher>();
+        private Context _context;
+
         public async Task<bool> InitializeAsync(IPool pool, int threads)
         {
             if (Initialized)
@@ -78,6 +88,54 @@ namespace OrionClientLib.Hashers
             return true;
         }
 
+        public async Task StopAsync()
+        {
+            if (!_running)
+            {
+                return;
+            }
+
+            _running = false;
+            _newChallengeWait.Reset();
+
+            if (_pool != null)
+            {
+                _pool.OnChallengeUpdate -= _pool_OnChallengeUpdate;
+            }
+
+            List<Task> waitTasks = new List<Task>();
+            
+            //Wait for all devices to stop
+            _gpuDevices.ForEach(x => waitTasks.Add(x.WaitForStop()));
+            await Task.WhenAll(waitTasks);
+
+            //Clean up memory
+            _gpuDevices.ForEach(x => x.Dispose());
+            _gpuDevices.Clear();
+        }
+
+        public List<Device> GetDevices()
+        {
+            try
+            {
+                using Context context = Context.Create((builder) => builder.AllAccelerators());
+
+                return context.Devices.Where(x => x.AcceleratorType != AcceleratorType.CPU).ToList();
+            }
+            catch(Exception ex)
+            {
+                return null;
+            }
+        }
+
+        public abstract void HashxKernel(ArrayView<Instruction> program, ArrayView<SipState> key, ArrayView<ulong> results);
+        public abstract void EquihashKernel(ArrayView<ulong> values, ArrayView<ushort> solutions, ArrayView<ushort> globalHeap, ArrayView<uint> solutionCount);
+        public abstract bool IsSupported();
+
+
+
+
+        #region Fix later
         private void _pool_OnChallengeUpdate(object? sender, NewChallengeInfo e)
         {
             //Don't want to block pool module thread waiting for challenge to change
@@ -104,57 +162,9 @@ namespace OrionClientLib.Hashers
             _newChallengeWait.Set();
             _pauseMining.Set();
             _challengeStartTime = _sw.Elapsed;
-            _logger.Log(LogLevel.Debug, $"New challenge. Challenge Id: {challengeId}. Range: {startNonce} - {endNonce}");
+            _logger.Log(LogLevel.Debug, $"[CPU] New challenge. Challenge Id: {challengeId}. Range: {startNonce} - {endNonce}");
 
             return true;
-        }
-
-        public async Task StopAsync()
-        {
-            if (!_running)
-            {
-                return;
-            }
-
-            _running = false;
-            _newChallengeWait.Reset();
-
-            if (_pool != null)
-            {
-                _pool.OnChallengeUpdate -= _pool_OnChallengeUpdate;
-            }
-
-            await _taskRunner.WaitAsync(CancellationToken.None);
-
-            Exception lastError = null;
-
-            //Dispose memory
-            while (_solverQueue.TryDequeue(out Solver solver))
-            {
-                try
-                {
-                    solver.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    lastError = ex;
-                }
-            }
-
-            //Reset affinity
-            if (OperatingSystem.IsWindows())
-            {
-                Process currentProcess = Process.GetCurrentProcess();
-
-                currentProcess.ProcessorAffinity = _currentAffinity;
-                //currentProcess.PriorityClass = ProcessPriorityClass.Normal;
-            }
-
-            //Attempts to dispose everything before throwing an error
-            if (lastError != null)
-            {
-                _logger.Log(LogLevel.Error, lastError, $"Failed to clean up memory. Hasher: {Name}");
-            }
         }
 
         protected virtual void Run()
@@ -312,7 +322,6 @@ namespace OrionClientLib.Hashers
             _threads = totalThreads;
         }
 
-        public abstract bool IsSupported();
 
         protected bool HasNativeFile()
         {
@@ -329,6 +338,37 @@ namespace OrionClientLib.Hashers
         public void ResumeMining()
         {
             _pauseMining.Set();
+        }
+
+        #endregion
+
+        public class GPUDeviceHasher : IDisposable
+        {
+            //Used to verify GPU solutions
+            private Solver _solver = new Solver();
+
+            public GPUDeviceHasher(Action<ArrayView<Instruction>, ArrayView<SipState>, ArrayView<ulong>> hashxKernel,
+                         Action<ArrayView<ulong>, ArrayView<ushort>, ArrayView<ushort>, ArrayView<uint>> equihashKernel)
+            {
+
+            }
+
+            public async Task WaitForStop()
+            {
+
+            }
+
+            public void Dispose()
+            {
+                try
+                {
+                    _solver.Dispose();
+                }
+                catch(Exception ex)
+                {
+                    _logger.Log(LogLevel.Error, ex, $"Failed to clean up memory for GPU device");
+                }
+            }
         }
     }
 }

@@ -64,6 +64,8 @@ namespace OrionClientLib.Pools
         protected int _currentBestDifficulty = 0;
         protected string _errorMessage = String.Empty;
 
+        private bool _sendingReadyUp = false;
+
         #region Overrides
 
         public override async void DifficultyFound(DifficultyInfo info)
@@ -96,7 +98,18 @@ namespace OrionClientLib.Pools
 
                 if (message == serverMineSend)
                 {
-                    await SendReadyUp();
+                    //Continue to attempt to send readyup message until successful
+                    if(!_sendingReadyUp)
+                    {
+                        _sendingReadyUp = true;
+
+                        while(!await SendReadyUp())
+                        {
+                            await Task.Delay(1000);
+                        }
+
+                        _sendingReadyUp = false;
+                    }
                 }
                 else
                 {
