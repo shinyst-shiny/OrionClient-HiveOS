@@ -911,6 +911,11 @@ namespace OrionClientLib.Pools
 
             public void UpdateStakes(List<OreHQPoolStake> stakes)
             {
+                if(stakes == null)
+                {
+                    return;
+                }
+
                 Stakes = stakes;
 
                 double totalStakeRewards = 0;
