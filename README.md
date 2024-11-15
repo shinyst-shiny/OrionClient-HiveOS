@@ -1,6 +1,6 @@
 # Orion Client
 
-Ore/Coal mining client with expandable pool and hashing implemention support.
+Ore/Coal mining client with expandable pool and hashing implementation support.
 
 # Build From Source
 
