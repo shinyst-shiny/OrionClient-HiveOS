@@ -25,6 +25,9 @@ namespace OrionClientLib.Hashers
 {
     public abstract class BaseGPUHasher : IHasher, IGPUHasher
     {
+        private const int _maxNonces = 4096;
+        private const int _maxQueueSize = 2;
+
         protected static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         public IHasher.Hardware HardwareType => IHasher.Hardware.GPU;
@@ -53,22 +56,26 @@ namespace OrionClientLib.Hashers
         private int _threads = Environment.ProcessorCount;
         private Task _taskRunner;
 
-        private nint _currentAffinity;
-
-
         private List<GPUDeviceHasher> _gpuDevices = new List<GPUDeviceHasher>();
+        private List<CPUData> _gpuData = new List<CPUData>();
         private Context _context;
 
-        public async Task<bool> InitializeAsync(IPool pool, int threads)
+        public async Task<bool> InitializeAsync(IPool pool, Settings settings)
         {
             if (Initialized)
             {
                 return false;
             }
 
+            if (settings.GPUDevices == null || settings.GPUDevices.Count == 0)
+            {
+                return false;
+            }
+
             _pool = pool;
             _running = true;
-            _threads = threads;
+            //Use total CPU threads for now
+            _threads = settings.CPUThreads; //TODO: Change to use remaining threads
             _info = new HasherInfo();
 
             if (_pool != null)
@@ -76,13 +83,32 @@ namespace OrionClientLib.Hashers
                 _pool.OnChallengeUpdate += _pool_OnChallengeUpdate;
             }
 
-            _taskRunner = new Task(Run, TaskCreationOptions.LongRunning);
-            _taskRunner.Start();
+            _context = Context.Create(builder => builder.AllAccelerators().Profiling().IOOperations());
 
-            //Allocate memory required
-            while (_solverQueue.Count < Environment.ProcessorCount)
+            var devices = _context.Devices.Where(x => x.AcceleratorType != AcceleratorType.CPU).ToList();
+
+            List<Device> devicesToUse = new List<Device>();
+
+            foreach(var d in settings.GPUDevices)
             {
-                _solverQueue.Enqueue(new Solver());
+                if(d >= 0 && d < devices.Count)
+                {
+                    devicesToUse.Add(devices[d]);
+                }
+            }
+
+
+            int maxNonces = (int)((ulong)devicesToUse.Min(x => x.MemorySize) / GPUDeviceHasher.MemoryPerNonce);
+
+            //Reduce to a power of 2
+            maxNonces = (int)Math.Pow(2, (int)Math.Log2(maxNonces));
+
+            //Reduce to 4096 being the max
+            maxNonces = Math.Min(_maxNonces, maxNonces);
+
+            foreach(var device in devicesToUse)
+            {
+                GPUDeviceHasher dHasher = new GPUDeviceHasher(HashxKernel, EquihashKernel, device.CreateAccelerator(_context), device);
             }
 
             return true;
@@ -106,12 +132,18 @@ namespace OrionClientLib.Hashers
             List<Task> waitTasks = new List<Task>();
             
             //Wait for all devices to stop
-            _gpuDevices.ForEach(x => waitTasks.Add(x.WaitForStop()));
+            _gpuDevices.ForEach(x => waitTasks.Add(x.WaitForStopAsync()));
             await Task.WhenAll(waitTasks);
 
             //Clean up memory
             _gpuDevices.ForEach(x => x.Dispose());
             _gpuDevices.Clear();
+
+            //Clean up GPUData
+            _gpuData.ForEach(x => x.Dispose());
+            _gpuData.Clear();
+
+            _context?.Dispose();
         }
 
         public List<Device> GetDevices()
@@ -342,32 +374,251 @@ namespace OrionClientLib.Hashers
 
         #endregion
 
-        public class GPUDeviceHasher : IDisposable
+        private class GPUDeviceHasher : IDisposable
         {
+            public const ulong ProgramSize = (Instruction.ProgramSize * Instruction.Size);
+            public const ulong KeySize = SipState.Size;
+            public const ulong HeapSize = 2239488;
+            public const ulong SolutionSize = EquixSolution.Size * EquixSolution.MaxLength;
+            public const ulong HashSolutionSize = ushort.MaxValue + 1 * sizeof(ulong);
+            public const ulong MemoryPerNonce = (ProgramSize + KeySize) * _maxQueueSize + HeapSize + SolutionSize + HashSolutionSize;
+
+            private List<GPUDeviceData> _deviceData = new List<GPUDeviceData>();
+
             //Used to verify GPU solutions
             private Solver _solver = new Solver();
 
+            private Accelerator _accelerator = null;
+            private Device _device = null;
+
+            private Action<ArrayView<Instruction>, ArrayView<SipState>, ArrayView<ulong>> _hashxKernel;
+            private Action<ArrayView<ulong>, ArrayView<ushort>, ArrayView<ushort>, ArrayView<uint>> _equihashKernel;
+
+            private int _nonceCount = 0;
+
+            private Task _runningTask = null;
+            private CancellationTokenSource _runToken;
+
+            private Task _gpuCopyToTask = null;
+            private CancellationTokenSource _gpuCopyToToken;
+            private Task _gpuCopyFromTask = null;
+            private CancellationTokenSource _gpuCopyFromToken;
+
             public GPUDeviceHasher(Action<ArrayView<Instruction>, ArrayView<SipState>, ArrayView<ulong>> hashxKernel,
-                         Action<ArrayView<ulong>, ArrayView<ushort>, ArrayView<ushort>, ArrayView<uint>> equihashKernel)
+                         Action<ArrayView<ulong>, ArrayView<ushort>, ArrayView<ushort>, ArrayView<uint>> equihashKernel,
+                         Accelerator accelerator, Device device)
             {
+                _hashxKernel = hashxKernel;
+                _equihashKernel = equihashKernel;
 
+                _device = device;
+                _accelerator = accelerator;
             }
 
-            public async Task WaitForStop()
+            public void Initialize(int totalNonces)
             {
+                _nonceCount = totalNonces;
 
+                MemoryBuffer1D<ushort, Stride1D.Dense> heap = _accelerator.Allocate1D<ushort>(_nonceCount);
+                MemoryBuffer1D<ulong, Stride1D.Dense> hashes = _accelerator.Allocate1D<ulong>(_nonceCount);
+                MemoryBuffer1D<EquixSolution, Stride1D.Dense> solutions = _accelerator.Allocate1D<EquixSolution>(_nonceCount * EquixSolution.MaxLength);
+
+
+                for (int i = 0; i < _maxQueueSize; i++)
+                {
+                    MemoryBuffer1D<Instruction, Stride1D.Dense> instructions = _accelerator.Allocate1D<Instruction>(_nonceCount);
+                    MemoryBuffer1D<SipState, Stride1D.Dense> keys = _accelerator.Allocate1D<SipState>(_nonceCount);
+
+                    GPUDeviceData deviceData = new GPUDeviceData(instructions, keys, heap, hashes, solutions);
+                    _deviceData.Add(deviceData);
+                }
+
+                _gpuCopyToTask = new Task(GPUCopyTo, _gpuCopyToToken.Token, TaskCreationOptions.LongRunning);
+                _gpuCopyToTask.Start();
+
+                _gpuCopyFromTask = new Task(GPUCopyFrom, _gpuCopyFromToken.Token, TaskCreationOptions.LongRunning);
+                _gpuCopyFromTask.Start();
+
+                _runningTask = new Task(Run, _runToken.Token, TaskCreationOptions.LongRunning);
+                _runningTask.Start();
+
+                _logger.Log(LogLevel.Debug, $"Initialized GPU device: {_device.Name}");
             }
+
+            public async Task WaitForStopAsync()
+            {
+                _runToken.Cancel();
+                await _runningTask.WaitAsync(CancellationToken.None);
+                _runToken.Dispose();
+
+                try
+                {
+                    foreach(var deviceData in _deviceData)
+                    {
+                        deviceData.Dispose();
+                    }
+
+                    _deviceData.Clear();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Log(LogLevel.Error, ex, $"Failed to dispose GPU data");
+                }
+            }
+
+            private async void GPUCopyTo()
+            {
+                while(!_gpuCopyToTask.IsCanceled)
+                {
+                    GPUDeviceData deviceData = GetDeviceData(GPUDeviceData.Stage.None);
+
+                    while (deviceData == null && !_runningTask.IsCanceled)
+                    {
+                        await Task.Delay(100);
+                        deviceData = GetDeviceData(GPUDeviceData.Stage.None);
+                    }
+
+                    if(_runningTask.IsCanceled)
+                    {
+                        break;
+                    }
+
+                    //TODO: Waits for hashx data
+
+                    //Set as the current CPU data
+                    //Copies to device
+                    //Waits
+
+                    deviceData.CurrentStage = GPUDeviceData.Stage.Execute;
+                }
+            }
+
+            private async void GPUCopyFrom()
+            {
+                while (!_gpuCopyToTask.IsCanceled)
+                {
+                    GPUDeviceData deviceData = GetDeviceData(GPUDeviceData.Stage.Solution);
+
+                    while (deviceData == null && !_runningTask.IsCanceled)
+                    {
+                        await Task.Delay(100);
+                        deviceData = GetDeviceData(GPUDeviceData.Stage.Solution);
+                    }
+
+                    if (_runningTask.IsCanceled)
+                    {
+                        break;
+                    }
+
+                    //Copies back to host
+                    //Waits
+                    //Deals with verifying solution
+
+                    deviceData.CurrentStage = GPUDeviceData.Stage.None;
+                }
+            }
+
+            private async void Run()
+            {
+                while (!_runningTask.IsCanceled)
+                {
+                    GPUDeviceData deviceData = GetDeviceData(GPUDeviceData.Stage.Execute);
+
+                    while (deviceData == null && !_runningTask.IsCanceled)
+                    {
+                        await Task.Delay(100);
+                        deviceData = GetDeviceData(GPUDeviceData.Stage.Execute);
+                    }
+
+                    if (_runningTask.IsCanceled)
+                    {
+                        break;
+                    }
+
+                    //_hashxKernel();
+                    //_equihashKernel();
+
+
+                    deviceData.CurrentStage = GPUDeviceData.Stage.Solution;
+                }
+            }
+
+            private GPUDeviceData GetDeviceData(GPUDeviceData.Stage stage)
+            {
+                return _deviceData.FirstOrDefault(x => x.CurrentStage == stage);
+            }
+
 
             public void Dispose()
             {
                 try
                 {
                     _solver.Dispose();
+                    _accelerator?.Dispose();
                 }
                 catch(Exception ex)
                 {
                     _logger.Log(LogLevel.Error, ex, $"Failed to clean up memory for GPU device");
                 }
+            }
+
+            private class GPUDeviceData : IDisposable
+            {
+                public enum Stage { None, Execute, Solution };
+
+                public Stage CurrentStage { get; set; } = Stage.None;
+
+                //Unique
+                public MemoryBuffer1D<Instruction, Stride1D.Dense> ProgramInstructions { get; private set; }
+                public MemoryBuffer1D<SipState, Stride1D.Dense> Keys { get; private set; }
+
+                //These only need a single copy
+                public MemoryBuffer1D<ushort, Stride1D.Dense> Heap { get; private set; }
+                public MemoryBuffer1D<ulong, Stride1D.Dense> Hashes { get; private set; }
+                public MemoryBuffer1D<EquixSolution, Stride1D.Dense> Solutions { get; private set; }
+
+                public CPUData CurrentCPUData { get; set; }
+
+                public GPUDeviceData(MemoryBuffer1D<Instruction, Stride1D.Dense> programInstructions, 
+                                     MemoryBuffer1D<SipState, Stride1D.Dense> keys,
+                                     MemoryBuffer1D<ushort, Stride1D.Dense> heap,
+                                     MemoryBuffer1D<ulong, Stride1D.Dense> hashes,
+                                     MemoryBuffer1D<EquixSolution, Stride1D.Dense> solutions)
+                {
+                    ProgramInstructions = programInstructions;
+                    Keys = keys;
+                    Heap = heap;
+                    Hashes = hashes;
+                    Solutions = solutions;
+                }
+
+                public void Dispose()
+                {
+                    ProgramInstructions?.Dispose();
+                    Keys?.Dispose();
+                }
+            }
+        }
+
+
+        private unsafe class CPUData : IDisposable
+        {
+            private Instruction* _instructionData;
+            private SipState* _keys;
+            private EquixSolution* _solutions;
+
+            public CPUData(int nonceCount)
+            {
+                _instructionData = (Instruction*)NativeMemory.Alloc((nuint)(sizeof(Instruction) * nonceCount * Instruction.ProgramSize));
+                _keys = (SipState*)NativeMemory.Alloc((nuint)(sizeof(SipState) * nonceCount * Instruction.ProgramSize));
+                _solutions = (EquixSolution*)NativeMemory.Alloc((nuint)(sizeof(Instruction) * nonceCount * Instruction.ProgramSize));
+            }
+
+            public void Dispose()
+            {
+                NativeMemory.Free(_instructionData);
+                NativeMemory.Free(_keys);
+                NativeMemory.Free(_solutions);
             }
         }
     }

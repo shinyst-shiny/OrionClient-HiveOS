@@ -52,7 +52,7 @@ namespace OrionClientLib.Hashers
 
         private nint _currentAffinity;
 
-        public async Task<bool> InitializeAsync(IPool pool, int threads)
+        public async Task<bool> InitializeAsync(IPool pool, Settings settings)
         {
             if (Initialized)
             {
@@ -61,7 +61,7 @@ namespace OrionClientLib.Hashers
 
             _pool = pool;
             _running = true;
-            _threads = threads;
+            _threads = settings.CPUThreads;
             _info = new HasherInfo();
 
             if (_pool != null)
@@ -89,20 +89,20 @@ namespace OrionClientLib.Hashers
                 List<CoreInfo> coreInformation = SystemInformation.GetCoreInformation();
                 int totalThreads = coreInformation.Sum(x => x.ThreadCount);
 
-                if(threads != totalThreads)
+                if(_threads != totalThreads)
                 {
                     nint processorMask = 0;
 
-                    int totalLogical = Math.Clamp(threads - coreInformation.Count, 0, coreInformation.Count);
+                    int totalLogical = Math.Clamp(_threads - coreInformation.Count, 0, coreInformation.Count);
 
                     //Extra thread for the UI
                     //TODO: Modify to use dedicated threads with a specific affinity
-                    if (threads < coreInformation.Count)
+                    if (_threads < coreInformation.Count)
                     {
-                        ++threads;
+                        ++_threads;
                     }
                     //1431655765
-                    int loopCount = Math.Min(coreInformation.Count, threads);
+                    int loopCount = Math.Min(coreInformation.Count, _threads);
 
 
 
@@ -121,13 +121,13 @@ namespace OrionClientLib.Hashers
 
                         void AddThreadAffinity(ulong mask)
                         {
-                            if(threads <= 0)
+                            if(_threads <= 0)
                             {
                                 return;
                             }
 
                             processorMask |= (nint)mask;
-                            --threads;
+                            --_threads;
                         }
                     }
 

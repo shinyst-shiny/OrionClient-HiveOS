@@ -36,7 +36,7 @@ namespace OrionClientLib.Modules.Models
             return Pools.FirstOrDefault(x => x.PoolName == Settings.Pool);
         }
 
-        public (IHasher cpu, IHasher gpu) GetChosenHasher()
+        public (IHasher? cpu, IHasher? gpu) GetChosenHasher()
         {
             return (
                 Hashers.FirstOrDefault(x => x.Name == Settings.CPUHasher && x.HardwareType == IHasher.Hardware.CPU), 

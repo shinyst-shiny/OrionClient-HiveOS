@@ -24,6 +24,7 @@ namespace DrillX.Compiler
     {
         public const int Loops = 16;
         public const int ProgramSize = 512;
+        public const int Size = 16;
 
         public OpCode Type => (OpCode)Type_;
         public int Dst;

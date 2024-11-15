@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NoWarn>8618;1998;8600</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
