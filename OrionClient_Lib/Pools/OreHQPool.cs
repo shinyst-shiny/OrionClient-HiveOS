@@ -560,7 +560,7 @@ namespace OrionClientLib.Pools
             }
             catch (Exception ex)
             {
-                _logger.Log(LogLevel.Error, $"Failed to request timestamp from {WebsocketUrl.Host}. Result: {ex.Message}");
+                _logger.Log(LogLevel.Warn, $"Failed to request timestamp from {WebsocketUrl.Host}. Reason: {ex.Message}");
 
                 return false;
             }
@@ -637,7 +637,7 @@ namespace OrionClientLib.Pools
             }
             catch(Exception ex)
             {
-                _logger.Log(LogLevel.Error, $"Failed to request {endpoint} data. Result: {ex.Message}");
+                _logger.Log(LogLevel.Warn, $"Failed to request {endpoint} data from pool. Reason: {ex.Message}");
 
                 return default;
             }
@@ -655,22 +655,31 @@ namespace OrionClientLib.Pools
 
         protected virtual async Task<List<OreHQPoolStake>> GetStakingInformationAsync(CancellationToken token)
         {
-            using var response = await _client.GetAsync($"/v2/miner/boost/stake-accounts?pubkey={_publicKey}", token);
-
-            if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
-            {
-                return default;
-            }
-
-            string data = await response.Content.ReadAsStringAsync();
-
             try
             {
-                return JsonConvert.DeserializeObject<List<OreHQPoolStake>>(data);
+                using var response = await _client.GetAsync($"/v2/miner/boost/stake-accounts?pubkey={_publicKey}", token);
 
+                if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+                {
+                    return default;
+                }
+
+                string data = await response.Content.ReadAsStringAsync();
+
+                try
+                {
+                    return JsonConvert.DeserializeObject<List<OreHQPoolStake>>(data);
+
+                }
+                catch(JsonReaderException) //Typically invalid pubkey
+                {
+                    return null;
+                }
             }
             catch
             {
+                _logger.Log(LogLevel.Warn, $"Failed to grab staking information from pool");
+
                 return null;
             }
         }
