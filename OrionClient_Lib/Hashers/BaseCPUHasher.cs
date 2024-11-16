@@ -79,59 +79,60 @@ namespace OrionClientLib.Hashers
             }
 
             //Set process affinity
-            if (OperatingSystem.IsWindows())
-            {
-                Process currentProcess = Process.GetCurrentProcess();
+            //TODO: Move to miner/benchmark module
+            //if (OperatingSystem.IsWindows())
+            //{
+            //    Process currentProcess = Process.GetCurrentProcess();
 
-                //currentProcess.PriorityClass = ProcessPriorityClass.AboveNormal;
-                _currentAffinity = currentProcess.ProcessorAffinity;
+            //    //currentProcess.PriorityClass = ProcessPriorityClass.AboveNormal;
+            //    _currentAffinity = currentProcess.ProcessorAffinity;
 
-                List<CoreInfo> coreInformation = SystemInformation.GetCoreInformation();
-                int totalThreads = coreInformation.Sum(x => x.ThreadCount);
+            //    List<CoreInfo> coreInformation = SystemInformation.GetCoreInformation();
+            //    int totalThreads = coreInformation.Sum(x => x.ThreadCount);
 
-                if(_threads != totalThreads)
-                {
-                    nint processorMask = 0;
+            //    if(_threads != totalThreads)
+            //    {
+            //        nint processorMask = 0;
 
-                    int totalLogical = Math.Clamp(_threads - coreInformation.Count, 0, coreInformation.Count);
+            //        int totalLogical = Math.Clamp(_threads - coreInformation.Count, 0, coreInformation.Count);
 
-                    //Extra thread for the UI
-                    //TODO: Modify to use dedicated threads with a specific affinity
-                    if (_threads < coreInformation.Count)
-                    {
-                        ++_threads;
-                    }
+            //        //Extra thread for the UI
+            //        //TODO: Modify to use dedicated threads with a specific affinity
+            //        if (_threads < coreInformation.Count)
+            //        {
+            //            ++_threads;
+            //        }
 
-                    int loopCount = Math.Min(coreInformation.Count, _threads);
+            //        int loopCount = Math.Min(coreInformation.Count, _threads);
 
-                    for (int i =0; i < loopCount; i++)
-                    {
-                        CoreInfo cInfo = coreInformation[i];
+            //        for (int i =0; i < loopCount; i++)
+            //        {
+            //            CoreInfo cInfo = coreInformation[i];
 
-                        AddThreadAffinity(cInfo.PhysicalMask);
+            //            AddThreadAffinity(cInfo.PhysicalMask);
 
-                        if(totalLogical > 0 && cInfo.HasLogical)
-                        {
-                            AddThreadAffinity(cInfo.LogicalMask);
+            //            if(totalLogical > 0 && cInfo.HasLogical)
+            //            {
+            //                AddThreadAffinity(cInfo.LogicalMask);
 
-                            --totalLogical;
-                        }
+            //                --totalLogical;
+            //            }
 
-                        void AddThreadAffinity(ulong mask)
-                        {
-                            if(_threads <= 0)
-                            {
-                                return;
-                            }
+            //            void AddThreadAffinity(ulong mask)
+            //            {
+            //                if(_threads <= 0)
+            //                {
+            //                    return;
+            //                }
 
-                            processorMask |= (nint)mask;
-                            --_threads;
-                        }
-                    }
+            //                processorMask |= (nint)mask;
+            //                --_threads;
+            //            }
+            //        }
 
-                    currentProcess.ProcessorAffinity = processorMask;
-                }
-            }
+            //        currentProcess.ProcessorAffinity = processorMask;
+            //    }
+            //}
 
             return true;
         }
@@ -306,6 +307,8 @@ namespace OrionClientLib.Hashers
                 });
 
             }
+
+            _logger.Log(LogLevel.Warn, $"Stopped");
         }
 
         protected abstract void ExecuteThread(Tuple<int, int> range, ParallelLoopState loopState, ConcurrentQueue<Exception> exceptions);

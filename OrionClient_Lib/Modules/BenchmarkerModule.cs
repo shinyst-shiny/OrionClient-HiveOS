@@ -60,12 +60,25 @@ namespace OrionClientLib.Modules
             MultiSelectionPrompt<IHasher> hasherPrompt = new MultiSelectionPrompt<IHasher>();
             hasherPrompt.Title = "Choose hashers to benchmark";
 
-            hasherPrompt.UseConverter((hasher) => $"{hasher.Name} - {hasher.Description}");
-            hasherPrompt.AddChoices(data.Hashers.Where(x => x is not DisabledHasher));
+            hasherPrompt.AddChoiceGroup(data.Hashers.First(x => x is DisabledCPUHasher), data.Hashers.Where(x => x is not DisabledHasher && x.HardwareType == IHasher.Hardware.CPU));
+            hasherPrompt.AddChoiceGroup(data.Hashers.First(x => x is DisabledGPUHasher), data.Hashers.Where(x => x is not DisabledHasher && x.HardwareType == IHasher.Hardware.GPU));
+            hasherPrompt.UseConverter((hasher) =>
+            {
+                if(hasher is DisabledCPUHasher)
+                {
+                    return "CPU Hashers";
+                }
+                else if (hasher is DisabledGPUHasher)
+                {
+                    return "GPU Hashers";
+                }
+
+                return $"{hasher.Name} - {hasher.Description}";
+            });
 
             try
             {
-                _chosenHashers = (await hasherPrompt.ShowAsync(AnsiConsole.Console, GetNewToken())).Select(x => new HasherInfo { Hasher = x }).ToList();
+                _chosenHashers = (await hasherPrompt.ShowAsync(AnsiConsole.Console, GetNewToken())).Where(x => x is not DisabledHasher).Select(x => new HasherInfo { Hasher = x }).ToList();
 
                 if (_chosenHashers.Count == 0)
                 {
@@ -211,6 +224,7 @@ namespace OrionClientLib.Modules
         {
             _stop = true;
             _currentTokenSource?.Cancel();
+            _currentTokenSource?.Dispose();
         }
 
         private CancellationToken GetNewToken()

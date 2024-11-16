@@ -5,6 +5,7 @@ using OrionClientLib;
 using OrionClientLib.Hashers;
 using OrionClientLib.Hashers.CPU;
 using OrionClientLib.Hashers.GPU;
+using OrionClientLib.Hashers.GPU.Baseline;
 using OrionClientLib.Hashers.Models;
 using OrionClientLib.Modules;
 using OrionClientLib.Modules.Models;

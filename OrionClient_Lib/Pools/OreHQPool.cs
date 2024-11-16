@@ -676,9 +676,9 @@ namespace OrionClientLib.Pools
                     return null;
                 }
             }
-            catch
+            catch(Exception ex)
             {
-                _logger.Log(LogLevel.Warn, $"Failed to grab staking information from pool");
+                _logger.Log(LogLevel.Warn, $"Failed to grab staking information from pool. Reason: {ex.Message}");
 
                 return null;
             }

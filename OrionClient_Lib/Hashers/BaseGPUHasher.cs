@@ -122,7 +122,7 @@ namespace OrionClientLib.Hashers
 
                 GPUDeviceHasher dHasher = new GPUDeviceHasher(HashxKernel(), EquihashKernel(), device.CreateAccelerator(_context), 
                                                               device, i, _setupCPUData, _availableCPUData, _info,
-                                                              GetHashXKernelConfig(device), GetEquihashKernelConfig(device));
+                                                              GetHashXKernelConfig(device, maxNonces), GetEquihashKernelConfig(device, maxNonces));
 
                 dHasher.OnDifficultyUpdate += DHasher_OnDifficultyUpdate;
                 dHasher.Initialize(maxNonces);
@@ -176,6 +176,8 @@ namespace OrionClientLib.Hashers
                     {
                         _availableCPUData.TryAdd(cpuData);
                     }
+
+                    continue;
                 }
 
                 #region Program Generation
@@ -293,6 +295,8 @@ namespace OrionClientLib.Hashers
                     {
                         _availableCPUData.TryAdd(cpuData);
                     }
+
+                    continue;
                 }
 
                 _setupCPUData.TryAdd(cpuData);
@@ -357,14 +361,15 @@ namespace OrionClientLib.Hashers
         #region GPU Implemention
 
         public abstract Action<ArrayView<Instruction>, ArrayView<SipState>, ArrayView<ulong>> HashxKernel();
-        public abstract KernelConfig GetHashXKernelConfig(Device device);
+        public abstract KernelConfig GetHashXKernelConfig(Device device, int maxNonces);
         public abstract Action<ArrayView<ulong>, ArrayView<EquixSolution>, ArrayView<ushort>, ArrayView<uint>> EquihashKernel();
-        public abstract KernelConfig GetEquihashKernelConfig(Device device);
-        public abstract bool IsSupported();
+        public abstract KernelConfig GetEquihashKernelConfig(Device device, int maxNonces);
+        public bool IsSupported()
+        {
+            List<Device> validDevices = GetDevices();
 
-        #endregion
-
-        #region Generic Implementation
+            return validDevices?.Count > 0;
+        }
 
         public List<Device> GetDevices()
         {
@@ -372,13 +377,28 @@ namespace OrionClientLib.Hashers
             {
                 using Context context = Context.Create((builder) => builder.AllAccelerators());
 
-                return context.Devices.Where(x => x.AcceleratorType != AcceleratorType.CPU).ToList();
+                return GetValidDevices(context.Devices);
             }
             catch (Exception ex)
             {
                 return null;
             }
         }
+
+
+        protected virtual List<Device> GetValidDevices(IEnumerable<Device> devices)
+        {
+            if(devices == null)
+            {
+                return new List<Device>();
+            }
+
+            return devices.Where(x => x.AcceleratorType != AcceleratorType.CPU).ToList();
+        }
+
+        #endregion
+
+        #region Generic Implementation
 
         public bool NewChallenge(int challengeId, Span<byte> challenge, ulong startNonce, ulong endNonce)
         {
@@ -526,7 +546,7 @@ namespace OrionClientLib.Hashers
 
                 for (int i = 0; i < _maxQueueSize; i++)
                 {
-                    MemoryBuffer1D<Instruction, Stride1D.Dense> instructions = _accelerator.Allocate1D<Instruction>(_nonceCount);
+                    MemoryBuffer1D<Instruction, Stride1D.Dense> instructions = _accelerator.Allocate1D<Instruction>(_nonceCount * Instruction.ProgramSize);
                     MemoryBuffer1D<SipState, Stride1D.Dense> keys = _accelerator.Allocate1D<SipState>(_nonceCount);
 
                     GPUDeviceData deviceData = new GPUDeviceData(instructions, keys, heap, hashes, solutions, solutionCounts);
