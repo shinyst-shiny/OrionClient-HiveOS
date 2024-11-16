@@ -16,7 +16,7 @@ namespace OrionClientLib.Hashers
         public string Name => $"Disabled";
         public string Description => $"Disables {HardwareType} hasher";
         public bool Initialized => true;
-
+        public bool IsMiningPaused => true;
         public TimeSpan CurrentChallengeTime { get; private set; } = TimeSpan.FromMinutes(5);
 
 

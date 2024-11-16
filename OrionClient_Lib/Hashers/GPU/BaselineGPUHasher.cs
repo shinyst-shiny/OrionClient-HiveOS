@@ -1,5 +1,6 @@
 ﻿using DrillX;
 using DrillX.Compiler;
+using DrillX.Solver;
 using ILGPU;
 using ILGPU.Runtime;
 using System;
@@ -17,12 +18,23 @@ namespace OrionClientLib.Hashers.GPU
 
         public override string Description => "Baseline GPU hashing implementation";
 
-        public override void EquihashKernel(ArrayView<ulong> values, ArrayView<ushort> solutions, ArrayView<ushort> globalHeap, ArrayView<uint> solutionCount)
+        public override Action<ArrayView<Instruction>, ArrayView<SipState>, ArrayView<ulong>> HashxKernel()
+        {
+            return eq;
+        }
+
+
+        public override Action<ArrayView<ulong>, ArrayView<EquixSolution>, ArrayView<ushort>, ArrayView<uint>> EquihashKernel()
+        {
+            return eq2;
+        }
+
+        private static void eq2(ArrayView<ulong> values, ArrayView<EquixSolution> solutions, ArrayView<ushort> globalHeap, ArrayView<uint> solutionCount)
         {
 
         }
 
-        public override void HashxKernel(ArrayView<Instruction> program, ArrayView<SipState> key, ArrayView<ulong> results)
+        private static void eq(ArrayView<Instruction> program, ArrayView<SipState> key, ArrayView<ulong> results)
         {
 
         }
@@ -41,9 +53,14 @@ namespace OrionClientLib.Hashers.GPU
             }
         }
 
-        protected override void ExecuteThread(Tuple<int, int> range, ParallelLoopState loopState, ConcurrentQueue<Exception> exceptions)
+        public override KernelConfig GetHashXKernelConfig(Device device)
         {
+            return default;
+        }
 
+        public override KernelConfig GetEquihashKernelConfig(Device device)
+        {
+            return default;
         }
     }
 }

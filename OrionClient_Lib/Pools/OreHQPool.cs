@@ -791,7 +791,8 @@ namespace OrionClientLib.Pools
                 ChallengeId = GenerateChallengeId(challengeResponse.Challenge),
                 Challenge = challengeResponse.Challenge,
                 StartNonce = challengeResponse.StartNonce,
-                EndNonce = challengeResponse.EndNonce
+                EndNonce = challengeResponse.EndNonce,
+                TotalCPUNonces = (ulong)((challengeResponse.EndNonce - challengeResponse.StartNonce) * _poolSettings.CPUNonceRatio)
             });
         }
 
@@ -960,6 +961,9 @@ namespace OrionClientLib.Pools
 
             [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
             public string CustomDomain { get; set; }
+
+            //This is how many of the returned nonces will be used for the CPU
+            public double CPUNonceRatio { get; set; } = 0.33;
 
             public HQPoolSettings(string poolName) : base(poolName)
             {

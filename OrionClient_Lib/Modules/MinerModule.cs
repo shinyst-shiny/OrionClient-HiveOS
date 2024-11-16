@@ -164,7 +164,6 @@ namespace OrionClientLib.Modules
 
         private void Pool_OnChallengeUpdate(object? sender, NewChallengeInfo e)
         {
-            _paused = false;
         }
 
         private void Pool_PauseMining(object? sender, EventArgs e)
@@ -173,8 +172,6 @@ namespace OrionClientLib.Modules
 
             cpu?.PauseMining();
             gpu?.PauseMining();
-
-            _paused = true;
 
             for (int i = 0; i < _hashrateTable.Rows.Count; i++)
             {
@@ -213,15 +210,11 @@ namespace OrionClientLib.Modules
 
         private void Hasher_OnHashrateUpdate(object? sender, Hashers.Models.HashrateInfo e)
         {
-            int index = e.IsCPU ? 0 : e.Index + 1;
+            IHasher hasher = (IHasher)sender;
+            int index = hasher.HardwareType == IHasher.Hardware.CPU ? 0 : e.Index + 1;
 
             _hashrateTable.UpdateCell(index, 1, e.CurrentThreads.ToString());
-
-            if (!_paused)
-            {
-                _hashrateTable.UpdateCell(index, 2, "[green]Mining[/]");
-            }
-
+            _hashrateTable.UpdateCell(index, 2, hasher.IsMiningPaused ? "[yellow]Paused[/]" :"[green]Mining[/]");
             _hashrateTable.UpdateCell(index, 3, e.ChallengeSolutionsPerSecond.ToString());
             _hashrateTable.UpdateCell(index, 4, e.SolutionsPerSecond.ToString());
             _hashrateTable.UpdateCell(index, 5, e.HighestDifficulty.ToString());

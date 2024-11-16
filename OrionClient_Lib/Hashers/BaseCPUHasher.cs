@@ -42,8 +42,8 @@ namespace OrionClientLib.Hashers
         protected IPool _pool;
         protected ManualResetEvent _newChallengeWait = new ManualResetEvent(false);
         protected ManualResetEvent _pauseMining = new ManualResetEvent(true);
-
-        protected bool ResettingChallenge => !_newChallengeWait.WaitOne(1);
+        public bool IsMiningPaused => !_pauseMining.WaitOne(0);
+        protected bool ResettingChallenge => !_newChallengeWait.WaitOne(0);
 
         protected ConcurrentQueue<Solver> _solverQueue = new ConcurrentQueue<Solver>();
 
@@ -101,10 +101,8 @@ namespace OrionClientLib.Hashers
                     {
                         ++_threads;
                     }
-                    //1431655765
+
                     int loopCount = Math.Min(coreInformation.Count, _threads);
-
-
 
                     for (int i =0; i < loopCount; i++)
                     {
@@ -141,7 +139,7 @@ namespace OrionClientLib.Hashers
         private void _pool_OnChallengeUpdate(object? sender, NewChallengeInfo e)
         {
             //Don't want to block pool module thread waiting for challenge to change
-            Task.Run(() => NewChallenge(e.ChallengeId, e.Challenge, e.StartNonce, e.EndNonce));
+            Task.Run(() => NewChallenge(e.ChallengeId, e.Challenge, e.CPUStartNonce, e.CPUEndNonce));
         }
 
         public bool NewChallenge(int challengeId, Span<byte> challenge, ulong startNonce, ulong endNonce)
@@ -260,19 +258,6 @@ namespace OrionClientLib.Hashers
                     continue;
                 }
 
-                OnHashrateUpdate?.Invoke(this, new HashrateInfo
-                {
-                    IsCPU = true,
-                    ExecutionTime = hashingTime,
-                    NumNonces = _info.BatchSize,
-                    NumSolutions = _info.TotalSolutions - startSolutions,
-                    HighestDifficulty = _info.DifficultyInfo.BestDifficulty,
-                    ChallengeSolutions = _info.TotalSolutions,
-                    TotalTime = _sw.Elapsed - _challengeStartTime,
-                    CurrentThreads = _threads,
-                    ChallengeId = _info.ChallengeId
-                });
-
                 //Modify batch size to be between 750ms-2000ms long
                 if (_running)
                 {
@@ -299,6 +284,27 @@ namespace OrionClientLib.Hashers
                 }
 
                 _info.CurrentNonce += _info.BatchSize;
+
+                if(_info.CurrentNonce >= _info.EndNonce)
+                {
+                    _logger.Log(LogLevel.Warn, $"Ran through all nonces set for the CPU. Total: {_info.EndNonce - _info.StartNonce} nonces");
+
+                    PauseMining();
+                }
+
+                OnHashrateUpdate?.Invoke(this, new HashrateInfo
+                {
+                    IsCPU = true,
+                    ExecutionTime = hashingTime,
+                    NumNonces = _info.BatchSize,
+                    NumSolutions = _info.TotalSolutions - startSolutions,
+                    HighestDifficulty = _info.DifficultyInfo.BestDifficulty,
+                    ChallengeSolutions = _info.TotalSolutions,
+                    TotalTime = _sw.Elapsed - _challengeStartTime,
+                    CurrentThreads = _threads,
+                    ChallengeId = _info.ChallengeId
+                });
+
             }
         }
 
