@@ -147,166 +147,173 @@ namespace OrionClientLib.Hashers
 
         private async void RunProgramGeneration()
         {
-            while(_running)
+            try
             {
-                _executing = false;
-
-                CPUData cpuData = null;
-
-                while ((!_newChallengeWait.WaitOne(500) || !_pauseMining.WaitOne(0)) && _running)
+                while (_running)
                 {
+                    _executing = false;
 
-                }
+                    CPUData cpuData = null;
 
-                if(!_running)
-                {
-                    continue;
-                }
-
-                _executing = true;
-
-                while(!_hasNotice && !_availableCPUData.TryTake(out cpuData, 50))
-                {
-
-                }
-
-                if(_hasNotice)
-                {
-                    if(cpuData != null)
+                    while ((!_newChallengeWait.WaitOne(500) || !_pauseMining.WaitOne(0)) && _running)
                     {
-                        _availableCPUData.TryAdd(cpuData);
+
                     }
 
-                    continue;
-                }
-
-                #region Program Generation
-
-                var rangePartitioner = Partitioner.Create(0, _maxNonces, _maxNonces / (_threads));
-
-                Parallel.ForEach(rangePartitioner, new ParallelOptions { MaxDegreeOfParallelism = _threads }, (range, loopState) =>
-                {
-                    Span<Instruction> allInstructions = cpuData.InstructionData.AsSpan();
-                    Span<SipState> keys = cpuData.Keys.AsSpan();
-
-                    byte[] currentChallenge = new byte[40];
-                    _info.Challenge.CopyTo(currentChallenge, 0);
-                    var currentChallengeSpan = currentChallenge.AsSpan();
-
-                    // Loop over each range element without a delegate invocation.
-                    for (int z = range.Item1; z < range.Item2; z++)
+                    if (!_running)
                     {
-                        if (z % 32 == 0)
+                        continue;
+                    }
+
+                    _executing = true;
+
+                    while (!_hasNotice && !_availableCPUData.TryTake(out cpuData, 50))
+                    {
+
+                    }
+
+                    if (_hasNotice)
+                    {
+                        if (cpuData != null)
                         {
-                            if (_hasNotice)
-                            {
-                                return;
-                            }
+                            _availableCPUData.TryAdd(cpuData);
                         }
 
-                        ulong currentNonce = 0;
-                        HashX program = null;
-                        var instructions = allInstructions.Slice(Instruction.ProgramSize * z, Instruction.ProgramSize);
+                        continue;
+                    }
 
-                        //Keep trying until a valid program is found
-                        while (true)
+                    #region Program Generation
+
+                    var rangePartitioner = Partitioner.Create(0, _maxNonces, _maxNonces / (_threads));
+
+                    Parallel.ForEach(rangePartitioner, new ParallelOptions { MaxDegreeOfParallelism = _threads }, (range, loopState) =>
+                    {
+                        Span<Instruction> allInstructions = cpuData.InstructionData.AsSpan();
+                        Span<SipState> keys = cpuData.Keys.AsSpan();
+
+                        byte[] currentChallenge = new byte[40];
+                        _info.Challenge.CopyTo(currentChallenge, 0);
+                        var currentChallengeSpan = currentChallenge.AsSpan();
+
+                        // Loop over each range element without a delegate invocation.
+                        for (int z = range.Item1; z < range.Item2; z++)
                         {
-                            currentNonce = Interlocked.Increment(ref _currentNonce) - 1;
-                            BinaryPrimitives.WriteUInt64LittleEndian(currentChallengeSpan.Slice(32), currentNonce);
-
-                            //Invalid program
-                            if (!HashX.TryBuild(currentChallenge, instructions, out program))
+                            if (z % 32 == 0)
                             {
-                                continue;
-                            }
-
-                            break;
-                        }
-
-                        bool valid = true;
-
-                        for (int i = 0; i < instructions.Length; i++)
-                        {
-                            var instruction = instructions[i];
-
-                            instruction.SetDestination((ulong)instruction.Dst);
-                            if (instruction.Type == OpCode.XorConst)
-                            {
-                                instruction.SetType(OpCode.Xor);
-                                instruction.Src = (int)instruction.Operand;
-
-                                if (instruction.Src < 8 && instruction.Src >= 0)
+                                if (_hasNotice)
                                 {
-                                    valid = false;
-                                    break;
+                                    return;
                                 }
                             }
-                            else if (instruction.Type == OpCode.AddConst)
-                            {
-                                instruction.SetType(OpCode.Sub);
-                                instruction.Src = ((int)instruction.Operand * -1);
 
-                                if (instruction.Src < 8 && instruction.Src >= 0)
+                            ulong currentNonce = 0;
+                            HashX program = null;
+                            var instructions = allInstructions.Slice(Instruction.ProgramSize * z, Instruction.ProgramSize);
+
+                            //Keep trying until a valid program is found
+                            while (true)
+                            {
+                                currentNonce = Interlocked.Increment(ref _currentNonce) - 1;
+                                BinaryPrimitives.WriteUInt64LittleEndian(currentChallengeSpan.Slice(32), currentNonce);
+
+                                //Invalid program
+                                if (!HashX.TryBuild(currentChallenge, instructions, out program))
                                 {
-                                    valid = false;
-                                    break;
+                                    continue;
                                 }
-                            }
-                            else if (instruction.Type == OpCode.Branch)
-                            {
-                                instruction.Dst = instruction.Operand;
+
+                                break;
                             }
 
-                            if (instruction.Type == OpCode.Sub)
-                            {
-                                instruction.SetType(OpCode.AddShift);
-                                instruction.SetOperand(-1);
-                            }
-                            else if (instruction.Type == OpCode.AddShift)
-                            {
-                                var nOperand = 1 << instruction.Operand;
+                            bool valid = true;
 
-                                instruction.SetOperand(nOperand);
+                            for (int i = 0; i < instructions.Length; i++)
+                            {
+                                var instruction = instructions[i];
+
+                                instruction.SetDestination((ulong)instruction.Dst);
+                                if (instruction.Type == OpCode.XorConst)
+                                {
+                                    instruction.SetType(OpCode.Xor);
+                                    instruction.Src = (int)instruction.Operand;
+
+                                    if (instruction.Src < 8 && instruction.Src >= 0)
+                                    {
+                                        valid = false;
+                                        break;
+                                    }
+                                }
+                                else if (instruction.Type == OpCode.AddConst)
+                                {
+                                    instruction.SetType(OpCode.Sub);
+                                    instruction.Src = ((int)instruction.Operand * -1);
+
+                                    if (instruction.Src < 8 && instruction.Src >= 0)
+                                    {
+                                        valid = false;
+                                        break;
+                                    }
+                                }
+                                else if (instruction.Type == OpCode.Branch)
+                                {
+                                    instruction.Dst = instruction.Operand;
+                                }
+
+                                if (instruction.Type == OpCode.Sub)
+                                {
+                                    instruction.SetType(OpCode.AddShift);
+                                    instruction.SetOperand(-1);
+                                }
+                                else if (instruction.Type == OpCode.AddShift)
+                                {
+                                    var nOperand = 1 << instruction.Operand;
+
+                                    instruction.SetOperand(nOperand);
+                                }
+
+                                instructions[i] = instruction;
                             }
 
-                            instructions[i] = instruction;
+                            if (valid)
+                            {
+                                keys[z] = new SipState
+                                {
+                                    V0 = program.RegisterKey.V0,
+                                    V1 = program.RegisterKey.V1,
+                                    V2 = program.RegisterKey.V2,
+                                    V3 = program.RegisterKey.V3,
+                                };
+
+                                cpuData.NoncesUsed[z] = currentNonce;
+                            }
                         }
+                    });
 
-                        if (valid)
-                        {
-                            keys[z] = new SipState
-                            {
-                                V0 = program.RegisterKey.V0,
-                                V1 = program.RegisterKey.V1,
-                                V2 = program.RegisterKey.V2,
-                                V3 = program.RegisterKey.V3,
-                            };
+                    #endregion
 
-                            cpuData.NoncesUsed[z] = currentNonce;
-                        }
-                    }
-                });
-
-                #endregion
-
-                if (_hasNotice)
-                {
-                    if (cpuData != null)
+                    if (_hasNotice)
                     {
-                        _availableCPUData.TryAdd(cpuData);
+                        if (cpuData != null)
+                        {
+                            _availableCPUData.TryAdd(cpuData);
+                        }
+
+                        continue;
                     }
 
-                    continue;
+                    _setupCPUData.TryAdd(cpuData);
+
+                    if (_currentNonce >= _info.EndNonce)
+                    {
+                        _logger.Log(LogLevel.Warn, $"Ran through all nonces set for the GPU. Total: {_info.EndNonce - _info.StartNonce} nonces");
+
+                        PauseMining();
+                    }
                 }
-
-                _setupCPUData.TryAdd(cpuData);
-
-                if (_currentNonce >= _info.EndNonce)
-                {
-                    _logger.Log(LogLevel.Warn, $"Ran through all nonces set for the GPU. Total: {_info.EndNonce - _info.StartNonce} nonces");
-
-                    PauseMining();
-                }
+            }
+            catch(Exception ex)
+            {
+                _logger.Log(LogLevel.Error, ex, $"Unknown exception occurred during GPU program generation");
             }
         }
 
@@ -593,55 +600,62 @@ namespace OrionClientLib.Hashers
             {
                 using var stream = _accelerator.CreateStream();
 
-                while(_running)
+                try
                 {
-                    _copyToWaiting = true;
-
-                    while ((!_pauseMining.WaitOne(500) || _miningPaused) && _running)
+                    while (_running)
                     {
-                    }
+                        _copyToWaiting = true;
 
-                    _copyToWaiting = false;
-
-                    GPUDeviceData deviceData = GetDeviceData(GPUDeviceData.Stage.None);
-
-                    while (deviceData == null && !_hasNotice)
-                    {
-                        Thread.Sleep(100);
-                        deviceData = GetDeviceData(GPUDeviceData.Stage.None);
-                    }
-
-                    CPUData cpuData = null;
-
-                    while (!_readyCPUData.TryTake(out cpuData, 50) && !_hasNotice)
-                    {
-
-                    }
-
-                    if(_hasNotice)
-                    {
-                        //Return data
-                        if(cpuData != null)
+                        while ((!_pauseMining.WaitOne(500) || _miningPaused) && _running)
                         {
-                            _readyCPUData.TryAdd(cpuData);
                         }
 
-                        //Mining paused, exiting, or new challenge are all handled by continuing loop
-                        continue;
+                        _copyToWaiting = false;
+
+                        GPUDeviceData deviceData = GetDeviceData(GPUDeviceData.Stage.None);
+
+                        while (deviceData == null && !_hasNotice)
+                        {
+                            Thread.Sleep(100);
+                            deviceData = GetDeviceData(GPUDeviceData.Stage.None);
+                        }
+
+                        CPUData cpuData = null;
+
+                        while (!_readyCPUData.TryTake(out cpuData, 50) && !_hasNotice)
+                        {
+
+                        }
+
+                        if (_hasNotice)
+                        {
+                            //Return data
+                            if (cpuData != null)
+                            {
+                                _readyCPUData.TryAdd(cpuData);
+                            }
+
+                            //Mining paused, exiting, or new challenge are all handled by continuing loop
+                            continue;
+                        }
+
+
+                        //Set as the current CPU data
+                        deviceData.CurrentCPUData = cpuData;
+
+                        //Copies to device.
+                        deviceData.ProgramInstructions.View.CopyFromCPU(stream, cpuData.InstructionData);
+                        deviceData.Keys.View.CopyFromCPU(cpuData.Keys);
+
+                        //Wait for copy to finish
+                        stream.Synchronize();
+
+                        deviceData.CurrentStage = GPUDeviceData.Stage.Execute;
                     }
-
-
-                    //Set as the current CPU data
-                    deviceData.CurrentCPUData = cpuData;
-
-                    //Copies to device.
-                    deviceData.ProgramInstructions.View.CopyFromCPU(stream, cpuData.InstructionData);
-                    deviceData.Keys.View.CopyFromCPU(cpuData.Keys);
-
-                    //Wait for copy to finish
-                    stream.Synchronize();
-
-                    deviceData.CurrentStage = GPUDeviceData.Stage.Execute;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Log(LogLevel.Error, $"Unknown exception occurred during CPU->GPU copying. Reason: {ex.Message}");
                 }
             }
 
@@ -649,161 +663,167 @@ namespace OrionClientLib.Hashers
             {
                 using var stream = _accelerator.CreateStream();
 
-                while (_running)
+                try
                 {
-                    _copyFromWaiting = true;
-
-                    while ((!_pauseMining.WaitOne(500) || _miningPaused) && _running)
+                    while (_running)
                     {
-                    }
+                        _copyFromWaiting = true;
 
-                    _copyFromWaiting = false;
-
-                    GPUDeviceData deviceData = GetDeviceData(GPUDeviceData.Stage.Solution);
-
-                    while (deviceData == null && !_hasNotice)
-                    {
-                        Thread.Sleep(100);
-                        deviceData = GetDeviceData(GPUDeviceData.Stage.Solution);
-                    }
-
-                    if (_hasNotice)
-                    {
-                        continue;
-                    }
-
-                    //Copies back to host
-                    deviceData.Solutions.CopyToCPU(stream, deviceData.CurrentCPUData.Solutions);
-                    deviceData.SolutionCounts.CopyToCPU(stream, deviceData.CurrentCPUData.SolutionCounts);
-
-                    //Wait for copy to finish
-                    stream.Synchronize();
-
-                    #region Verify
-
-                    Span<EquixSolution> allSolutions = deviceData.CurrentCPUData.Solutions;
-                    Span<uint> solutionCounts = deviceData.CurrentCPUData.SolutionCounts;
-                    byte[] challenge = _hasherInfo.Challenge.ToArray();
-                    byte[] b_nonceOutput = new byte[24];
-
-                    Span<byte> hashOutput = new Span<byte>(new byte[32]);
-                    Span<byte> nonceOutput = new Span<byte>(b_nonceOutput);
-                    Span<ushort> testSolution = new Span<ushort>(new ushort[8]);
-
-                    int totalSolutions = 0;
-                    int currentBestDifficulty = _hasherInfo.DifficultyInfo.BestDifficulty;
-                    int prevBestDifficulty = currentBestDifficulty;
-
-                    for (int i = 0; i < deviceData.CurrentCPUData.NoncesUsed.Length; i++)
-                    {
-                        Span<EquixSolution> solutions = allSolutions.Slice(8 * i, 8);
-                        uint solutionCount = Math.Min(8, solutionCounts[i]);
-
-                        for (int z = 0; z < solutionCount; z++)
+                        while ((!_pauseMining.WaitOne(500) || _miningPaused) && _running)
                         {
-                            ++totalSolutions;
-
-                            Span<ushort> eSolution = MemoryMarshal.Cast<EquixSolution, ushort>(solutions.Slice(z, 1));
-                            eSolution.CopyTo(testSolution);
-
-                            testSolution.Sort();
-
-                            ulong nonce = deviceData.CurrentCPUData.NoncesUsed[i];
-
-                            BinaryPrimitives.WriteUInt64LittleEndian(nonceOutput.Slice(16), nonce);
-                            MemoryMarshal.Cast<ushort, byte>(testSolution).CopyTo(nonceOutput);
-                            SHA3.Sha3Hash(testSolution, nonce, hashOutput);
-                            int difficulty = CalculateTarget(hashOutput);
-
-                            if(difficulty > currentBestDifficulty)
-                            {
-                                //Verify
-                                if (!VerifyResultAndReorder(nonce, solutions.Slice(z, 1)))
-                                {
-                                    _logger.Log(LogLevel.Warn, $"Solution verification failed. Nonce: {nonce}. Solution: {solutions.Slice(z, 1)[0]}. Expected Difficulty: {difficulty}. Skipping");
-
-                                    continue;
-                                }
-
-                                currentBestDifficulty = difficulty;
-                                _hasherInfo.UpdateDifficulty(difficulty, MemoryMarshal.Cast<ushort, byte>(eSolution).ToArray(), nonce);
-                            }
-
-                            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                            bool VerifyResultAndReorder(ulong nonce, Span<EquixSolution> solution)
-                            {
-                                BinaryPrimitives.WriteUInt64LittleEndian(challenge.AsSpan().Slice(32), nonce);
-                                HashX.TryBuild(challenge, out var program);
-                                program.InitCompiler(_solver.CompiledProgram);
-
-                                var result = _solver.Verify(program, solution[0]);
-
-                                if (result != Solver.EquixResult.EquixOk)
-                                {
-                                    return false;
-                                }
-
-                                program.DestroyCompiler();
-
-                                //Reorder
-
-                                //Individual level
-                                Span<ushort> v = MemoryMarshal.Cast<EquixSolution, ushort>(solution);
-
-                                for (int i = 0; i < v.Length; i += 2)
-                                {
-                                    if (v[i] > v[i + 1])
-                                    {
-                                        var t = v[i];
-                                        v[i] = v[i + 1];
-                                        v[i + 1] = t;
-                                    }
-                                }
-
-                                //First pair
-                                Span<uint> v2 = MemoryMarshal.Cast<ushort, uint>(v);
-
-                                for (int i = 0; i < v2.Length; i += 2)
-                                {
-                                    if (v2[i] > v2[i + 1])
-                                    {
-                                        var t = v2[i];
-                                        v2[i] = v2[i + 1];
-                                        v2[i + 1] = t;
-                                    }
-                                }
-
-
-                                //Second pair
-                                Span<ulong> v4 = MemoryMarshal.Cast<uint, ulong>(v2);
-
-                                for (int i = 0; i < v4.Length; i += 2)
-                                {
-                                    if (v4[i] > v4[i + 1])
-                                    {
-                                        var t = v4[i];
-                                        v4[i] = v4[i + 1];
-                                        v4[i + 1] = t;
-                                    }
-                                }
-
-                                return true;
-                            }
                         }
 
-                        //Only notifies that there was a better difficulty found
-                        if(currentBestDifficulty > prevBestDifficulty)
+                        _copyFromWaiting = false;
+
+                        GPUDeviceData deviceData = GetDeviceData(GPUDeviceData.Stage.Solution);
+
+                        while (deviceData == null && !_hasNotice)
                         {
-                            OnDifficultyUpdate?.Invoke(this, EventArgs.Empty);
+                            Thread.Sleep(100);
+                            deviceData = GetDeviceData(GPUDeviceData.Stage.Solution);
                         }
 
-                        deviceData.CurrentStage = GPUDeviceData.Stage.None;
-                    }
+                        if (_hasNotice)
+                        {
+                            continue;
+                        }
 
-                    #endregion
+                        //Copies back to host
+                        deviceData.Solutions.CopyToCPU(stream, deviceData.CurrentCPUData.Solutions);
+                        deviceData.SolutionCounts.CopyToCPU(stream, deviceData.CurrentCPUData.SolutionCounts);
+
+                        //Wait for copy to finish
+                        stream.Synchronize();
+
+                        #region Verify
+
+                        Span<EquixSolution> allSolutions = deviceData.CurrentCPUData.Solutions;
+                        Span<uint> solutionCounts = deviceData.CurrentCPUData.SolutionCounts;
+                        byte[] challenge = _hasherInfo.Challenge.ToArray();
+                        byte[] b_nonceOutput = new byte[24];
+
+                        Span<byte> hashOutput = new Span<byte>(new byte[32]);
+                        Span<byte> nonceOutput = new Span<byte>(b_nonceOutput);
+                        Span<ushort> testSolution = new Span<ushort>(new ushort[8]);
+
+                        int totalSolutions = 0;
+                        int currentBestDifficulty = _hasherInfo.DifficultyInfo.BestDifficulty;
+                        int prevBestDifficulty = currentBestDifficulty;
+
+                        for (int i = 0; i < deviceData.CurrentCPUData.NoncesUsed.Length; i++)
+                        {
+                            Span<EquixSolution> solutions = allSolutions.Slice(8 * i, 8);
+                            uint solutionCount = Math.Min(8, solutionCounts[i]);
+
+                            for (int z = 0; z < solutionCount; z++)
+                            {
+                                ++totalSolutions;
+
+                                Span<ushort> eSolution = MemoryMarshal.Cast<EquixSolution, ushort>(solutions.Slice(z, 1));
+                                eSolution.CopyTo(testSolution);
+
+                                testSolution.Sort();
+
+                                ulong nonce = deviceData.CurrentCPUData.NoncesUsed[i];
+
+                                BinaryPrimitives.WriteUInt64LittleEndian(nonceOutput.Slice(16), nonce);
+                                MemoryMarshal.Cast<ushort, byte>(testSolution).CopyTo(nonceOutput);
+                                SHA3.Sha3Hash(testSolution, nonce, hashOutput);
+                                int difficulty = CalculateTarget(hashOutput);
+
+                                if (difficulty > currentBestDifficulty)
+                                {
+                                    //Verify
+                                    if (!VerifyResultAndReorder(nonce, solutions.Slice(z, 1)))
+                                    {
+                                        _logger.Log(LogLevel.Warn, $"Solution verification failed. Nonce: {nonce}. Solution: {solutions.Slice(z, 1)[0]}. Expected Difficulty: {difficulty}. Skipping");
+
+                                        continue;
+                                    }
+
+                                    currentBestDifficulty = difficulty;
+                                    _hasherInfo.UpdateDifficulty(difficulty, MemoryMarshal.Cast<ushort, byte>(eSolution).ToArray(), nonce);
+                                }
+
+                                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                                bool VerifyResultAndReorder(ulong nonce, Span<EquixSolution> solution)
+                                {
+                                    BinaryPrimitives.WriteUInt64LittleEndian(challenge.AsSpan().Slice(32), nonce);
+                                    HashX.TryBuild(challenge, out var program);
+                                    program.InitCompiler(_solver.CompiledProgram);
+
+                                    var result = _solver.Verify(program, solution[0]);
+
+                                    if (result != Solver.EquixResult.EquixOk)
+                                    {
+                                        return false;
+                                    }
+
+                                    program.DestroyCompiler();
+
+                                    //Reorder
+
+                                    //Individual level
+                                    Span<ushort> v = MemoryMarshal.Cast<EquixSolution, ushort>(solution);
+
+                                    for (int i = 0; i < v.Length; i += 2)
+                                    {
+                                        if (v[i] > v[i + 1])
+                                        {
+                                            var t = v[i];
+                                            v[i] = v[i + 1];
+                                            v[i + 1] = t;
+                                        }
+                                    }
+
+                                    //First pair
+                                    Span<uint> v2 = MemoryMarshal.Cast<ushort, uint>(v);
+
+                                    for (int i = 0; i < v2.Length; i += 2)
+                                    {
+                                        if (v2[i] > v2[i + 1])
+                                        {
+                                            var t = v2[i];
+                                            v2[i] = v2[i + 1];
+                                            v2[i + 1] = t;
+                                        }
+                                    }
+
+
+                                    //Second pair
+                                    Span<ulong> v4 = MemoryMarshal.Cast<uint, ulong>(v2);
+
+                                    for (int i = 0; i < v4.Length; i += 2)
+                                    {
+                                        if (v4[i] > v4[i + 1])
+                                        {
+                                            var t = v4[i];
+                                            v4[i] = v4[i + 1];
+                                            v4[i + 1] = t;
+                                        }
+                                    }
+
+                                    return true;
+                                }
+                            }
+
+                            //Only notifies that there was a better difficulty found
+                            if (currentBestDifficulty > prevBestDifficulty)
+                            {
+                                OnDifficultyUpdate?.Invoke(this, EventArgs.Empty);
+                            }
+
+                            deviceData.CurrentStage = GPUDeviceData.Stage.None;
+                        }
+
+                        #endregion
+                    }
                 }
-
-            }
+                catch (Exception ex)
+                {
+                    _logger.Log(LogLevel.Error, $"Unknown exception occurred during GPU->CPU copying. Reason: {ex.Message}");
+                }
+    }
 
             private async void Run()
             {
@@ -814,36 +834,43 @@ namespace OrionClientLib.Hashers
 
                 _logger.Log(LogLevel.Debug, $"[GPU] Finished loading kernels for {_device.Name} [{_deviceId}]");
 
-                while (!_runningTask.IsCanceled)
+                try
                 {
-                    _executingWaiting = true;
-
-                    while ((!_pauseMining.WaitOne(500) || _miningPaused) && _running)
+                    while (!_runningTask.IsCanceled)
                     {
+                        _executingWaiting = true;
+
+                        while ((!_pauseMining.WaitOne(500) || _miningPaused) && _running)
+                        {
+                        }
+
+                        _executingWaiting = false;
+
+                        GPUDeviceData deviceData = GetDeviceData(GPUDeviceData.Stage.Execute);
+
+                        while (deviceData == null && !_hasNotice)
+                        {
+                            await Task.Delay(100);
+                            deviceData = GetDeviceData(GPUDeviceData.Stage.Execute);
+                        }
+
+                        if (_hasNotice)
+                        {
+                            continue;
+                        }
+
+                        hashxKernel(_hashxConfig, deviceData.ProgramInstructions.View, deviceData.Keys.View, deviceData.Hashes.View);
+                        equixKernel(_equihashConfig, deviceData.Hashes.View, deviceData.Solutions.View, deviceData.Heap.View, deviceData.SolutionCounts.View);
+
+                        //Wait for kernels to finish
+                        _accelerator.Synchronize();
+
+                        deviceData.CurrentStage = GPUDeviceData.Stage.Solution;
                     }
-
-                    _executingWaiting = false;
-
-                    GPUDeviceData deviceData = GetDeviceData(GPUDeviceData.Stage.Execute);
-
-                    while (deviceData == null && !_hasNotice)
-                    {
-                        await Task.Delay(100);
-                        deviceData = GetDeviceData(GPUDeviceData.Stage.Execute);
-                    }
-
-                    if(_hasNotice)
-                    {
-                        continue;
-                    }
-
-                    hashxKernel(_hashxConfig, deviceData.ProgramInstructions.View, deviceData.Keys.View, deviceData.Hashes.View);
-                    equixKernel(_equihashConfig, deviceData.Hashes.View, deviceData.Solutions.View, deviceData.Heap.View, deviceData.SolutionCounts.View);
-
-                    //Wait for kernels to finish
-                    _accelerator.Synchronize();
-
-                    deviceData.CurrentStage = GPUDeviceData.Stage.Solution;
+                }
+                catch(Exception ex)
+                {
+                    _logger.Log(LogLevel.Error, $"Unknown exception occurred during GPU execution. Reason: {ex.Message}");
                 }
             }
 

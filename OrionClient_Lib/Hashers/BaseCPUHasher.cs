@@ -218,97 +218,102 @@ namespace OrionClientLib.Hashers
 
         protected virtual void Run()
         {
-            while (_running)
+            try
             {
-                _executing = false;
-
-                while ((!_newChallengeWait.WaitOne(500) || !_pauseMining.WaitOne(0)) && _running)
+                while (_running)
                 {
-                }
+                    _executing = false;
 
-                if (!_running)
-                {
-                    break;
-                }
-
-                _executing = true;
-
-                TimeSpan startTime = _sw.Elapsed;
-                int prevDifficulty = _info.DifficultyInfo.BestDifficulty;
-                ulong startSolutions = _info.TotalSolutions;
-
-                //TODO: Verify threads didn't increase, log error if it did
-                _threads = Math.Min(_solverQueue.Count, _threads);
-
-                var rangePartitioner = Partitioner.Create(0, (int)_info.BatchSize, (int)_info.BatchSize / _threads);
-                ConcurrentQueue<Exception> exceptions = new ConcurrentQueue<Exception>();
-
-                Parallel.ForEach(rangePartitioner, new ParallelOptions { MaxDegreeOfParallelism = _threads }, (range, loop) => ExecuteThread(range, loop, exceptions));
-
-                if (exceptions.TryDequeue(out Exception ex))
-                {
-                    //Log error
-                    Console.WriteLine(ex);
-                }
-
-                TimeSpan hashingTime = _sw.Elapsed - startTime;
-
-                //All prior hashes are invalid now
-                if (ResettingChallenge)
-                {
-                    continue;
-                }
-
-                //Modify batch size to be between 750ms-2000ms long
-                if (_running)
-                {
-                    if (hashingTime.TotalSeconds < 0.75)
+                    while ((!_newChallengeWait.WaitOne(500) || !_pauseMining.WaitOne(0)) && _running)
                     {
-                        _info.BatchSize *= 2;
                     }
-                    else if (hashingTime.TotalSeconds > 2)
+
+                    if (!_running)
                     {
-                        _info.BatchSize /= 2;
-
-                        _info.BatchSize = Math.Max(64, _info.BatchSize);
+                        break;
                     }
-                }
 
-                //Higher difficulty found, notify pool
-                if (_info.DifficultyInfo.BestDifficulty > prevDifficulty)
-                {
-                    //Check that we aren't paused
-                    if (_pauseMining.WaitOne(0))
+                    _executing = true;
+
+                    TimeSpan startTime = _sw.Elapsed;
+                    int prevDifficulty = _info.DifficultyInfo.BestDifficulty;
+                    ulong startSolutions = _info.TotalSolutions;
+
+                    //TODO: Verify threads didn't increase, log error if it did
+                    _threads = Math.Min(_solverQueue.Count, _threads);
+
+                    var rangePartitioner = Partitioner.Create(0, (int)_info.BatchSize, (int)_info.BatchSize / _threads);
+                    ConcurrentQueue<Exception> exceptions = new ConcurrentQueue<Exception>();
+
+                    Parallel.ForEach(rangePartitioner, new ParallelOptions { MaxDegreeOfParallelism = _threads }, (range, loop) => ExecuteThread(range, loop, exceptions));
+
+                    if (exceptions.TryDequeue(out Exception ex))
                     {
-                        _pool?.DifficultyFound(_info.DifficultyInfo.GetUpdateCopy());
+                        //Log error
+                        Console.WriteLine(ex);
                     }
+
+                    TimeSpan hashingTime = _sw.Elapsed - startTime;
+
+                    //All prior hashes are invalid now
+                    if (ResettingChallenge)
+                    {
+                        continue;
+                    }
+
+                    //Modify batch size to be between 750ms-2000ms long
+                    if (_running)
+                    {
+                        if (hashingTime.TotalSeconds < 0.75)
+                        {
+                            _info.BatchSize *= 2;
+                        }
+                        else if (hashingTime.TotalSeconds > 2)
+                        {
+                            _info.BatchSize /= 2;
+
+                            _info.BatchSize = Math.Max(64, _info.BatchSize);
+                        }
+                    }
+
+                    //Higher difficulty found, notify pool
+                    if (_info.DifficultyInfo.BestDifficulty > prevDifficulty)
+                    {
+                        //Check that we aren't paused
+                        if (_pauseMining.WaitOne(0))
+                        {
+                            _pool?.DifficultyFound(_info.DifficultyInfo.GetUpdateCopy());
+                        }
+                    }
+
+                    _info.CurrentNonce += _info.BatchSize;
+
+                    if (_info.CurrentNonce >= _info.EndNonce)
+                    {
+                        _logger.Log(LogLevel.Warn, $"Ran through all nonces set for the CPU. Total: {_info.EndNonce - _info.StartNonce} nonces");
+
+                        PauseMining();
+                    }
+
+                    OnHashrateUpdate?.Invoke(this, new HashrateInfo
+                    {
+                        IsCPU = true,
+                        ExecutionTime = hashingTime,
+                        NumNonces = _info.BatchSize,
+                        NumSolutions = _info.TotalSolutions - startSolutions,
+                        HighestDifficulty = _info.DifficultyInfo.BestDifficulty,
+                        ChallengeSolutions = _info.TotalSolutions,
+                        TotalTime = _sw.Elapsed - _challengeStartTime,
+                        CurrentThreads = _threads,
+                        ChallengeId = _info.ChallengeId
+                    });
+
                 }
-
-                _info.CurrentNonce += _info.BatchSize;
-
-                if(_info.CurrentNonce >= _info.EndNonce)
-                {
-                    _logger.Log(LogLevel.Warn, $"Ran through all nonces set for the CPU. Total: {_info.EndNonce - _info.StartNonce} nonces");
-
-                    PauseMining();
-                }
-
-                OnHashrateUpdate?.Invoke(this, new HashrateInfo
-                {
-                    IsCPU = true,
-                    ExecutionTime = hashingTime,
-                    NumNonces = _info.BatchSize,
-                    NumSolutions = _info.TotalSolutions - startSolutions,
-                    HighestDifficulty = _info.DifficultyInfo.BestDifficulty,
-                    ChallengeSolutions = _info.TotalSolutions,
-                    TotalTime = _sw.Elapsed - _challengeStartTime,
-                    CurrentThreads = _threads,
-                    ChallengeId = _info.ChallengeId
-                });
-
             }
-
-            _logger.Log(LogLevel.Warn, $"Stopped");
+            catch(Exception ex)
+            {
+                _logger.Log(LogLevel.Error, ex, $"Unknown exception occurred in CPUHasher. Reason: {ex.Message}");
+            }
         }
 
         protected abstract void ExecuteThread(Tuple<int, int> range, ParallelLoopState loopState, ConcurrentQueue<Exception> exceptions);
