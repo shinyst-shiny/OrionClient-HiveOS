@@ -1,4 +1,5 @@
-﻿using Equix;
+﻿using Blake2Sharp;
+using Equix;
 using Hardware.Info;
 using ILGPU.Runtime;
 using ILGPU.Runtime.Cuda;
@@ -38,7 +39,6 @@ namespace OrionClientLib.Modules
             _steps.Add(WalletSetupAsync);
             _steps.Add(ChooseCPUHasherAsync);
             _steps.Add(ChooseGPUHasherAsync);
-            _steps.Add(ThreadCountAsync);
             _steps.Add(ChoosePoolAsync);
             _steps.Add(FinalConfirmationAsync);
         }
@@ -93,7 +93,7 @@ namespace OrionClientLib.Modules
                 (Wallet solanaWallet, string publicKey) = await _settings.GetWalletAsync();
 
                 SelectionPrompt<string> selectionPrompt = new SelectionPrompt<string>();
-                selectionPrompt.Title($"Setup solana wallet. Current: {publicKey ?? "??"}. Path: {(_settings.HasPrivateKey ? (_settings.KeyFile ?? "N/A") : "N/A")}");
+                selectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nSetup solana wallet. Current: {publicKey ?? "??"}. Path: {(_settings.HasPrivateKey ? (_settings.KeyFile ?? "N/A") : "N/A")}");
 
                 if (!String.IsNullOrEmpty(publicKey))
                 {
@@ -130,40 +130,56 @@ namespace OrionClientLib.Modules
 
         private async Task<int> ChooseCPUHasherAsync()
         {
-            (IHasher chosenHasher, IHasher gpuHasher) = _data.GetChosenHasher();
+            (IHasher cpuHasher, IHasher gpuHasher) = _data.GetChosenHasher();
 
             SelectionPrompt<IHasher> selectionPrompt = new SelectionPrompt<IHasher>();
-            selectionPrompt.Title("Select CPU hashing implementation. Run benchmark to see hashrates");
-            selectionPrompt.UseConverter((pool) =>
+            selectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nSelect CPU hashing implementation. Run benchmark to see hashrates");
+            selectionPrompt.UseConverter((hasher) =>
             {
+                if (hasher == null)
+                {
+                    return "[aqua]<-- Previous Step[/]";
+                }
+
                 string chosenText = String.Empty;
 
-                if (pool == chosenHasher)
+                if (hasher == cpuHasher)
                 {
                     chosenText = "[b][[Current]][/] ";
                 }
 
-                return $"{chosenText}{pool.Name} - {pool.Description}";
+                return $"{chosenText}{hasher.Name} - {hasher.Description}";
             });
 
-            selectionPrompt.AddChoices(_data.Hashers.Where(x => x.HardwareType == IHasher.Hardware.CPU).OrderByDescending(x =>x == chosenHasher));
+            selectionPrompt.AddChoices(_data.Hashers.Where(x => x.HardwareType == IHasher.Hardware.CPU).OrderByDescending(x =>x == cpuHasher));
+            selectionPrompt.AddChoice(null);
 
-            chosenHasher = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
+            cpuHasher = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
 
-            _settings.CPUHasher = chosenHasher.Name;
+            if(cpuHasher == null)
+            {
+                return _currentStep - 1;
+            }
 
-            return _currentStep + 1;
+            _settings.CPUHasher = cpuHasher.Name;
+
+            return await ThreadCountAsync();
         }
 
         //Reduce to single method later
         private async Task<int> ChooseGPUHasherAsync()
         {
-            (IHasher chosenHasher, IHasher gpuHasher) = _data.GetChosenHasher();
+            (IHasher cpuHasher, IHasher gpuHasher) = _data.GetChosenHasher();
 
             SelectionPrompt<IHasher> selectionPrompt = new SelectionPrompt<IHasher>();
-            selectionPrompt.Title("Select GPU hashing implementation. Run benchmark to see hashrates");
+            selectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nSelect GPU hashing implementation. Run benchmark to see hashrates");
             selectionPrompt.UseConverter((hasher) =>
             {
+                if(hasher == null)
+                {
+                    return "[aqua]<-- Previous Step[/]";
+                }
+
                 string chosenText = String.Empty;
 
                 if (hasher == gpuHasher)
@@ -174,26 +190,32 @@ namespace OrionClientLib.Modules
                 return $"{chosenText}{hasher.Name} - {hasher.Description}";
             });
 
-            selectionPrompt.AddChoices(_data.Hashers.Where(x => x.HardwareType == IHasher.Hardware.GPU).OrderByDescending(x => x == chosenHasher));
+            selectionPrompt.AddChoices(_data.Hashers.Where(x => x.HardwareType == IHasher.Hardware.GPU).OrderByDescending(x => x == gpuHasher));
+            selectionPrompt.AddChoice(null);
 
-            chosenHasher = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
+            gpuHasher = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
 
-            _settings.GPUHasher = chosenHasher.Name;
-
-            if(chosenHasher is DisabledHasher)
+            if(gpuHasher == null)
             {
-                _settings.GPUHasher = chosenHasher.Name;
+                return _currentStep - 1;
+            }
+
+            _settings.GPUHasher = gpuHasher.Name;
+
+            if(gpuHasher is DisabledHasher)
+            {
+                _settings.GPUHasher = gpuHasher.Name;
 
                 return _currentStep + 1;
             }
 
-            IGPUHasher hasher = (IGPUHasher)chosenHasher;
+            IGPUHasher hasher = (IGPUHasher)gpuHasher;
             List<Device> devices = hasher.GetDevices(false);
             HashSet<Device> validDevices = new HashSet<Device>(hasher.GetDevices(true));
 
             //Allow device selection
             MultiSelectionPrompt<Device> deviceSelectionPrompt = new MultiSelectionPrompt<Device>();
-            deviceSelectionPrompt.Title("Select GPUs to use. Selecting different GPU types may cause performance issues");
+            deviceSelectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nSelect GPUs to use. Selecting different GPU types may cause performance issues");
             deviceSelectionPrompt.UseConverter((device) =>
             {
                 bool selected = _settings.GPUDevices.Contains(devices.IndexOf(device));
@@ -290,8 +312,10 @@ namespace OrionClientLib.Modules
                 }
             }
 
+            choices.Add((-1, "[aqua]<-- Previous Step[/]"));
+
             SelectionPrompt<(int, string)> selectionPrompt = new SelectionPrompt<(int, string)>();
-            selectionPrompt.Title($"Select total threads. Highest value recommended. Current: {_settings.CPUThreads}");
+            selectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nSelect total threads. Highest value recommended. Current: {_settings.CPUThreads}");
             selectionPrompt.UseConverter((tuple) =>
             {
                 if(tuple.Item1 > 0)
@@ -306,7 +330,12 @@ namespace OrionClientLib.Modules
 
             (int, string) choice = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
             
-            if(choice.Item1 == 0)
+            if(choice.Item1 == -1)
+            {
+                //We're going back to the start of this step
+                return _currentStep;
+            }
+            else if(choice.Item1 == 0)
             {
                 while (true)
                 {
@@ -337,7 +366,7 @@ namespace OrionClientLib.Modules
             IPool chosenPool = _data.GetChosenPool();
             
             SelectionPrompt<IPool> selectionPrompt = new SelectionPrompt<IPool>();
-            selectionPrompt.Title($"Pool Selection{(!String.IsNullOrEmpty(_errorMessage) ? $"\n[red]Error: {_errorMessage}[/]\n" : String.Empty)}");
+            selectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nPool Selection{(!String.IsNullOrEmpty(_errorMessage) ? $"\n[red]Error: {_errorMessage}[/]\n" : String.Empty)}");
             _errorMessage = String.Empty;
 
             selectionPrompt.UseConverter((pool) =>
@@ -367,7 +396,6 @@ namespace OrionClientLib.Modules
                 selectionPrompt.AddChoices(_data.Pools.OrderByDescending(x => x == chosenPool));
                 selectionPrompt.AddChoice(null);
             }
-
 
             chosenPool = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
 
@@ -401,7 +429,7 @@ namespace OrionClientLib.Modules
             (Wallet wallet, string publicKey) = await _settings.GetWalletAsync();
 
             SelectionPrompt<int> selectionPrompt = new SelectionPrompt<int>();
-            selectionPrompt.Title($"All settings can be manually changed in [b]{Settings.FilePath}[/]\n\nWallet: {publicKey ?? "??"}\nHasher: CPU - {cpuHasher?.Name ?? "N/A"} ({_settings.CPUThreads} threads), GPU - {gpuHasher?.Name ?? "N/A"}\nPool: {chosenPool?.DisplayName ?? "None"}\n");
+            selectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nAll settings can be manually changed in [b]{Settings.FilePath}[/]\n\nWallet: {publicKey ?? "??"}\nHasher: CPU - {cpuHasher?.Name ?? "N/A"} ({_settings.CPUThreads} threads), GPU - {gpuHasher?.Name ?? "N/A"}\nPool: {chosenPool?.DisplayName ?? "None"}\n");
             selectionPrompt.EnableSearch();
             selectionPrompt.AddChoice(0);
             selectionPrompt.AddChoice(1);
