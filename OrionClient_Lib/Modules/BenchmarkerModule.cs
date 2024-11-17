@@ -118,6 +118,8 @@ namespace OrionClientLib.Modules
                 deviceTable.AddColumn(new TableColumn("Average Hashrate").Centered());
                 deviceTable.AddColumn(new TableColumn("Min Hashrate").Centered());
                 deviceTable.AddColumn(new TableColumn("Max Hashrate").Centered());
+                deviceTable.AddColumn(new TableColumn("Hashx N/S (GPU)").Centered());
+                deviceTable.AddColumn(new TableColumn("Equihash N/S (GPU)").Centered());
                 deviceTable.AddColumn(new TableColumn("Remaining Time").Centered());
                 deviceTable.Expand();
                 deviceTable.ShowRowSeparators = true;
@@ -127,6 +129,8 @@ namespace OrionClientLib.Modules
                     HasherInfo hasher = _chosenHashers[i];
 
                     deviceTable.AddRow($"{hasher.Hasher.Name} ({data.Settings.CPUThreads} threads)",
+                        $"-",
+                        $"-",
                         $"-",
                         $"-",
                         $"-",
@@ -216,7 +220,14 @@ namespace OrionClientLib.Modules
             _render.UpdateCell(_hasherIndex, 1, currentInfo.CurrentRate.ChallengeSolutionsPerSecond.ToString());
             _render.UpdateCell(_hasherIndex, 2, currentInfo.MinRate.SolutionsPerSecond.ToString());
             _render.UpdateCell(_hasherIndex, 3, currentInfo.MaxRate.SolutionsPerSecond.ToString());
-            _render.UpdateCell(_hasherIndex, 4, $"{Math.Max(0, _totalSeconds - currentInfo.CurrentRate.TotalTime.TotalSeconds):0.00}s");
+
+            if(currentInfo.Hasher is IGPUHasher)
+            {
+                _render.UpdateCell(_hasherIndex, 4, currentInfo.MaxRate.HashxNoncesPerSecond.ToString());
+                _render.UpdateCell(_hasherIndex, 5, currentInfo.MaxRate.EquihashNoncesPerSecond.ToString());
+            }
+
+            _render.UpdateCell(_hasherIndex, 6, $"{Math.Max(0, _totalSeconds - currentInfo.CurrentRate.TotalTime.TotalSeconds):0.00}s");
 
             //Console.WriteLine($"{currentInfo.Hasher.Name} -- Average: {currentInfo.CurrentRate.SolutionsPerSecond}, Min: {currentInfo.MinRate.SolutionsPerSecond}, Max: {currentInfo.MaxRate.SolutionsPerSecond}. Runtime: {currentInfo.CurrentRate.TotalTime}");
         }

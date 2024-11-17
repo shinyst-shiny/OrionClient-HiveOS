@@ -16,7 +16,7 @@ using ILGPU.Runtime.Cuda;
 
 namespace OrionClientLib.Hashers.GPU.Baseline
 {
-    public partial class BaselineGPUHasher
+    public partial class CudaBaselineGPUHasher
     {
         private static int _targetId = 0;
         public static int _offsetCounter = 0;
@@ -303,8 +303,7 @@ namespace OrionClientLib.Hashers.GPU.Baseline
                 return dst ^ src;
             }
 
-            var a = dst;
-            return a.Ror(operand);
+            return dst.Ror(operand);
         }
 
         #endregion
@@ -387,8 +386,6 @@ namespace OrionClientLib.Hashers.GPU.Baseline
 
             _offsetCounter += 16;
         }
-
-
 
         [IntrinsicMethod(nameof(LoadTargetInstruction_Generate))]
         [IntrinsicImplementation]
@@ -516,8 +513,6 @@ namespace OrionClientLib.Hashers.GPU.Baseline
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static ArrayView<ulong> SipHash24Ctr(SipState s, ulong input, ArrayView<ulong> ret)
         {
-            //Modify how it stores data
-
             s.V1 ^= 0xee;
             s.V3 ^= input;
 
@@ -537,8 +532,6 @@ namespace OrionClientLib.Hashers.GPU.Baseline
             ret[2] = s.V2;
             ret[3] = s.V3;
 
-            //StoreValues(ref ret[0], s.V0, s.V1, s.V2, s.V3);
-
             s.V1 ^= 0xdd;
 
             s.SipRound();
@@ -546,81 +539,12 @@ namespace OrionClientLib.Hashers.GPU.Baseline
             s.SipRound();
             s.SipRound();
 
-            //StoreValues(ref ret[4], s.V0, s.V1, s.V2, s.V3);
-
             ret[4] = s.V0;
             ret[5] = s.V1;
             ret[6] = s.V2;
             ret[7] = s.V3;
 
             return ret;
-        }
-
-        private static void SipRound_Generate(PTXCodeGenerator codeGenerator, List<RegisterAllocator<PTXRegisterKind>.HardwareRegister> registers, RegisterAllocator<PTXRegisterKind>.HardwareRegister temp = null)
-        {
-            codeGenerator.Addu64(registers[0], registers[0], registers[1]);//V0 = V0 + V1;
-            codeGenerator.Addu64(registers[2], registers[2], registers[3]);//V2 = V2 + V3;
-            codeGenerator.Rol(registers[1], 13, temp); // V1 = V1.Rol(13);
-            codeGenerator.Rol(registers[3], 16, temp);//V3.Rol(16);
-            codeGenerator.Xorb64(registers[1], registers[1], registers[0]);//V1 ^= V0;
-            codeGenerator.Xorb64(registers[3], registers[3], registers[2]);//V3 ^= V2;
-            codeGenerator.Rol(registers[0], 32, temp);//V0 = V0.Rol(32);
-            codeGenerator.Addu64(registers[2], registers[2], registers[1]);//V2 = V2 + V1;
-            codeGenerator.Addu64(registers[0], registers[0], registers[3]);//V0 = V0 + V3;
-            codeGenerator.Rol(registers[1], 17, temp);//V1 = V1.Rol(17);
-            codeGenerator.Rol(registers[3], 21, temp);//V3 = V3.Rol(21);
-            codeGenerator.Xorb64(registers[1], registers[1], registers[2]);//V1 ^= V2;
-            codeGenerator.Xorb64(registers[3], registers[3], registers[0]);//V3 ^= V0;
-            codeGenerator.Rol(registers[2], 32, temp);//V2 = V2.Rol(32);
-        }
-
-        private static void Digest_Generate(PTXCodeGenerator codeGenerator, RegisterAllocator<PTXRegisterKind>.HardwareRegister ret, List<RegisterAllocator<PTXRegisterKind>.HardwareRegister> registers, List<RegisterAllocator<PTXRegisterKind>.HardwareRegister> keys)
-        {
-            codeGenerator.Addu64(registers[0], registers[0], keys[0]);
-            codeGenerator.Addu64(registers[1], registers[1], keys[1]);
-            codeGenerator.Addu64(registers[6], registers[6], keys[2]);
-            codeGenerator.Addu64(registers[7], registers[7], keys[3]);
-
-            SipRound_Generate(codeGenerator, registers.Take(4).ToList());
-            SipRound_Generate(codeGenerator, registers.Skip(4).Take(4).ToList());
-
-            codeGenerator.Xorb64(ret, registers[0], registers[4]);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static void SipHash24Ctr_Generate(PTXCodeGenerator codeGenerator, List<RegisterAllocator<PTXRegisterKind>.HardwareRegister> registers, List<RegisterAllocator<PTXRegisterKind>.HardwareRegister> keys, RegisterAllocator<PTXRegisterKind>.HardwareRegister input)
-        {
-            var sRegisters = registers.Take(4).ToList();
-            var tRegisters = registers.Skip(4).Take(4).ToList();
-            var tempOperand = codeGenerator.AllocateRegister(BasicValueType.Int64, PTXRegisterKind.Int64);
-
-            codeGenerator.Movb64(sRegisters[0], keys[0]);
-            codeGenerator.Xorb64(sRegisters[1], keys[1], 0xee);  //s.V1 ^= 0xee;
-            codeGenerator.Movb64(sRegisters[2], keys[2]);
-            codeGenerator.Xorb64(sRegisters[3], keys[3], input); //s.V3 ^= input;
-
-            SipRound_Generate(codeGenerator, sRegisters, tempOperand);
-            SipRound_Generate(codeGenerator, sRegisters, tempOperand);
-
-            codeGenerator.Xorb64(sRegisters[0], sRegisters[0], input); //s.V0 ^= input;
-            codeGenerator.Xorb64(sRegisters[2], sRegisters[2], 0xee); //s.V2 ^= 0xee;
-
-            SipRound_Generate(codeGenerator, sRegisters, tempOperand);
-            SipRound_Generate(codeGenerator, sRegisters, tempOperand);
-            SipRound_Generate(codeGenerator, sRegisters, tempOperand);
-            SipRound_Generate(codeGenerator, sRegisters, tempOperand);
-
-            //var t = s;
-
-            codeGenerator.Movb64(tRegisters[0], sRegisters[0]);
-            codeGenerator.Xorb64(tRegisters[1], sRegisters[1], 0xdd); //t.V1 ^= 0xdd;
-            codeGenerator.Movb64(tRegisters[2], sRegisters[2]);
-            codeGenerator.Movb64(tRegisters[3], sRegisters[3]);
-
-            SipRound_Generate(codeGenerator, tRegisters, tempOperand);
-            SipRound_Generate(codeGenerator, tRegisters, tempOperand);
-            SipRound_Generate(codeGenerator, tRegisters, tempOperand);
-            SipRound_Generate(codeGenerator, tRegisters, tempOperand);
         }
 
         #endregion
@@ -694,8 +618,6 @@ namespace OrionClientLib.Hashers.GPU.Baseline
 
         #region Store Key
 
-        [IntrinsicMethod(nameof(StoreValues_Generate))]
-        //[IntrinsicImplementation]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private unsafe static void StoreValues(ref ulong arr, ulong a, ulong b, ulong c, ulong d)
         {
@@ -709,22 +631,6 @@ namespace OrionClientLib.Hashers.GPU.Baseline
                     v[3] = d;
                 }
             }
-        }
-
-        private static void StoreValues_Generate(PTXBackend backend, PTXCodeGenerator codeGenerator, Value value)
-        {
-            var arrayRef = (RegisterAllocator<PTXRegisterKind>.HardwareRegister)codeGenerator.LoadPrimitive(value[0]);
-            var a = (RegisterAllocator<PTXRegisterKind>.HardwareRegister)codeGenerator.LoadPrimitive(value[1]);
-            var b = (RegisterAllocator<PTXRegisterKind>.HardwareRegister)codeGenerator.LoadPrimitive(value[2]);
-            var c = (RegisterAllocator<PTXRegisterKind>.HardwareRegister)codeGenerator.LoadPrimitive(value[3]);
-            var d = (RegisterAllocator<PTXRegisterKind>.HardwareRegister)codeGenerator.LoadPrimitive(value[4]);
-
-            var command = codeGenerator.BeginCommand($"st.local.v2.u64 [%{PTXRegisterAllocator.GetStringRepresentation(arrayRef)}], {{%{PTXRegisterAllocator.GetStringRepresentation(a)},%{PTXRegisterAllocator.GetStringRepresentation(b)}}}");
-            command.Dispose();
-            command = codeGenerator.BeginCommand($"st.local.v2.u64 [%{PTXRegisterAllocator.GetStringRepresentation(arrayRef)} + 16], {{%{PTXRegisterAllocator.GetStringRepresentation(c)},%{PTXRegisterAllocator.GetStringRepresentation(d)}}}");
-            command.Dispose();
-
-            var ab = codeGenerator.Builder.ToString();
         }
 
         #endregion

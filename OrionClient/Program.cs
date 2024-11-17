@@ -83,7 +83,7 @@ namespace OrionClient
             AddSupportedHasher(new HybridCPUHasherAVX512());
             AddSupportedHasher(new NativeCPUHasher());
             AddSupportedHasher(new NativeCPUHasherAVX2());
-            AddSupportedHasher(new BaselineGPUHasher());
+            AddSupportedHasher(new CudaBaselineGPUHasher());
             AddSupportedHasher(new DisabledCPUHasher());
             AddSupportedHasher(new DisabledGPUHasher());
 

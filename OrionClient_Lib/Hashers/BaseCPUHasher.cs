@@ -297,7 +297,6 @@ namespace OrionClientLib.Hashers
 
                     OnHashrateUpdate?.Invoke(this, new HashrateInfo
                     {
-                        IsCPU = true,
                         ExecutionTime = hashingTime,
                         NumNonces = _info.BatchSize,
                         NumSolutions = _info.TotalSolutions - startSolutions,

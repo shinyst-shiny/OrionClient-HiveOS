@@ -3,6 +3,7 @@ using DrillX.Compiler;
 using DrillX.Solver;
 using ILGPU;
 using ILGPU.Runtime;
+using ILGPU.Runtime.Cuda;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -12,10 +13,10 @@ using System.Threading.Tasks;
 
 namespace OrionClientLib.Hashers.GPU.Baseline
 {
-    public partial class BaselineGPUHasher : BaseGPUHasher
+    public partial class CudaBaselineGPUHasher : BaseGPUHasher
     {
-        public override string Name => "Baseline";
-        public override string Description => "Baseline GPU hashing implementation";
+        public override string Name => "[[Nvidia]] Baseline";
+        public override string Description => "Baseline GPU hashing for Nvidia GPUs";
 
         public override Action<ArrayView<Instruction>, ArrayView<SipState>, ArrayView<ulong>> HashxKernel()
         {
@@ -34,7 +35,7 @@ namespace OrionClientLib.Hashers.GPU.Baseline
                 return new List<Device>();
             }
 
-            return devices.Where(x => x.AcceleratorType != AcceleratorType.CPU && x.MaxNumThreadsPerGroup >= 512).ToList();
+            return devices.Where(x => x.AcceleratorType != AcceleratorType.CPU && x.MaxNumThreadsPerGroup >= 512 && x is CudaDevice).ToList();
         }
 
         public override KernelConfig GetHashXKernelConfig(Device device, int maxNonces)

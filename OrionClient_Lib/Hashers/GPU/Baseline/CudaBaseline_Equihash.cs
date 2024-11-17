@@ -15,7 +15,7 @@ using System.Runtime.CompilerServices;
 
 namespace OrionClientLib.Hashers.GPU.Baseline
 {
-    public partial class BaselineGPUHasher
+    public partial class CudaBaselineGPUHasher
     {
         public const int BlockSize = 128;
         public const int TotalValues = ushort.MaxValue + 1;

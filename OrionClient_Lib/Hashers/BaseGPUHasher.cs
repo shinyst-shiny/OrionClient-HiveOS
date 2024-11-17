@@ -142,6 +142,7 @@ namespace OrionClientLib.Hashers
                                                               GetHashXKernelConfig(device, maxNonces), GetEquihashKernelConfig(device, maxNonces));
 
                 dHasher.OnDifficultyUpdate += DHasher_OnDifficultyUpdate;
+                dHasher.OnHashrateUpdate += DHasher_OnHashrateUpdate;
                 dHasher.Initialize(maxNonces);
             }
 
@@ -155,6 +156,13 @@ namespace OrionClientLib.Hashers
             _taskRunner.Start();
 
             return true;
+        }
+
+        private void DHasher_OnHashrateUpdate(object? sender, HashrateInfo e)
+        {
+            e.TotalTime = _sw.Elapsed - _challengeStartTime;
+
+            OnHashrateUpdate?.Invoke(this, e);
         }
 
         private void DHasher_OnDifficultyUpdate(object? sender, EventArgs e)
@@ -372,6 +380,7 @@ namespace OrionClientLib.Hashers
             _gpuDevices.ForEach(x =>
             {
                 x.OnDifficultyUpdate -= DHasher_OnDifficultyUpdate;
+                x.OnHashrateUpdate -= DHasher_OnHashrateUpdate;
                 x.Dispose();
             });
             _gpuDevices.Clear();
@@ -511,6 +520,7 @@ namespace OrionClientLib.Hashers
             #endregion
 
             public event EventHandler OnDifficultyUpdate;
+            public event EventHandler<HashrateInfo> OnHashrateUpdate;
 
             public bool Executing => !_copyToWaiting || !_copyFromWaiting || !_executingWaiting;
             private bool _copyToWaiting;
@@ -690,6 +700,60 @@ namespace OrionClientLib.Hashers
                 }
             }
 
+            private void Execute()
+            {
+                _logger.Log(LogLevel.Debug, $"[GPU] Loading kernels to {_device.Name} [{_deviceId}]");
+
+                var hashxKernel = _accelerator.LoadStreamKernel(_hashxKernel);
+                var equixKernel = _accelerator.LoadStreamKernel(_equihashKernel);
+
+                _logger.Log(LogLevel.Debug, $"[GPU] Finished loading kernels for {_device.Name} [{_deviceId}]");
+
+                try
+                {
+                    while (!_runningTask.IsCanceled)
+                    {
+                        _executingWaiting = true;
+
+                        while ((!_pauseMining.WaitOne(500) || _miningPaused) && _running)
+                        {
+                        }
+
+                        _executingWaiting = false;
+
+                        GPUDeviceData deviceData = GetDeviceData(GPUDeviceData.Stage.Execute);
+
+                        while (deviceData == null && !_hasNotice)
+                        {
+                            Thread.Sleep(100);
+                            deviceData = GetDeviceData(GPUDeviceData.Stage.Execute);
+                        }
+
+                        if (_hasNotice)
+                        {
+                            continue;
+                        }
+
+                        var marker1 = _accelerator.AddProfilingMarker();
+                        hashxKernel(_hashxConfig, deviceData.ProgramInstructions.View, deviceData.Keys.View, deviceData.Hashes.View);
+                        var marker2 = _accelerator.AddProfilingMarker();
+                        equixKernel(_equihashConfig, deviceData.Hashes.View, deviceData.Solutions.View, deviceData.Heap.View, deviceData.SolutionCounts.View);
+                        var marker3 = _accelerator.AddProfilingMarker();
+
+                        //Wait for kernels to finish
+                        _accelerator.Synchronize();
+
+                        deviceData.CurrentStage = GPUDeviceData.Stage.Solution;
+                        deviceData.HashXTime = marker2.MeasureFrom(marker1);
+                        deviceData.EquihashTime = marker3.MeasureFrom(marker2);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Log(LogLevel.Error, $"Unknown exception occurred during GPU execution. Reason: {ex.Message}");
+                }
+            }
+
             private void GPUCopyFrom()
             {
                 using var stream = _accelerator.CreateStream();
@@ -725,6 +789,8 @@ namespace OrionClientLib.Hashers
 
                         //Wait for copy to finish
                         stream.Synchronize();
+
+                        ulong startSolutions = _hasherInfo.TotalSolutions;
 
                         #region Verify
 
@@ -788,12 +854,12 @@ namespace OrionClientLib.Hashers
 
                                     var asdfasdf = program.Emulate(0);
 
+                                    program.DestroyCompiler();
+
                                     if (result != Solver.EquixResult.EquixOk)
                                     {
                                         return false;
                                     }
-
-                                    program.DestroyCompiler();
 
                                     //Reorder
 
@@ -852,6 +918,22 @@ namespace OrionClientLib.Hashers
 
                         #endregion
 
+                        _hasherInfo.AddSolutionCount((ulong)totalSolutions);
+
+                        OnHashrateUpdate?.Invoke(this, new HashrateInfo
+                        {
+                            Index = _deviceId,
+                            ExecutionTime = deviceData.ExecutionTime,
+                            GPUEquihashTime = deviceData.EquihashTime,
+                            GPUHashXTime = deviceData.HashXTime,
+                            NumNonces = (ulong)_nonceCount,
+                            NumSolutions = _hasherInfo.TotalSolutions - startSolutions,
+                            HighestDifficulty = _hasherInfo.DifficultyInfo.BestDifficulty,
+                            ChallengeSolutions = _hasherInfo.TotalSolutions,
+                            CurrentThreads = 0,
+                            ChallengeId = _hasherInfo.ChallengeId
+                        });
+
                         //Return data
                         _availableCPUData.TryAdd(deviceData.CurrentCPUData);
                     }
@@ -861,55 +943,6 @@ namespace OrionClientLib.Hashers
                     _logger.Log(LogLevel.Error, $"Unknown exception occurred during GPU->CPU copying. Reason: {ex.Message}");
                 }
     }
-
-            private async void Execute()
-            {
-                _logger.Log(LogLevel.Debug, $"[GPU] Loading kernels to {_device.Name} [{_deviceId}]");
-
-                var hashxKernel = _accelerator.LoadStreamKernel(_hashxKernel);
-                var equixKernel = _accelerator.LoadStreamKernel(_equihashKernel);
-
-                _logger.Log(LogLevel.Debug, $"[GPU] Finished loading kernels for {_device.Name} [{_deviceId}]");
-
-                try
-                {
-                    while (!_runningTask.IsCanceled)
-                    {
-                        _executingWaiting = true;
-
-                        while ((!_pauseMining.WaitOne(500) || _miningPaused) && _running)
-                        {
-                        }
-
-                        _executingWaiting = false;
-
-                        GPUDeviceData deviceData = GetDeviceData(GPUDeviceData.Stage.Execute);
-
-                        while (deviceData == null && !_hasNotice)
-                        {
-                            await Task.Delay(100);
-                            deviceData = GetDeviceData(GPUDeviceData.Stage.Execute);
-                        }
-
-                        if (_hasNotice)
-                        {
-                            continue;
-                        }
-
-                        hashxKernel(_hashxConfig, deviceData.ProgramInstructions.View, deviceData.Keys.View, deviceData.Hashes.View);
-                        equixKernel(_equihashConfig, deviceData.Hashes.View, deviceData.Solutions.View, deviceData.Heap.View, deviceData.SolutionCounts.View);
-
-                        //Wait for kernels to finish
-                        _accelerator.Synchronize();
-
-                        deviceData.CurrentStage = GPUDeviceData.Stage.Solution;
-                    }
-                }
-                catch(Exception ex)
-                {
-                    _logger.Log(LogLevel.Error, $"Unknown exception occurred during GPU execution. Reason: {ex.Message}");
-                }
-            }
 
             public void PauseMining()
             {
@@ -972,6 +1005,9 @@ namespace OrionClientLib.Hashers
                 public enum Stage { None, Execute, Solution };
 
                 public Stage CurrentStage { get; set; } = Stage.None;
+                public TimeSpan HashXTime { get; set; }
+                public TimeSpan EquihashTime { get; set; }
+                public TimeSpan ExecutionTime => HashXTime + EquihashTime;
 
                 //Unique
                 public MemoryBuffer1D<Instruction, Stride1D.Dense> ProgramInstructions { get; private set; }

@@ -25,6 +25,8 @@ namespace OrionClientLib
         public string KeyFile { get; set; }
         public string PublicKey { get; set; }
 
+        public bool EnableDebugging { get; set; }
+
         public static async Task<Settings> LoadAsync()
         {
             if (!File.Exists(FilePath))
