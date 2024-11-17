@@ -1,4 +1,5 @@
-﻿using ILGPU.Runtime;
+﻿using Equix;
+using ILGPU.Runtime;
 using NLog;
 using OrionClientLib.Hashers;
 using OrionClientLib.Modules.Models;
@@ -9,6 +10,7 @@ using Spectre.Console;
 using Spectre.Console.Rendering;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -78,6 +80,36 @@ namespace OrionClientLib.Modules
 
             await Task.WhenAll(tasks);
 
+            bool cpuEnabled = cpuHasher != null && cpuHasher is not DisabledHasher;
+            bool gpuEnabled = gpuHasher != null && gpuHasher is not DisabledHasher;
+            bool setAffinity = cpuEnabled && !gpuEnabled && _currentData.Settings.AutoSetCPUAffinity;
+
+            //TODO: Check for efficiency cores
+            if(OperatingSystem.IsWindows() && setAffinity)
+            {
+                List<CoreInfo> coreInformation = SystemInformation.GetCoreInformation();
+
+                //Only use physical cores
+                if(coreInformation.Count <= _currentData.Settings.CPUThreads)
+                {
+                    nint processorMask = 0;
+                    nint fullMask = 0;
+
+                    coreInformation.ForEach(x =>
+                    {
+                        processorMask |= (nint)x.PhysicalMask;
+                        fullMask |= (nint)x.FullMask;
+                    });
+
+                    Process currentProcess = Process.GetCurrentProcess();
+
+                    if(currentProcess.ProcessorAffinity == processorMask)
+                    {
+                        currentProcess.ProcessorAffinity = fullMask;
+                    }
+                }
+            }
+
             _cts.Cancel();
             _stop = true;
         }
@@ -136,7 +168,37 @@ namespace OrionClientLib.Modules
                 gpuHasher.OnHashrateUpdate += Hasher_OnHashrateUpdate;
             }
 
-            if(cpuHasher != null && cpuHasher is not DisabledHasher)
+            bool cpuEnabled = cpuHasher != null && cpuHasher is not DisabledHasher;
+            bool gpuEnabled = gpuHasher != null && gpuHasher is not DisabledHasher;
+            bool setAffinity = OperatingSystem.IsWindows() && cpuEnabled && !gpuEnabled && _currentData.Settings.AutoSetCPUAffinity;
+
+            if (OperatingSystem.IsWindows() && setAffinity)
+            {
+                List<CoreInfo> coreInformation = SystemInformation.GetCoreInformation();
+
+                //Only use physical cores
+                if (coreInformation.Count <= _currentData.Settings.CPUThreads)
+                {
+                    nint processorMask = 0;
+                    nint fullMask = 0;
+
+                    coreInformation.ForEach(x =>
+                    {
+                        processorMask |= (nint)x.PhysicalMask;
+                        fullMask |= (nint)x.FullMask;
+                    });
+
+                    Process currentProcess = Process.GetCurrentProcess();
+
+                    if (currentProcess.ProcessorAffinity == fullMask)
+                    {
+                        currentProcess.ProcessorAffinity = processorMask;
+                    }
+                }
+            }
+
+
+            if (cpuEnabled)
             {
                 _logger.Log(LogLevel.Debug, $"Initializing {cpuHasher.Name} {cpuHasher.HardwareType} hasher");
 
@@ -146,7 +208,7 @@ namespace OrionClientLib.Modules
                 }
             }
 
-            if (gpuHasher != null && gpuHasher is not DisabledHasher)
+            if (gpuEnabled)
             {
                 _logger.Log(LogLevel.Debug, $"Initializing {gpuHasher.Name} {gpuHasher.HardwareType} hasher");
 

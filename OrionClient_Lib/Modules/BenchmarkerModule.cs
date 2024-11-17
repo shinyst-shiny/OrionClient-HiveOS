@@ -1,4 +1,5 @@
 ﻿using Blake2Sharp;
+using Equix;
 using NLog;
 using OrionClientLib.Hashers;
 using OrionClientLib.Hashers.Models;
@@ -7,6 +8,7 @@ using Spectre.Console;
 using Spectre.Console.Rendering;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
@@ -102,6 +104,7 @@ namespace OrionClientLib.Modules
 
             HasherInfo currentHasherInfo = _chosenHashers[_hasherIndex];
             IHasher currentHasher = currentHasherInfo.Hasher;
+            List<CoreInfo> coreInformation = SystemInformation.GetCoreInformation();
 
             if (_stop)
             {
@@ -142,6 +145,8 @@ namespace OrionClientLib.Modules
 
             if (!currentHasher.Initialized)
             {
+                SetAffinity();
+
                 _logger.Log(LogLevel.Debug, $"Running hasher: {currentHasher.Name} for {_totalSeconds}s");
 
                 currentHasher.OnHashrateUpdate += CurrentHasher_OnHashrateUpdate;
@@ -171,6 +176,8 @@ namespace OrionClientLib.Modules
             if (currentHasher.CurrentChallengeTime.TotalSeconds > _totalSeconds && currentHasher.Initialized)
             {
                 await currentHasher.StopAsync();
+                ResetAffinity();
+
                 currentHasher.OnHashrateUpdate -= CurrentHasher_OnHashrateUpdate;
                 ++_hasherIndex;
 
@@ -190,6 +197,60 @@ namespace OrionClientLib.Modules
             }
 
             return _render;
+
+            void SetAffinity()
+            {
+                if(currentHasher.HardwareType != IHasher.Hardware.CPU || !OperatingSystem.IsWindows())
+                {
+                    return;
+                }
+
+                if (data.Settings.CPUThreads <= coreInformation.Count)
+                {
+                    nint processorMask = 0;
+                    nint fullMask = 0;
+
+                    coreInformation.ForEach(x =>
+                    {
+                        processorMask |= (nint)x.PhysicalMask;
+                        fullMask |= (nint)x.FullMask;
+                    });
+
+                    Process currentProcess = Process.GetCurrentProcess();
+
+                    if (currentProcess.ProcessorAffinity == fullMask)
+                    {
+                        currentProcess.ProcessorAffinity = processorMask;
+                    }
+                }
+            }
+
+            void ResetAffinity()
+            {
+                if (currentHasher.HardwareType != IHasher.Hardware.CPU || !OperatingSystem.IsWindows())
+                {
+                    return;
+                }
+
+                if (data.Settings.CPUThreads <= coreInformation.Count)
+                {
+                    nint processorMask = 0;
+                    nint fullMask = 0;
+
+                    coreInformation.ForEach(x =>
+                    {
+                        processorMask |= (nint)x.PhysicalMask;
+                        fullMask |= (nint)x.FullMask;
+                    });
+
+                    Process currentProcess = Process.GetCurrentProcess();
+
+                    if (currentProcess.ProcessorAffinity == processorMask)
+                    {
+                        currentProcess.ProcessorAffinity = fullMask;
+                    }
+                }
+            }
         }
 
         void CurrentHasher_OnHashrateUpdate(object? sender, HashrateInfo e)
