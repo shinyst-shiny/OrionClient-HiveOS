@@ -15,11 +15,13 @@ namespace OrionClientLib.Hashers.GPU.Baseline
 {
     public partial class CudaBaselineGPUHasher : BaseGPUHasher
     {
-        public override string Name => "[[Nvidia]] Baseline";
+        public override string Name => "Baseline";
         public override string Description => "Baseline GPU hashing for Nvidia GPUs";
 
         public override Action<ArrayView<Instruction>, ArrayView<SipState>, ArrayView<ulong>> HashxKernel()
         {
+            _offsetCounter = 0;
+
             return Hashx;
         }
 

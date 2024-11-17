@@ -34,9 +34,8 @@ namespace OrionClientLib.Hashers
     {
         protected static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-        private const int _maxNonces = 4096;
+        private const int _maxNonces = 2048;
         private const int _maxQueueSize = 2;
-
 
         public IHasher.Hardware HardwareType => IHasher.Hardware.GPU;
         public bool Initialized => _taskRunner?.IsCompleted == false;
@@ -144,9 +143,11 @@ namespace OrionClientLib.Hashers
                 dHasher.OnDifficultyUpdate += DHasher_OnDifficultyUpdate;
                 dHasher.OnHashrateUpdate += DHasher_OnHashrateUpdate;
                 dHasher.Initialize(maxNonces);
+
+                _gpuDevices.Add(dHasher);
             }
 
-            for(int i =0; i < devicesToUse.Count * 2; i++)
+            for(int i =0; i < devicesToUse.Count * _maxQueueSize; i++)
             {
                 _availableCPUData.Add(new CPUData(maxNonces));
             }
@@ -432,7 +433,6 @@ namespace OrionClientLib.Hashers
             }
         }
 
-
         protected virtual List<Device> GetValidDevices(IEnumerable<Device> devices)
         {
             if(devices == null)
@@ -527,7 +527,6 @@ namespace OrionClientLib.Hashers
             private bool _copyFromWaiting;
             private bool _executingWaiting;
 
-
             private List<GPUDeviceData> _deviceData = new List<GPUDeviceData>();
 
             //Used to verify GPU solutions
@@ -580,14 +579,20 @@ namespace OrionClientLib.Hashers
                 _hashxConfig = hashxConfig;
                 _equihashConfig = equihashConfig;
                 _hasherInfo = hasherInfo;
+
+                if(accelerator is CudaAccelerator cudaAccelerator)
+                {
+                    //Equihash is better with equal or L1 preference
+                    //Baseline suffers with L1 preference
+                    cudaAccelerator.CacheConfiguration = CudaCacheConfiguration.PreferEqual;
+                }
             }
 
-            public void Initialize(int totalNonces)
+            public async void Initialize(int totalNonces)
             {
                 _nonceCount = totalNonces;
 
                 MemoryBuffer1D<ushort, Stride1D.Dense> heap = _accelerator.Allocate1D<ushort>((uint)HeapSize * _nonceCount / 2);
-
 
                 for (int i = 0; i < _maxQueueSize; i++)
                 {
@@ -604,7 +609,7 @@ namespace OrionClientLib.Hashers
                 _gpuCopyToTask = new Task(GPUCopyTo, TaskCreationOptions.LongRunning);
                 _gpuCopyToTask.Start();
 
-                _gpuCopyFromTask = new Task(GPUCopyFrom,  TaskCreationOptions.LongRunning);
+                _gpuCopyFromTask = new Task(GPUCopyFrom, TaskCreationOptions.LongRunning);
                 _gpuCopyFromTask.Start();
 
                 _runToken = new CancellationTokenSource();
@@ -647,7 +652,7 @@ namespace OrionClientLib.Hashers
                     {
                         _copyToWaiting = true;
 
-                        while ((!_pauseMining.WaitOne(500) || _miningPaused) && _running)
+                        while ((!_pauseMining.WaitOne(500)) && _running)
                         {
                         }
 
@@ -673,13 +678,14 @@ namespace OrionClientLib.Hashers
                             //Return data
                             if (cpuData != null)
                             {
+                                _logger.Log(LogLevel.Warn, $"Data returned");
+
                                 _readyCPUData.TryAdd(cpuData);
                             }
 
                             //Mining paused, exiting, or new challenge are all handled by continuing loop
                             continue;
                         }
-
 
                         //Set as the current CPU data
                         deviceData.CurrentCPUData = cpuData;
@@ -711,11 +717,11 @@ namespace OrionClientLib.Hashers
 
                 try
                 {
-                    while (!_runningTask.IsCanceled)
+                    while (_running)
                     {
                         _executingWaiting = true;
 
-                        while ((!_pauseMining.WaitOne(500) || _miningPaused) && _running)
+                        while ((!_pauseMining.WaitOne(500)) && _running)
                         {
                         }
 
@@ -734,11 +740,11 @@ namespace OrionClientLib.Hashers
                             continue;
                         }
 
-                        var marker1 = _accelerator.AddProfilingMarker();
+                        using var marker1 = _accelerator.AddProfilingMarker();
                         hashxKernel(_hashxConfig, deviceData.ProgramInstructions.View, deviceData.Keys.View, deviceData.Hashes.View);
-                        var marker2 = _accelerator.AddProfilingMarker();
+                        using var marker2 = _accelerator.AddProfilingMarker();
                         equixKernel(_equihashConfig, deviceData.Hashes.View, deviceData.Solutions.View, deviceData.Heap.View, deviceData.SolutionCounts.View);
-                        var marker3 = _accelerator.AddProfilingMarker();
+                        using var marker3 = _accelerator.AddProfilingMarker();
 
                         //Wait for kernels to finish
                         _accelerator.Synchronize();
@@ -764,7 +770,7 @@ namespace OrionClientLib.Hashers
                     {
                         _copyFromWaiting = true;
 
-                        while ((!_pauseMining.WaitOne(500) || _miningPaused) && _running)
+                        while ((!_pauseMining.WaitOne(500)) && _running)
                         {
                         }
 
@@ -832,6 +838,7 @@ namespace OrionClientLib.Hashers
                                 if (difficulty > currentBestDifficulty)
                                 {
                                     //Verify
+                                    //A small percent of solutions do end up invalid
                                     if (!VerifyResultAndReorder(nonce, solutions.Slice(z, 1)))
                                     {
                                         _logger.Log(LogLevel.Warn, $"Solution verification failed. Nonce: {nonce}. Solution: {solutions.Slice(z, 1)[0]}. Expected Difficulty: {difficulty}. Skipping");
@@ -912,12 +919,11 @@ namespace OrionClientLib.Hashers
                             {
                                 OnDifficultyUpdate?.Invoke(this, EventArgs.Empty);
                             }
-
-                            deviceData.CurrentStage = GPUDeviceData.Stage.None;
                         }
 
                         #endregion
 
+                        deviceData.CurrentStage = GPUDeviceData.Stage.None;
                         _hasherInfo.AddSolutionCount((ulong)totalSolutions);
 
                         OnHashrateUpdate?.Invoke(this, new HashrateInfo
@@ -930,12 +936,13 @@ namespace OrionClientLib.Hashers
                             NumSolutions = _hasherInfo.TotalSolutions - startSolutions,
                             HighestDifficulty = _hasherInfo.DifficultyInfo.BestDifficulty,
                             ChallengeSolutions = _hasherInfo.TotalSolutions,
-                            CurrentThreads = 0,
+                            CurrentThreads = -1,
                             ChallengeId = _hasherInfo.ChallengeId
                         });
 
                         //Return data
                         _availableCPUData.TryAdd(deviceData.CurrentCPUData);
+
                     }
                 }
                 catch (Exception ex)
@@ -1020,6 +1027,7 @@ namespace OrionClientLib.Hashers
                 public MemoryBuffer1D<ushort, Stride1D.Dense> Heap { get; private set; }
 
                 public CPUData CurrentCPUData { get; set; }
+
 
                 public GPUDeviceData(MemoryBuffer1D<Instruction, Stride1D.Dense> programInstructions, 
                                      MemoryBuffer1D<SipState, Stride1D.Dense> keys,

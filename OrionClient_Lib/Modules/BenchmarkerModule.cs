@@ -223,8 +223,8 @@ namespace OrionClientLib.Modules
 
             if(currentInfo.Hasher is IGPUHasher)
             {
-                _render.UpdateCell(_hasherIndex, 4, currentInfo.MaxRate.HashxNoncesPerSecond.ToString());
-                _render.UpdateCell(_hasherIndex, 5, currentInfo.MaxRate.EquihashNoncesPerSecond.ToString());
+                _render.UpdateCell(_hasherIndex, 4, currentInfo.CurrentRate.HashxNoncesPerSecond.ToString());
+                _render.UpdateCell(_hasherIndex, 5, currentInfo.CurrentRate.EquihashNoncesPerSecond.ToString());
             }
 
             _render.UpdateCell(_hasherIndex, 6, $"{Math.Max(0, _totalSeconds - currentInfo.CurrentRate.TotalTime.TotalSeconds):0.00}s");

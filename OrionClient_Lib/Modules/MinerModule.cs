@@ -1,4 +1,5 @@
-﻿using NLog;
+﻿using ILGPU.Runtime;
+using NLog;
 using OrionClientLib.Hashers;
 using OrionClientLib.Modules.Models;
 using OrionClientLib.Pools;
@@ -175,7 +176,7 @@ namespace OrionClientLib.Modules
 
             for (int i = 0; i < _hashrateTable.Rows.Count; i++)
             {
-                _hashrateTable.UpdateCell(i, 2, "[yellow]Paused[/]");
+                _hashrateTable.UpdateCell(i, 3, "[yellow]Paused[/]");
             }
         }
 
@@ -213,13 +214,13 @@ namespace OrionClientLib.Modules
             IHasher hasher = (IHasher)sender;
             int index = hasher.HardwareType == IHasher.Hardware.CPU ? 0 : e.Index + 1;
 
-            _hashrateTable.UpdateCell(index, 1, e.CurrentThreads.ToString());
-            _hashrateTable.UpdateCell(index, 2, hasher.IsMiningPaused ? "[yellow]Paused[/]" :"[green]Mining[/]");
-            _hashrateTable.UpdateCell(index, 3, e.ChallengeSolutionsPerSecond.ToString());
-            _hashrateTable.UpdateCell(index, 4, e.SolutionsPerSecond.ToString());
-            _hashrateTable.UpdateCell(index, 5, e.HighestDifficulty.ToString());
-            _hashrateTable.UpdateCell(index, 6, e.ChallengeId.ToString());
-            //_hashrateTable.UpdateCell(index, 7, $"{e.TotalTime.TotalSeconds:0.00}s");
+            _hashrateTable.UpdateCell(index, 2, e.CurrentThreads == -1 ? "-" : e.CurrentThreads.ToString());
+            _hashrateTable.UpdateCell(index, 3, hasher.IsMiningPaused ? "[yellow]Paused[/]" :"[green]Mining[/]");
+            _hashrateTable.UpdateCell(index, 4, e.ChallengeSolutionsPerSecond.ToString());
+            _hashrateTable.UpdateCell(index, 5, e.SolutionsPerSecond.ToString());
+            _hashrateTable.UpdateCell(index, 6, e.HighestDifficulty.ToString());
+            _hashrateTable.UpdateCell(index, 7, e.ChallengeId.ToString());
+            //_hashrateTable.UpdateCell(index, 8, $"{e.TotalTime.TotalSeconds:0.00}s");
         }
 
         private void GenerateUI()
@@ -232,12 +233,13 @@ namespace OrionClientLib.Modules
                 new Layout("hashrate"),
                 new Layout("poolInfo")
                 );
-            _uiLayout["hashrate"].Ratio = 75;
+            _uiLayout["hashrate"].Ratio = 85;
             _uiLayout["poolInfo"].Ratio = 100;
             
             _hashrateTable = new Table();
             _hashrateTable.Title = new TableTitle($"Pool: {pool.DisplayName}");
-
+            
+            _hashrateTable.AddColumn(new TableColumn("Name").Centered());
             _hashrateTable.AddColumn(new TableColumn("Hasher").Centered());
             _hashrateTable.AddColumn(new TableColumn("Threads").Centered());
             _hashrateTable.AddColumn(new TableColumn("Status").Centered());
@@ -263,12 +265,38 @@ namespace OrionClientLib.Modules
             _uiLayout["poolInfo"].Update(_poolInfoTable);
 
             //Add CPU
-            _hashrateTable.AddRow(cpuHasher?.Name, "-", "-", "-", "-", "-", "-");
+            _hashrateTable.AddRow("CPU", cpuHasher?.Name, "-", "-", "-", "-", "-", "-");
 
 
+            //Add GPUs
             if (gpuHasher != null)
             {
+                IGPUHasher gHasher = (IGPUHasher)gpuHasher;
+
+                //Grab all devices that are being used
+                List<Device> devicesToUse = new List<Device>();
+                List<Device> devices = gHasher.GetDevices(false); //All devices
+                HashSet<Device> supportedDevices = new HashSet<Device>(gHasher.GetDevices(true)); //Only supported
+
+                //The setting is the full list of GPU devices
+                foreach (var d in _currentData.Settings.GPUDevices)
+                {
+                    if (d >= 0 && d < devices.Count)
+                    {
+                        if (supportedDevices.Contains(devices[d]))
+                        {
+                            devicesToUse.Add(devices[d]);
+                        }
+                    }
+                }
+
                 //Will need to add a row for each GPU
+                foreach(var device in devicesToUse)
+                {
+                    string gpuName = device.Name.Replace("NVIDIA ", "").Replace("GeForce ", "");
+
+                    _hashrateTable.AddRow(gpuName, gpuHasher.Name, "-", "-", "-", "-", "-", "-");
+                }
             }
         }
 

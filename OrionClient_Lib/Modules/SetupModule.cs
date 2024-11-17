@@ -162,16 +162,16 @@ namespace OrionClientLib.Modules
 
             SelectionPrompt<IHasher> selectionPrompt = new SelectionPrompt<IHasher>();
             selectionPrompt.Title("Select GPU hashing implementation. Run benchmark to see hashrates");
-            selectionPrompt.UseConverter((pool) =>
+            selectionPrompt.UseConverter((hasher) =>
             {
                 string chosenText = String.Empty;
 
-                if (pool == chosenHasher)
+                if (hasher == gpuHasher)
                 {
                     chosenText = "[b][[Current]][/] ";
                 }
 
-                return $"{chosenText}{pool.Name} - {pool.Description}";
+                return $"{chosenText}{hasher.Name} - {hasher.Description}";
             });
 
             selectionPrompt.AddChoices(_data.Hashers.Where(x => x.HardwareType == IHasher.Hardware.GPU).OrderByDescending(x => x == chosenHasher));

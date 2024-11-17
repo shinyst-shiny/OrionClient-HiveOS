@@ -18,8 +18,7 @@ namespace OrionClientLib.Hashers.GPU.Baseline
 {
     public partial class CudaBaselineGPUHasher
     {
-        private static int _targetId = 0;
-        public static int _offsetCounter = 0;
+        private static int _offsetCounter = 0;
 
         public static void Hashx(ArrayView<Instruction> program, ArrayView<SipState> key, ArrayView<ulong> results)
         {
