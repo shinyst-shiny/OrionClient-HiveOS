@@ -145,7 +145,8 @@ namespace OrionClientLib.Modules
                 if(await currentHasher.InitializeAsync(null, data.Settings))
                 {
                     byte[] challenge = new byte[32];
-                    RandomNumberGenerator.Fill(challenge);
+                    challenge.AsSpan().Fill(0xFF);
+                    //RandomNumberGenerator.Fill(challenge);
 
                     currentHasher.NewChallenge(0, challenge, 0, ulong.MaxValue);
                 }
@@ -229,6 +230,8 @@ namespace OrionClientLib.Modules
 
         private CancellationToken GetNewToken()
         {
+            _currentTokenSource?.Dispose();
+
             _currentTokenSource = new CancellationTokenSource();
             return _currentTokenSource.Token;
         }

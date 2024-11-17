@@ -26,6 +26,7 @@ using Org.BouncyCastle.Tsp;
 using Org.BouncyCastle.Asn1.Cmp;
 using Org.BouncyCastle.Asn1.X509;
 using OrionClientLib.Hashers.GPU;
+using ILGPU.Runtime.CPU;
 
 namespace OrionClientLib.Hashers
 {
@@ -200,7 +201,14 @@ namespace OrionClientLib.Hashers
 
                     #region Program Generation
 
-                    var rangePartitioner = Partitioner.Create(0, _maxNonces, _maxNonces / (_threads));
+                    int rangeSize = _maxNonces / _threads;
+
+                    if(rangeSize == 0)
+                    {
+                        rangeSize++;
+                    }
+
+                    var rangePartitioner = Partitioner.Create(0, _maxNonces, rangeSize);
 
                     Parallel.ForEach(rangePartitioner, new ParallelOptions { MaxDegreeOfParallelism = _threads }, (range, loopState) =>
                     {
@@ -224,7 +232,7 @@ namespace OrionClientLib.Hashers
 
                             ulong currentNonce = 0;
                             HashX program = null;
-                            var instructions = allInstructions.Slice(Instruction.ProgramSize * z, Instruction.ProgramSize);
+                            var instructions = allInstructions.Slice(Instruction.TotalInstructions * z, Instruction.TotalInstructions);
 
                             //Keep trying until a valid program is found
                             while (true)
@@ -329,7 +337,7 @@ namespace OrionClientLib.Hashers
             }
             catch(Exception ex)
             {
-                _logger.Log(LogLevel.Error, ex, $"Unknown exception occurred during GPU program generation");
+                _logger.Log(LogLevel.Error, ex, $"Unknown exception occurred during GPU program generation. Message: {ex.Message}");
             }
         }
 
@@ -493,12 +501,12 @@ namespace OrionClientLib.Hashers
         {
             #region Consts
 
-            public const ulong ProgramSize = (Instruction.ProgramSize * Instruction.Size);
+            public const ulong ProgramSize = (Instruction.TotalInstructions * Instruction.ByteSize);
             public const ulong KeySize = SipState.Size;
             public const ulong HeapSize = 2239488;
             public const ulong SolutionSize = EquixSolution.Size * EquixSolution.MaxLength;
-            public const ulong HashSolutionSize = ushort.MaxValue + 1 * sizeof(ulong);
-            public const ulong MemoryPerNonce = (ProgramSize + KeySize) * _maxQueueSize + HeapSize + SolutionSize + HashSolutionSize;
+            public const ulong HashSolutionSize = (ushort.MaxValue + 1) * sizeof(ulong);
+            public const ulong MemoryPerNonce = (ProgramSize + KeySize + SolutionSize + HashSolutionSize) * _maxQueueSize + HeapSize;
 
             #endregion
 
@@ -568,16 +576,16 @@ namespace OrionClientLib.Hashers
             {
                 _nonceCount = totalNonces;
 
-                MemoryBuffer1D<ushort, Stride1D.Dense> heap = _accelerator.Allocate1D<ushort>((int)HeapSize * _nonceCount / 2);
-                MemoryBuffer1D<ulong, Stride1D.Dense> hashes = _accelerator.Allocate1D<ulong>((int)HashSolutionSize * _nonceCount);
-                MemoryBuffer1D<EquixSolution, Stride1D.Dense> solutions = _accelerator.Allocate1D<EquixSolution>(_nonceCount * EquixSolution.MaxLength);
-                MemoryBuffer1D<uint, Stride1D.Dense> solutionCounts = _accelerator.Allocate1D<uint>(_nonceCount);
+                MemoryBuffer1D<ushort, Stride1D.Dense> heap = _accelerator.Allocate1D<ushort>((uint)HeapSize * _nonceCount / 2);
 
 
                 for (int i = 0; i < _maxQueueSize; i++)
                 {
-                    MemoryBuffer1D<Instruction, Stride1D.Dense> instructions = _accelerator.Allocate1D<Instruction>(_nonceCount * Instruction.ProgramSize);
+                    MemoryBuffer1D<Instruction, Stride1D.Dense> instructions = _accelerator.Allocate1D<Instruction>(_nonceCount * Instruction.TotalInstructions);
                     MemoryBuffer1D<SipState, Stride1D.Dense> keys = _accelerator.Allocate1D<SipState>(_nonceCount);
+                    MemoryBuffer1D<ulong, Stride1D.Dense> hashes = _accelerator.Allocate1D<ulong>((ushort.MaxValue + 1) * _nonceCount);
+                    MemoryBuffer1D<EquixSolution, Stride1D.Dense> solutions = _accelerator.Allocate1D<EquixSolution>(_nonceCount * EquixSolution.MaxLength);
+                    MemoryBuffer1D<uint, Stride1D.Dense> solutionCounts = _accelerator.Allocate1D<uint>(_nonceCount);
 
                     GPUDeviceData deviceData = new GPUDeviceData(instructions, keys, heap, hashes, solutions, solutionCounts);
                     _deviceData.Add(deviceData);
@@ -590,7 +598,7 @@ namespace OrionClientLib.Hashers
                 _gpuCopyFromTask.Start();
 
                 _runToken = new CancellationTokenSource();
-                _runningTask = new Task(Run, _runToken.Token, TaskCreationOptions.LongRunning);
+                _runningTask = new Task(Execute, _runToken.Token, TaskCreationOptions.LongRunning);
                 _runningTask.Start();
 
                 _logger.Log(LogLevel.Debug, $"Initialized GPU device: {_device.Name}");
@@ -668,7 +676,7 @@ namespace OrionClientLib.Hashers
 
                         //Copies to device.
                         deviceData.ProgramInstructions.View.CopyFromCPU(stream, cpuData.InstructionData);
-                        deviceData.Keys.View.CopyFromCPU(cpuData.Keys);
+                        deviceData.Keys.View.CopyFromCPU(stream, cpuData.Keys);
 
                         //Wait for copy to finish
                         stream.Synchronize();
@@ -722,7 +730,8 @@ namespace OrionClientLib.Hashers
 
                         Span<EquixSolution> allSolutions = deviceData.CurrentCPUData.Solutions;
                         Span<uint> solutionCounts = deviceData.CurrentCPUData.SolutionCounts;
-                        byte[] challenge = _hasherInfo.Challenge.ToArray();
+                        byte[] challenge = new byte[40];
+                        _hasherInfo.Challenge.CopyTo(challenge, 0);
                         byte[] b_nonceOutput = new byte[24];
 
                         Span<byte> hashOutput = new Span<byte>(new byte[32]);
@@ -776,6 +785,8 @@ namespace OrionClientLib.Hashers
                                     program.InitCompiler(_solver.CompiledProgram);
 
                                     var result = _solver.Verify(program, solution[0]);
+
+                                    var asdfasdf = program.Emulate(0);
 
                                     if (result != Solver.EquixResult.EquixOk)
                                     {
@@ -840,6 +851,9 @@ namespace OrionClientLib.Hashers
                         }
 
                         #endregion
+
+                        //Return data
+                        _availableCPUData.TryAdd(deviceData.CurrentCPUData);
                     }
                 }
                 catch (Exception ex)
@@ -848,7 +862,7 @@ namespace OrionClientLib.Hashers
                 }
     }
 
-            private async void Run()
+            private async void Execute()
             {
                 _logger.Log(LogLevel.Debug, $"[GPU] Loading kernels to {_device.Name} [{_deviceId}]");
 
@@ -962,12 +976,12 @@ namespace OrionClientLib.Hashers
                 //Unique
                 public MemoryBuffer1D<Instruction, Stride1D.Dense> ProgramInstructions { get; private set; }
                 public MemoryBuffer1D<SipState, Stride1D.Dense> Keys { get; private set; }
-
-                //These only need a single copy
-                public MemoryBuffer1D<ushort, Stride1D.Dense> Heap { get; private set; }
                 public MemoryBuffer1D<ulong, Stride1D.Dense> Hashes { get; private set; }
                 public MemoryBuffer1D<EquixSolution, Stride1D.Dense> Solutions { get; private set; }
                 public MemoryBuffer1D<uint, Stride1D.Dense> SolutionCounts { get; private set; }
+
+                //These only need a single copy
+                public MemoryBuffer1D<ushort, Stride1D.Dense> Heap { get; private set; }
 
                 public CPUData CurrentCPUData { get; set; }
 
@@ -990,26 +1004,14 @@ namespace OrionClientLib.Hashers
                 {
                     ProgramInstructions?.Dispose();
                     Keys?.Dispose();
+                    Hashes?.Dispose();
+                    Solutions?.Dispose();
+                    SolutionCounts?.Dispose();
 
-                    //These aren't unique to this object, so check if they weren't disposed of already
-                    if(Heap?.IsDisposed != true)
+                    //This isn't unique to this object, so check if they weren't disposed of already
+                    if (Heap?.IsDisposed != true)
                     {
                         Heap?.Dispose();
-                    }
-
-                    if(Hashes?.IsDisposed != true)
-                    {
-                        Hashes?.Dispose();
-                    }
-
-                    if(Solutions?.IsDisposed != true)
-                    {
-                        Solutions?.Dispose();
-                    }
-
-                    if (SolutionCounts?.IsDisposed != true)
-                    {
-                        SolutionCounts?.Dispose();
                     }
                 }
             }
@@ -1035,7 +1037,7 @@ namespace OrionClientLib.Hashers
 
             public CPUData(int nonceCount)
             {
-                InstructionData = new Instruction[nonceCount * Instruction.ProgramSize];
+                InstructionData = new Instruction[nonceCount * Instruction.TotalInstructions];
                 Keys = new SipState[nonceCount];
                 Solutions = new EquixSolution[EquixSolution.MaxLength * nonceCount];
                 SolutionCounts = new uint[nonceCount];

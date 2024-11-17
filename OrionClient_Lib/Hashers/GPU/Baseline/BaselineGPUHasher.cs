@@ -40,7 +40,7 @@ namespace OrionClientLib.Hashers.GPU.Baseline
         public override KernelConfig GetHashXKernelConfig(Device device, int maxNonces)
         {
             int iterationCount = maxNonces * (ushort.MaxValue + 1);
-            int groupSize = 512;
+            int groupSize = 16;
 
             return new KernelConfig(
                 new Index3D((iterationCount + groupSize - 1) / groupSize, 1, 1),

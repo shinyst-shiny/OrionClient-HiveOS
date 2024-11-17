@@ -56,8 +56,10 @@ namespace DrillX.Compiler
     public struct Instruction
     {
         public const int Loops = 16;
-        public const int ProgramSize = 512;
-        public const int Size = 16;
+        public const int TotalInstructions = 512;
+        public const int Size = (MultIntruction.Size * 10 + HiMultInstruction.Size * 2 + BasicInstruction.Size * 18 + BranchInstruction.Size * 2);
+        public const int ProgramSize = Size * Loops;
+        public const int ByteSize = 16;
 
         public OpCode Type => (OpCode)Type_;
         public int Dst;
