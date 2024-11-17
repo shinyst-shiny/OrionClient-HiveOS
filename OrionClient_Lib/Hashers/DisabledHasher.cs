@@ -68,7 +68,7 @@ namespace OrionClientLib.Hashers
     {
         public override IHasher.Hardware HardwareType => IHasher.Hardware.GPU;
 
-        public List<Device> GetDevices()
+        public List<Device> GetDevices(bool onlyValid)
         {
             return new List<Device>();
         }

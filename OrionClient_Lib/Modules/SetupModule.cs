@@ -188,7 +188,8 @@ namespace OrionClientLib.Modules
             }
 
             IGPUHasher hasher = (IGPUHasher)chosenHasher;
-            List<Device> devices = hasher.GetDevices();
+            List<Device> devices = hasher.GetDevices(false);
+            HashSet<Device> validDevices = new HashSet<Device>(hasher.GetDevices(true));
 
             //Allow device selection
             MultiSelectionPrompt<Device> deviceSelectionPrompt = new MultiSelectionPrompt<Device>();
@@ -197,7 +198,7 @@ namespace OrionClientLib.Modules
             {
                 bool selected = _settings.GPUDevices.Contains(devices.IndexOf(device));
 
-                return $"{(selected ? "[b][[Current]][/] " : String.Empty)}{device.Name} - {device.AcceleratorType}";
+                return $"{(selected ? "[b][[Current]][/] " : String.Empty)}{device.Name} - {device.AcceleratorType}{(!validDevices.Contains(device) ? " [red][[Not supported]][/]" : String.Empty)}";
             });
 
 

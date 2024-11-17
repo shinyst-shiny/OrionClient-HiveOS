@@ -62,7 +62,7 @@ namespace DrillX
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void SipRound()
+        public void SipRound()
         {
             unchecked
             {

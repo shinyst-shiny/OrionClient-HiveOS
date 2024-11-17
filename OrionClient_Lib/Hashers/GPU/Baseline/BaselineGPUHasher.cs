@@ -19,12 +19,12 @@ namespace OrionClientLib.Hashers.GPU.Baseline
 
         public override Action<ArrayView<Instruction>, ArrayView<SipState>, ArrayView<ulong>> HashxKernel()
         {
-            return Equihash;
+            return Hashx;
         }
 
         public override Action<ArrayView<ulong>, ArrayView<EquixSolution>, ArrayView<ushort>, ArrayView<uint>> EquihashKernel()
         {
-            return Hashx;
+            return Equihash;
         }
 
         protected override List<Device> GetValidDevices(IEnumerable<Device> devices)

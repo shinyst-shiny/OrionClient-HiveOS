@@ -25,6 +25,7 @@ using Blake2Sharp;
 using Org.BouncyCastle.Tsp;
 using Org.BouncyCastle.Asn1.Cmp;
 using Org.BouncyCastle.Asn1.X509;
+using OrionClientLib.Hashers.GPU;
 
 namespace OrionClientLib.Hashers
 {
@@ -93,18 +94,33 @@ namespace OrionClientLib.Hashers
                 _pool.OnChallengeUpdate += _pool_OnChallengeUpdate;
             }
 
-            _context = Context.Create(builder => builder.AllAccelerators().Profiling().IOOperations());
+            _context = Context.Create(builder => builder.AllAccelerators().Profiling().IOOperations()
+            .Inlining(InliningMode.Aggressive)
+            .Optimize(OptimizationLevel.O0));
+
+            IntrinsicsLoader.Load(this.GetType(), _context);
 
             var devices = _context.Devices.Where(x => x.AcceleratorType != AcceleratorType.CPU).ToList();
 
             List<Device> devicesToUse = new List<Device>();
+            HashSet<Device> supportedDevices = new HashSet<Device>(GetDevices(true));
 
             foreach(var d in settings.GPUDevices)
             {
                 if(d >= 0 && d < devices.Count)
                 {
-                    devicesToUse.Add(devices[d]);
+                    if (supportedDevices.Contains(devices[d]))
+                    {
+                        devicesToUse.Add(devices[d]);
+                    }
                 }
+            }
+
+            if (devicesToUse.Count == 0)
+            {
+                _logger.Log(LogLevel.Warn, $"No supported GPU devices selected");
+
+                return false;
             }
 
             //TODO: Allow additional buffer room
@@ -373,18 +389,25 @@ namespace OrionClientLib.Hashers
         public abstract KernelConfig GetEquihashKernelConfig(Device device, int maxNonces);
         public bool IsSupported()
         {
-            List<Device> validDevices = GetDevices();
+            List<Device> validDevices = GetDevices(true);
 
             return validDevices?.Count > 0;
         }
 
-        public List<Device> GetDevices()
+        public List<Device> GetDevices(bool onlyValid)
         {
             try
             {
                 using Context context = Context.Create((builder) => builder.AllAccelerators());
 
-                return GetValidDevices(context.Devices);
+                if (onlyValid)
+                {
+                    return GetValidDevices(context.Devices);
+                }
+                else
+                {
+                    return context.Devices.Where(x => x.AcceleratorType != AcceleratorType.CPU).ToList();
+                }
             }
             catch (Exception ex)
             {

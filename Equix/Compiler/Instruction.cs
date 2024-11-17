@@ -20,6 +20,39 @@ namespace DrillX.Compiler
         }
     }
 
+    public struct BranchInstruction
+    {
+        public const int Size = 4;
+
+        public int Mask;
+    }
+
+    public struct MultIntruction
+    {
+        public const int Size = 4;
+
+        public int Dst;
+        public int Src;
+    }
+
+    public struct HiMultInstruction
+    {
+        public const int Size = 4;
+
+        public int Dst;
+        public int Src;
+    }
+
+    public struct BasicInstruction
+    {
+        public const int Size = 4;
+
+        public int Dst;
+        public int Src;
+        public int Type;
+        public int Operand;
+    }
+
     public struct Instruction
     {
         public const int Loops = 16;

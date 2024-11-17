@@ -201,13 +201,13 @@ namespace OrionClientLib.Hashers
             }
 
             //Reset affinity
-            if (OperatingSystem.IsWindows())
-            {
-                Process currentProcess = Process.GetCurrentProcess();
+            //if (OperatingSystem.IsWindows())
+            //{
+            //    Process currentProcess = Process.GetCurrentProcess();
 
-                currentProcess.ProcessorAffinity = _currentAffinity;
-                //currentProcess.PriorityClass = ProcessPriorityClass.Normal;
-            }
+            //    currentProcess.ProcessorAffinity = _currentAffinity;
+            //    //currentProcess.PriorityClass = ProcessPriorityClass.Normal;
+            //}
 
             //Attempts to dispose everything before throwing an error
             if (lastError != null)
