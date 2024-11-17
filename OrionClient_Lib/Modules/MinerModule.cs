@@ -309,6 +309,7 @@ namespace OrionClientLib.Modules
             _hashrateTable.AddColumn(new TableColumn("Cur Hashrate").Centered());
             _hashrateTable.AddColumn(new TableColumn("Diff").Centered());
             _hashrateTable.AddColumn(new TableColumn("Id").Centered());
+            _hashrateTable.ShowRowSeparators = true;
             //_hashrateTable.AddColumn(new TableColumn("Challenge Time").Centered());
 
             _poolInfoTable = new Table();
@@ -316,7 +317,7 @@ namespace OrionClientLib.Modules
             _poolInfoTable.AddColumns(pool.TableHeaders());
             _poolInfoTable.ShowRowSeparators = true;
 
-            for(int i = 0; i < _poolInfoTable.Columns.Count; i++)
+            for (int i = 0; i < _poolInfoTable.Columns.Count; i++)
             {
                 _poolInfoTable.Columns[i].Centered();
             }

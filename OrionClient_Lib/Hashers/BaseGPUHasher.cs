@@ -147,7 +147,7 @@ namespace OrionClientLib.Hashers
                 _gpuDevices.Add(dHasher);
             }
 
-            for(int i =0; i < devicesToUse.Count * _maxQueueSize; i++)
+            for(int i =0; i < devicesToUse.Count * _maxQueueSize * 2; i++)
             {
                 _availableCPUData.Add(new CPUData(maxNonces));
             }
