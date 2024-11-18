@@ -834,15 +834,21 @@ namespace OrionClientLib.Hashers
                                 MemoryMarshal.Cast<ushort, byte>(testSolution).CopyTo(nonceOutput);
                                 SHA3.Sha3Hash(testSolution, nonce, hashOutput);
                                 int difficulty = CalculateTarget(hashOutput);
+                                bool checkAllSolutions = false;
 
-                                if (difficulty > currentBestDifficulty)
+#if DEBUG
+                                checkAllSolutions = false;
+#endif
+                                if (checkAllSolutions || difficulty > currentBestDifficulty)
                                 {
                                     //Verify
                                     //A small percent of solutions do end up invalid
                                     if (!VerifyResultAndReorder(nonce, solutions.Slice(z, 1)))
                                     {
+#if DEBUG
                                         _logger.Log(LogLevel.Warn, $"Solution verification failed. Nonce: {nonce}. Solution: {solutions.Slice(z, 1)[0]}. Expected Difficulty: {difficulty}. Skipping");
 
+#endif
                                         continue;
                                     }
 

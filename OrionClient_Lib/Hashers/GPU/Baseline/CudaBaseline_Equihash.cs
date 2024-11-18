@@ -164,13 +164,27 @@ namespace OrionClientLib.Hashers.GPU.Baseline
         {
             var sharedRef = (RegisterAllocator<PTXRegisterKind>.HardwareRegister)codeGenerator.LoadPrimitive(value[0]);
             var globalRef = (RegisterAllocator<PTXRegisterKind>.HardwareRegister)codeGenerator.LoadPrimitive(value[1]);
+            var r0 = codeGenerator.AllocateRegister(BasicValueType.Int64, PTXRegisterKind.Int64);
+            var r1 = codeGenerator.AllocateRegister(BasicValueType.Int64, PTXRegisterKind.Int64);
 
-            for (int i = 0; i < CacheSize / 2; i++)
+
+            if (backend.Architecture.Major < 8)
             {
-                codeGenerator.BeginCommand($"cp.async.ca.shared.global [{sharedRef.GetString()} + {i * 16}], [{globalRef.GetString()} + {i * 16}], 16").Dispose();
+                for (int i = 0; i < CacheSize / 2; i++)
+                {
+                    codeGenerator.BeginCommand($"ld.global.v2.b64 {{{r0.GetString()}, {r1.GetString()}}}, [{globalRef.GetString()} + {i * 16}]").Dispose();
+                    codeGenerator.BeginCommand($"st.shared.v2.b64 [{sharedRef.GetString()} + {i * 16}], {{{r0.GetString()}, {r1.GetString()}}}").Dispose();
+                }
             }
+            else
+            {
+                for (int i = 0; i < CacheSize / 2; i++)
+                {
+                    codeGenerator.BeginCommand($"cp.async.ca.shared.global [{sharedRef.GetString()} + {i * 16}], [{globalRef.GetString()} + {i * 16}], 16").Dispose();
+                }
 
-            codeGenerator.BeginCommand($"cp.async.wait_all").Dispose();
+                codeGenerator.BeginCommand($"cp.async.wait_all").Dispose();
+            }
         }
 
         [IntrinsicMethod(nameof(LoadToSharedU4_Generate))]
@@ -192,13 +206,26 @@ namespace OrionClientLib.Hashers.GPU.Baseline
         {
             var sharedRef = (RegisterAllocator<PTXRegisterKind>.HardwareRegister)codeGenerator.LoadPrimitive(value[0]);
             var globalRef = (RegisterAllocator<PTXRegisterKind>.HardwareRegister)codeGenerator.LoadPrimitive(value[1]);
+            var r0 = codeGenerator.AllocateRegister(BasicValueType.Int64, PTXRegisterKind.Int64);
+            var r1 = codeGenerator.AllocateRegister(BasicValueType.Int64, PTXRegisterKind.Int64);
 
-            for (int i = 0; i < CacheSize / 2; i++)
+            if (backend.Architecture.Major < 8)
             {
-                codeGenerator.BeginCommand($"cp.async.ca.shared.global [{sharedRef.GetString()} + {i * 16}], [{globalRef.GetString()} + {i * 16}], 16").Dispose();
+                for (int i = 0; i < CacheSize / 2; i++)
+                {
+                    codeGenerator.BeginCommand($"ld.global.v2.b64 {{{r0.GetString()}, {r1.GetString()}}}, [{globalRef.GetString()} + {i * 16}]").Dispose();
+                    codeGenerator.BeginCommand($"st.shared.v2.b64 [{sharedRef.GetString()} + {i * 16}], {{{r0.GetString()}, {r1.GetString()}}}").Dispose();
+                }
             }
+            else
+            {
+                for (int i = 0; i < CacheSize / 2; i++)
+                {
+                    codeGenerator.BeginCommand($"cp.async.ca.shared.global [{sharedRef.GetString()} + {i * 16}], [{globalRef.GetString()} + {i * 16}], 16").Dispose();
+                }
 
-            codeGenerator.BeginCommand($"cp.async.wait_all").Dispose();
+                codeGenerator.BeginCommand($"cp.async.wait_all").Dispose();
+            }
         }
 
         [IntrinsicMethod(nameof(LoadStageData_Generate))]
@@ -220,16 +247,31 @@ namespace OrionClientLib.Hashers.GPU.Baseline
         {
             var sharedRef = (RegisterAllocator<PTXRegisterKind>.HardwareRegister)codeGenerator.LoadPrimitive(value[0]);
             var globalRef = (RegisterAllocator<PTXRegisterKind>.HardwareRegister)codeGenerator.LoadPrimitive(value[1]);
+            var r0 = codeGenerator.AllocateRegister(BasicValueType.Int64, PTXRegisterKind.Int64);
 
-            for (int i = 0; i < 4; i++)
+            if (backend.Architecture.Major < 8)
             {
-                var index = (RegisterAllocator<PTXRegisterKind>.HardwareRegister)codeGenerator.LoadPrimitive(value[i + 2]);
+                for (int i = 0; i < 4; i++)
+                {
+                    var index = (RegisterAllocator<PTXRegisterKind>.HardwareRegister)codeGenerator.LoadPrimitive(value[i + 2]);
 
-                codeGenerator.BeginCommand($"add.u64 {index.GetString()}, {index.GetString()}, {globalRef.GetString()}").Dispose();
-                codeGenerator.BeginCommand($"cp.async.ca.shared.global [{sharedRef.GetString()} + {i * 8}], [{index.GetString()}], 8").Dispose();
+                    codeGenerator.BeginCommand($"add.u64 {index.GetString()}, {index.GetString()}, {globalRef.GetString()}").Dispose();
+                    codeGenerator.BeginCommand($"ld.global.b64 {r0.GetString()}, [{index.GetString()}]").Dispose();
+                    codeGenerator.BeginCommand($"st.shared.b64 [{sharedRef.GetString()} + {i + 8}], {r0.GetString()}").Dispose();
+                }
             }
+            else
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    var index = (RegisterAllocator<PTXRegisterKind>.HardwareRegister)codeGenerator.LoadPrimitive(value[i + 2]);
 
-            codeGenerator.BeginCommand($"cp.async.wait_all").Dispose();
+                    codeGenerator.BeginCommand($"add.u64 {index.GetString()}, {index.GetString()}, {globalRef.GetString()}").Dispose();
+                    codeGenerator.BeginCommand($"cp.async.ca.shared.global [{sharedRef.GetString()} + {i * 8}], [{index.GetString()}], 8").Dispose();
+                }
+
+                codeGenerator.BeginCommand($"cp.async.wait_all").Dispose();
+            }
         }
 
 
