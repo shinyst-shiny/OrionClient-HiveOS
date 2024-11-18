@@ -1,4 +1,5 @@
-﻿using OrionClientLib.Hashers.Models;
+﻿using ILGPU.Runtime;
+using OrionClientLib.Hashers.Models;
 using OrionClientLib.Pools;
 using System;
 using System.Collections.Generic;
@@ -15,13 +16,14 @@ namespace OrionClientLib.Hashers
         public string Name => $"Disabled";
         public string Description => $"Disables {HardwareType} hasher";
         public bool Initialized => true;
-
+        public bool IsMiningPaused => true;
         public TimeSpan CurrentChallengeTime { get; private set; } = TimeSpan.FromMinutes(5);
 
 
         public event EventHandler<HashrateInfo> OnHashrateUpdate;
 
-        public bool Initialize(IPool pool, int threads)
+
+        public async Task<bool> InitializeAsync(IPool pool, Settings settings)
         {
             return true;
         }
@@ -62,8 +64,13 @@ namespace OrionClientLib.Hashers
         public override IHasher.Hardware HardwareType => IHasher.Hardware.CPU;
     }
 
-    public class DisabledGPUHasher : DisabledHasher
+    public class DisabledGPUHasher : DisabledHasher, IGPUHasher
     {
         public override IHasher.Hardware HardwareType => IHasher.Hardware.GPU;
+
+        public List<Device> GetDevices(bool onlyValid)
+        {
+            return new List<Device>();
+        }
     }
 }

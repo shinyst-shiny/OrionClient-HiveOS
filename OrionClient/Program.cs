@@ -1,9 +1,12 @@
 ﻿using Equix;
+using Hardware.Info;
 using NLog;
 using Org.BouncyCastle.Crypto.Signers;
 using OrionClientLib;
 using OrionClientLib.Hashers;
 using OrionClientLib.Hashers.CPU;
+using OrionClientLib.Hashers.GPU;
+using OrionClientLib.Hashers.GPU.Baseline;
 using OrionClientLib.Hashers.Models;
 using OrionClientLib.Modules;
 using OrionClientLib.Modules.Models;
@@ -81,6 +84,7 @@ namespace OrionClient
             AddSupportedHasher(new HybridCPUHasherAVX512());
             AddSupportedHasher(new NativeCPUHasher());
             AddSupportedHasher(new NativeCPUHasherAVX2());
+            AddSupportedHasher(new CudaBaselineGPUHasher());
             AddSupportedHasher(new DisabledCPUHasher());
             AddSupportedHasher(new DisabledGPUHasher());
 
@@ -110,6 +114,32 @@ namespace OrionClient
             _uiLayout["Logs"].Update(_logTable);
 
             #endregion
+
+            if(args.Length > 0)
+            {
+                if (args[0] == "mine")
+                {
+                    _currentModule = _modules.FirstOrDefault(x => x is MinerModule);
+
+                    Data data = new Data(_hashers, _pools, _settings);
+                    (IHasher? cpuHasher, IHasher? gpuHasher) = data.GetChosenHasher();
+
+                    if((cpuHasher != null && cpuHasher is not DisabledHasher) || (gpuHasher != null && gpuHasher is not DisabledHasher))
+                    {
+                        var result = await _currentModule?.InitializeAsync(data);
+
+                        if(!result.success)
+                        {
+                            _message = $"[red]{result.errorMessage}[/]\n";
+                            _currentModule = null;
+                        }
+                    }
+                    else
+                    {
+                        _currentModule = null;
+                    }
+                }
+            }
 
             while (true)
             {

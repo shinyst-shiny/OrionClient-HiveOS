@@ -643,6 +643,7 @@ namespace DrillX.Solver
     public struct EquixSolution
     {
         public const int MaxLength = 8;
+        public const int Size = 8 * sizeof(ushort);
 
         public ushort V0;
         public ushort V1;

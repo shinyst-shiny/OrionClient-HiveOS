@@ -42,8 +42,8 @@ namespace OrionClientLib.Hashers
         protected IPool _pool;
         protected ManualResetEvent _newChallengeWait = new ManualResetEvent(false);
         protected ManualResetEvent _pauseMining = new ManualResetEvent(true);
-
-        protected bool ResettingChallenge => !_newChallengeWait.WaitOne(1);
+        public bool IsMiningPaused => !_pauseMining.WaitOne(0);
+        protected bool ResettingChallenge => !_newChallengeWait.WaitOne(0);
 
         protected ConcurrentQueue<Solver> _solverQueue = new ConcurrentQueue<Solver>();
 
@@ -52,7 +52,7 @@ namespace OrionClientLib.Hashers
 
         private nint _currentAffinity;
 
-        public bool Initialize(IPool pool, int threads)
+        public async Task<bool> InitializeAsync(IPool pool, Settings settings)
         {
             if (Initialized)
             {
@@ -61,7 +61,7 @@ namespace OrionClientLib.Hashers
 
             _pool = pool;
             _running = true;
-            _threads = threads;
+            _threads = settings.CPUThreads;
             _info = new HasherInfo();
 
             if (_pool != null)
@@ -79,61 +79,60 @@ namespace OrionClientLib.Hashers
             }
 
             //Set process affinity
-            if (OperatingSystem.IsWindows())
-            {
-                Process currentProcess = Process.GetCurrentProcess();
+            //TODO: Move to miner/benchmark module
+            //if (OperatingSystem.IsWindows())
+            //{
+            //    Process currentProcess = Process.GetCurrentProcess();
 
-                //currentProcess.PriorityClass = ProcessPriorityClass.AboveNormal;
-                _currentAffinity = currentProcess.ProcessorAffinity;
+            //    //currentProcess.PriorityClass = ProcessPriorityClass.AboveNormal;
+            //    _currentAffinity = currentProcess.ProcessorAffinity;
 
-                List<CoreInfo> coreInformation = SystemInformation.GetCoreInformation();
-                int totalThreads = coreInformation.Sum(x => x.ThreadCount);
+            //    List<CoreInfo> coreInformation = SystemInformation.GetCoreInformation();
+            //    int totalThreads = coreInformation.Sum(x => x.ThreadCount);
 
-                if(threads != totalThreads)
-                {
-                    nint processorMask = 0;
+            //    if(_threads != totalThreads)
+            //    {
+            //        nint processorMask = 0;
 
-                    int totalLogical = Math.Clamp(threads - coreInformation.Count, 0, coreInformation.Count);
+            //        int totalLogical = Math.Clamp(_threads - coreInformation.Count, 0, coreInformation.Count);
 
-                    //Extra thread for the UI
-                    //TODO: Modify to use dedicated threads with a specific affinity
-                    if (threads < coreInformation.Count)
-                    {
-                        ++threads;
-                    }
-                    //1431655765
-                    int loopCount = Math.Min(coreInformation.Count, threads);
+            //        //Extra thread for the UI
+            //        //TODO: Modify to use dedicated threads with a specific affinity
+            //        if (_threads < coreInformation.Count)
+            //        {
+            //            ++_threads;
+            //        }
 
+            //        int loopCount = Math.Min(coreInformation.Count, _threads);
 
+            //        for (int i =0; i < loopCount; i++)
+            //        {
+            //            CoreInfo cInfo = coreInformation[i];
 
-                    for (int i =0; i < loopCount; i++)
-                    {
-                        CoreInfo cInfo = coreInformation[i];
+            //            AddThreadAffinity(cInfo.PhysicalMask);
 
-                        AddThreadAffinity(cInfo.PhysicalMask);
+            //            if(totalLogical > 0 && cInfo.HasLogical)
+            //            {
+            //                AddThreadAffinity(cInfo.LogicalMask);
 
-                        if(totalLogical > 0 && cInfo.HasLogical)
-                        {
-                            AddThreadAffinity(cInfo.LogicalMask);
+            //                --totalLogical;
+            //            }
 
-                            --totalLogical;
-                        }
+            //            void AddThreadAffinity(ulong mask)
+            //            {
+            //                if(_threads <= 0)
+            //                {
+            //                    return;
+            //                }
 
-                        void AddThreadAffinity(ulong mask)
-                        {
-                            if(threads <= 0)
-                            {
-                                return;
-                            }
+            //                processorMask |= (nint)mask;
+            //                --_threads;
+            //            }
+            //        }
 
-                            processorMask |= (nint)mask;
-                            --threads;
-                        }
-                    }
-
-                    currentProcess.ProcessorAffinity = processorMask;
-                }
-            }
+            //        currentProcess.ProcessorAffinity = processorMask;
+            //    }
+            //}
 
             return true;
         }
@@ -141,7 +140,7 @@ namespace OrionClientLib.Hashers
         private void _pool_OnChallengeUpdate(object? sender, NewChallengeInfo e)
         {
             //Don't want to block pool module thread waiting for challenge to change
-            Task.Run(() => NewChallenge(e.ChallengeId, e.Challenge, e.StartNonce, e.EndNonce));
+            Task.Run(() => NewChallenge(e.ChallengeId, e.Challenge, e.CPUStartNonce, e.CPUEndNonce));
         }
 
         public bool NewChallenge(int challengeId, Span<byte> challenge, ulong startNonce, ulong endNonce)
@@ -164,7 +163,7 @@ namespace OrionClientLib.Hashers
             _newChallengeWait.Set();
             _pauseMining.Set();
             _challengeStartTime = _sw.Elapsed;
-            _logger.Log(LogLevel.Debug, $"New challenge. Challenge Id: {challengeId}. Range: {startNonce} - {endNonce}");
+            _logger.Log(LogLevel.Debug, $"[CPU] New challenge. Challenge Id: {challengeId}. Range: {startNonce} - {endNonce}");
 
             return true;
         }
@@ -202,13 +201,13 @@ namespace OrionClientLib.Hashers
             }
 
             //Reset affinity
-            if (OperatingSystem.IsWindows())
-            {
-                Process currentProcess = Process.GetCurrentProcess();
+            //if (OperatingSystem.IsWindows())
+            //{
+            //    Process currentProcess = Process.GetCurrentProcess();
 
-                currentProcess.ProcessorAffinity = _currentAffinity;
-                //currentProcess.PriorityClass = ProcessPriorityClass.Normal;
-            }
+            //    currentProcess.ProcessorAffinity = _currentAffinity;
+            //    //currentProcess.PriorityClass = ProcessPriorityClass.Normal;
+            //}
 
             //Attempts to dispose everything before throwing an error
             if (lastError != null)
@@ -219,86 +218,100 @@ namespace OrionClientLib.Hashers
 
         protected virtual void Run()
         {
-            while (_running)
+            try
             {
-                _executing = false;
-
-                while ((!_newChallengeWait.WaitOne(500) || !_pauseMining.WaitOne(0)) && _running)
+                while (_running)
                 {
-                }
+                    _executing = false;
 
-                if (!_running)
-                {
-                    break;
-                }
-
-                _executing = true;
-
-                TimeSpan startTime = _sw.Elapsed;
-                int prevDifficulty = _info.DifficultyInfo.BestDifficulty;
-                ulong startSolutions = _info.TotalSolutions;
-
-                //TODO: Verify threads didn't increase, log error if it did
-                _threads = Math.Min(_solverQueue.Count, _threads);
-
-                var rangePartitioner = Partitioner.Create(0, (int)_info.BatchSize, (int)_info.BatchSize / _threads);
-                ConcurrentQueue<Exception> exceptions = new ConcurrentQueue<Exception>();
-
-                Parallel.ForEach(rangePartitioner, new ParallelOptions { MaxDegreeOfParallelism = _threads }, (range, loop) => ExecuteThread(range, loop, exceptions));
-
-                if (exceptions.TryDequeue(out Exception ex))
-                {
-                    //Log error
-                    Console.WriteLine(ex);
-                }
-
-                TimeSpan hashingTime = _sw.Elapsed - startTime;
-
-                //All prior hashes are invalid now
-                if (ResettingChallenge)
-                {
-                    continue;
-                }
-
-                OnHashrateUpdate?.Invoke(this, new HashrateInfo
-                {
-                    IsCPU = true,
-                    ExecutionTime = hashingTime,
-                    NumNonces = _info.BatchSize,
-                    NumSolutions = _info.TotalSolutions - startSolutions,
-                    HighestDifficulty = _info.DifficultyInfo.BestDifficulty,
-                    ChallengeSolutions = _info.TotalSolutions,
-                    TotalTime = _sw.Elapsed - _challengeStartTime,
-                    CurrentThreads = _threads,
-                    ChallengeId = _info.ChallengeId
-                });
-
-                //Modify batch size to be between 750ms-2000ms long
-                if (_running)
-                {
-                    if (hashingTime.TotalSeconds < 0.75)
+                    while ((!_newChallengeWait.WaitOne(500) || !_pauseMining.WaitOne(0)) && _running)
                     {
-                        _info.BatchSize *= 2;
                     }
-                    else if (hashingTime.TotalSeconds > 2)
+
+                    if (!_running)
                     {
-                        _info.BatchSize /= 2;
-
-                        _info.BatchSize = Math.Max(64, _info.BatchSize);
+                        break;
                     }
-                }
 
-                //Higher difficulty found, notify pool
-                if (_info.DifficultyInfo.BestDifficulty > prevDifficulty)
-                {
-                    //Check that we aren't paused
-                    if (_pauseMining.WaitOne(0))
+                    _executing = true;
+
+                    TimeSpan startTime = _sw.Elapsed;
+                    int prevDifficulty = _info.DifficultyInfo.BestDifficulty;
+                    ulong startSolutions = _info.TotalSolutions;
+
+                    //TODO: Verify threads didn't increase, log error if it did
+                    _threads = Math.Min(_solverQueue.Count, _threads);
+
+                    var rangePartitioner = Partitioner.Create(0, (int)_info.BatchSize, (int)_info.BatchSize / _threads);
+                    ConcurrentQueue<Exception> exceptions = new ConcurrentQueue<Exception>();
+
+                    Parallel.ForEach(rangePartitioner, new ParallelOptions { MaxDegreeOfParallelism = _threads }, (range, loop) => ExecuteThread(range, loop, exceptions));
+
+                    if (exceptions.TryDequeue(out Exception ex))
                     {
-                        _pool?.DifficultyFound(_info.DifficultyInfo.GetUpdateCopy());
+                        //Log error
+                        Console.WriteLine(ex);
                     }
-                }
 
-                _info.CurrentNonce += _info.BatchSize;
+                    TimeSpan hashingTime = _sw.Elapsed - startTime;
+
+                    //All prior hashes are invalid now
+                    if (ResettingChallenge)
+                    {
+                        continue;
+                    }
+
+                    //Modify batch size to be between 750ms-2000ms long
+                    if (_running)
+                    {
+                        if (hashingTime.TotalSeconds < 0.75)
+                        {
+                            _info.BatchSize *= 2;
+                        }
+                        else if (hashingTime.TotalSeconds > 2)
+                        {
+                            _info.BatchSize /= 2;
+
+                            _info.BatchSize = Math.Max(64, _info.BatchSize);
+                        }
+                    }
+
+                    //Higher difficulty found, notify pool
+                    if (_info.DifficultyInfo.BestDifficulty > prevDifficulty)
+                    {
+                        //Check that we aren't paused
+                        if (_pauseMining.WaitOne(0))
+                        {
+                            _pool?.DifficultyFound(_info.DifficultyInfo.GetUpdateCopy());
+                        }
+                    }
+
+                    _info.CurrentNonce += _info.BatchSize;
+
+                    if (_info.CurrentNonce >= _info.EndNonce)
+                    {
+                        _logger.Log(LogLevel.Warn, $"Ran through all nonces set for the CPU. Total: {_info.EndNonce - _info.StartNonce} nonces");
+
+                        PauseMining();
+                    }
+
+                    OnHashrateUpdate?.Invoke(this, new HashrateInfo
+                    {
+                        ExecutionTime = hashingTime,
+                        NumNonces = _info.BatchSize,
+                        NumSolutions = _info.TotalSolutions - startSolutions,
+                        HighestDifficulty = _info.DifficultyInfo.BestDifficulty,
+                        ChallengeSolutions = _info.TotalSolutions,
+                        TotalTime = _sw.Elapsed - _challengeStartTime,
+                        CurrentThreads = _threads,
+                        ChallengeId = _info.ChallengeId
+                    });
+
+                }
+            }
+            catch(Exception ex)
+            {
+                _logger.Log(LogLevel.Error, ex, $"Unknown exception occurred in CPUHasher. Reason: {ex.Message}");
             }
         }
 

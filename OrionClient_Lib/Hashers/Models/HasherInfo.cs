@@ -33,6 +33,14 @@ namespace OrionClientLib.Hashers.Models
             DifficultyInfo = new DifficultyInfo(challengeId);
         }
 
+        public void UpdateDifficulty(int difficulty, byte[] solution, ulong nonce)
+        {
+            if (nonce >= StartNonce && nonce <= EndNonce)
+            {
+                DifficultyInfo.UpdateDifficulty(difficulty, solution, nonce);
+            }
+        }
+
         public void AddSolutionCount(ulong solutions)
         {
             Interlocked.Add(ref _totalSolutions, solutions);

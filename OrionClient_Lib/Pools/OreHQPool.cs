@@ -60,9 +60,12 @@ namespace OrionClientLib.Pools
         protected MinerPoolInformation _minerInformation;
         protected HQPoolSettings _poolSettings;
         protected ulong _timestamp = 0;
+        protected DifficultyInfo _bestDifficulty;
 
         protected int _currentBestDifficulty = 0;
         protected string _errorMessage = String.Empty;
+
+        private bool _sendingReadyUp = false;
 
         #region Overrides
 
@@ -96,7 +99,24 @@ namespace OrionClientLib.Pools
 
                 if (message == serverMineSend)
                 {
-                    await SendReadyUp();
+                    //"info" log with best difficulty submitted
+                    if(_bestDifficulty != null)
+                    {
+                        _logger.Log(LogLevel.Info, $"Challenge Id: {_bestDifficulty.ChallengeId}. Best Difficulty: {_bestDifficulty.BestDifficulty}. Best Nonce: {_bestDifficulty.BestNonce}");
+                    }
+
+                    //Continue to attempt to send readyup message until successful
+                    if(!_sendingReadyUp)
+                    {
+                        _sendingReadyUp = true;
+
+                        while(!await SendReadyUp())
+                        {
+                            await Task.Delay(1000);
+                        }
+
+                        _sendingReadyUp = false;
+                    }
                 }
                 else
                 {
@@ -663,7 +683,7 @@ namespace OrionClientLib.Pools
                     return null;
                 }
             }
-            catch (Exception ex)
+            catch(Exception ex)
             {
                 _logger.Log(LogLevel.Warn, $"Failed to grab staking information from pool. Reason: {ex.Message}");
 
@@ -772,13 +792,15 @@ namespace OrionClientLib.Pools
         protected virtual void HandleNewChallenge(OreHQChallengeResponse challengeResponse)
         {
             _currentBestDifficulty = 0;
+            _bestDifficulty = null;
 
             OnChallengeUpdate?.Invoke(this, new NewChallengeInfo
             {
                 ChallengeId = GenerateChallengeId(challengeResponse.Challenge),
                 Challenge = challengeResponse.Challenge,
                 StartNonce = challengeResponse.StartNonce,
-                EndNonce = challengeResponse.EndNonce
+                EndNonce = challengeResponse.EndNonce,
+                TotalCPUNonces = (ulong)((challengeResponse.EndNonce - challengeResponse.StartNonce) * _poolSettings.CPUNonceRatio)
             });
         }
 
@@ -846,7 +868,7 @@ namespace OrionClientLib.Pools
 
             if(result)
             {
-                _logger.Log(LogLevel.Info, $"Waiting for new challenge");
+                _logger.Log(LogLevel.Debug, $"Waiting for new challenge");
 
                 return result;
             }
@@ -858,7 +880,7 @@ namespace OrionClientLib.Pools
 
         protected virtual async Task<bool> SendPoolSubmission(DifficultyInfo info)
         {
-            _logger.Log(LogLevel.Debug, $"Sending solution. Diff: {info.BestDifficulty}. Challenge id: {info.ChallengeId}. Nonce: {info.BestNonce}");
+            _logger.Log(LogLevel.Debug, $"Sending solution. Diff: {info.BestDifficulty}. Challenge Id: {info.ChallengeId}. Nonce: {info.BestNonce}");
 
             byte[] nonce = new byte[24];
             info.BestSolution.CopyTo(nonce, 0);
@@ -873,6 +895,14 @@ namespace OrionClientLib.Pools
                 PublicKey = _wallet.Account.PublicKey,
                 B58Signature = encoder.EncodeData(_wallet.Account.Sign(nonce))
             });
+
+            if(result)
+            {
+                if(_bestDifficulty == null || info.BestDifficulty > _bestDifficulty.BestDifficulty)
+                {
+                    _bestDifficulty = info;
+                }
+            }
 
             return result;
         }
@@ -947,6 +977,9 @@ namespace OrionClientLib.Pools
 
             [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
             public string CustomDomain { get; set; }
+
+            //This is how many of the returned nonces will be used for the CPU
+            public double CPUNonceRatio { get; set; } = 0.33;
 
             public HQPoolSettings(string poolName) : base(poolName)
             {

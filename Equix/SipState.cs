@@ -12,6 +12,8 @@ namespace DrillX
     [StructLayout(LayoutKind.Sequential, Pack = 8)]
     public struct SipState
     {
+        public const int Size = 32;
+
         public ulong V0;
         public ulong V1;
         public ulong V2;
@@ -60,7 +62,7 @@ namespace DrillX
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void SipRound()
+        public void SipRound()
         {
             unchecked
             {

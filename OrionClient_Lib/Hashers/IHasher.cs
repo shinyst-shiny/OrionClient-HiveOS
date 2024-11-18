@@ -17,12 +17,13 @@ namespace OrionClientLib.Hashers
         public string Description { get; }
         public bool Initialized { get; }
         public TimeSpan CurrentChallengeTime { get; }
+        public bool IsMiningPaused { get; }
 
         public event EventHandler<HashrateInfo> OnHashrateUpdate;
 
         public bool IsSupported();
         public bool NewChallenge(int challengeId, Span<byte> challenge, ulong startNonce, ulong endNonce);
-        public bool Initialize(IPool pool, int threads);
+        public Task<bool> InitializeAsync(IPool pool, Settings settings);
         public Task StopAsync();
         public void SetThreads(int totalThreads);
         public void PauseMining();

@@ -10,9 +10,10 @@ namespace OrionClientLib.Hashers.Models
 {
     public class HashrateInfo
     {
-        public bool IsCPU { get; set; }
         public int Index { get; set; }
         public TimeSpan ExecutionTime { get; set; }
+        public TimeSpan GPUHashXTime { get; set; }
+        public TimeSpan GPUEquihashTime { get; set; }
         public TimeSpan TotalTime { get; set; }
         public ulong NumSolutions { get; set; }
         public ulong NumNonces { get; set; }
@@ -21,9 +22,12 @@ namespace OrionClientLib.Hashers.Models
         public int ChallengeId { get; set; }
         public ulong ChallengeSolutions { get; set; }
 
-        public HashesPerSecond NoncePerSecond => new HashesPerSecond(NumNonces, ExecutionTime);
+        //public HashesPerSecond NoncePerSecond => new HashesPerSecond(NumNonces, ExecutionTime);
         public HashesPerSecond SolutionsPerSecond => new HashesPerSecond(NumSolutions, ExecutionTime);
         public HashesPerSecond ChallengeSolutionsPerSecond => new HashesPerSecond(ChallengeSolutions, TotalTime);
+
+        public HashesPerSecond HashxNoncesPerSecond => new HashesPerSecond(NumNonces, GPUHashXTime, true);
+        public HashesPerSecond EquihashNoncesPerSecond => new HashesPerSecond(NumNonces, GPUEquihashTime, true);
     }
 
 
@@ -33,11 +37,13 @@ namespace OrionClientLib.Hashers.Models
         public TimeSpan Time { get; private set; }
 
         public double Speed => Count / Time.TotalSeconds;
+        public bool IsNonces { get; private set; }
 
-        public HashesPerSecond(ulong count, TimeSpan time)
+        public HashesPerSecond(ulong count, TimeSpan time, bool isNonces = false)
         {
             Count = count;
             Time = time;
+            IsNonces = isNonces;
         }
 
         public override string ToString()
@@ -53,20 +59,22 @@ namespace OrionClientLib.Hashers.Models
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         string ConvertToPrettyFormat(double hashes)
         {
+            string h = IsNonces ? "N" : "H";
+
             if (hashes > 1000000000)
             {
-                return $"{hashes / 1000000000:0.000} GH/s";
+                return $"{hashes / 1000000000:0.000} G{h}/s";
             }
             else if (hashes > 1000000)
             {
-                return $"{hashes / 1000000:0.000} MH/s";
+                return $"{hashes / 1000000:0.000} M{h}/s";
             }
             else if (hashes > 1000)
             {
-                return $"{hashes / 1000:0.000} KH/s";
+                return $"{hashes / 1000:0.000} K{h}/s";
             }
 
-            return $"{hashes:0.000} H/s";
+            return $"{hashes:0.000} {h}/s";
         }
     }
 }

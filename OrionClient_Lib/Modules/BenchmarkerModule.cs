@@ -1,4 +1,5 @@
 ﻿using Blake2Sharp;
+using Equix;
 using NLog;
 using OrionClientLib.Hashers;
 using OrionClientLib.Hashers.Models;
@@ -7,6 +8,7 @@ using Spectre.Console;
 using Spectre.Console.Rendering;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
@@ -60,12 +62,25 @@ namespace OrionClientLib.Modules
             MultiSelectionPrompt<IHasher> hasherPrompt = new MultiSelectionPrompt<IHasher>();
             hasherPrompt.Title = "Choose hashers to benchmark";
 
-            hasherPrompt.UseConverter((hasher) => $"{hasher.Name} - {hasher.Description}");
-            hasherPrompt.AddChoices(data.Hashers.Where(x => x is not DisabledHasher));
+            hasherPrompt.AddChoiceGroup(data.Hashers.First(x => x is DisabledCPUHasher), data.Hashers.Where(x => x is not DisabledHasher && x.HardwareType == IHasher.Hardware.CPU));
+            hasherPrompt.AddChoiceGroup(data.Hashers.First(x => x is DisabledGPUHasher), data.Hashers.Where(x => x is not DisabledHasher && x.HardwareType == IHasher.Hardware.GPU));
+            hasherPrompt.UseConverter((hasher) =>
+            {
+                if(hasher is DisabledCPUHasher)
+                {
+                    return "CPU Hashers";
+                }
+                else if (hasher is DisabledGPUHasher)
+                {
+                    return "GPU Hashers";
+                }
+
+                return $"{hasher.Name} - {hasher.Description}";
+            });
 
             try
             {
-                _chosenHashers = (await hasherPrompt.ShowAsync(AnsiConsole.Console, GetNewToken())).Select(x => new HasherInfo { Hasher = x }).ToList();
+                _chosenHashers = (await hasherPrompt.ShowAsync(AnsiConsole.Console, GetNewToken())).Where(x => x is not DisabledHasher).Select(x => new HasherInfo { Hasher = x }).ToList();
 
                 if (_chosenHashers.Count == 0)
                 {
@@ -89,6 +104,7 @@ namespace OrionClientLib.Modules
 
             HasherInfo currentHasherInfo = _chosenHashers[_hasherIndex];
             IHasher currentHasher = currentHasherInfo.Hasher;
+            List<CoreInfo> coreInformation = SystemInformation.GetCoreInformation();
 
             if (_stop)
             {
@@ -105,6 +121,8 @@ namespace OrionClientLib.Modules
                 deviceTable.AddColumn(new TableColumn("Average Hashrate").Centered());
                 deviceTable.AddColumn(new TableColumn("Min Hashrate").Centered());
                 deviceTable.AddColumn(new TableColumn("Max Hashrate").Centered());
+                deviceTable.AddColumn(new TableColumn("Hashx N/S (GPU)").Centered());
+                deviceTable.AddColumn(new TableColumn("Equihash N/S (GPU)").Centered());
                 deviceTable.AddColumn(new TableColumn("Remaining Time").Centered());
                 deviceTable.Expand();
                 deviceTable.ShowRowSeparators = true;
@@ -117,6 +135,8 @@ namespace OrionClientLib.Modules
                         $"-",
                         $"-",
                         $"-",
+                        $"-",
+                        $"-",
                         $"-");
                 }
 
@@ -125,20 +145,39 @@ namespace OrionClientLib.Modules
 
             if (!currentHasher.Initialized)
             {
+                SetAffinity();
+
                 _logger.Log(LogLevel.Debug, $"Running hasher: {currentHasher.Name} for {_totalSeconds}s");
 
                 currentHasher.OnHashrateUpdate += CurrentHasher_OnHashrateUpdate;
-                currentHasher.Initialize(null, data.Settings.CPUThreads);
-                byte[] challenge = new byte[32];
-                RandomNumberGenerator.Fill(challenge);
+                
+                if(await currentHasher.InitializeAsync(null, data.Settings))
+                {
+                    byte[] challenge = new byte[32];
+                    challenge.AsSpan().Fill(0xFF);
+                    //RandomNumberGenerator.Fill(challenge);
 
-                currentHasher.NewChallenge(0, challenge, 0, ulong.MaxValue);
+                    currentHasher.NewChallenge(0, challenge, 0, ulong.MaxValue);
+                }
+                else
+                {
+                    _logger.Log(LogLevel.Warn, $"Failed to initialize hasher {currentHasher.Name}");
+                    ++_hasherIndex;
+
+                    if (_hasherIndex >= _chosenHashers.Count)
+                    {
+                        _finished = true;
+                        _logger.Log(LogLevel.Info, $"Benchmark complete. Ctrl + C to return to menu");
+                    }
+                }
             }
 
             //Allow each hasher to run for 30 seconds in total
             if (currentHasher.CurrentChallengeTime.TotalSeconds > _totalSeconds && currentHasher.Initialized)
             {
                 await currentHasher.StopAsync();
+                ResetAffinity();
+
                 currentHasher.OnHashrateUpdate -= CurrentHasher_OnHashrateUpdate;
                 ++_hasherIndex;
 
@@ -158,6 +197,60 @@ namespace OrionClientLib.Modules
             }
 
             return _render;
+
+            void SetAffinity()
+            {
+                if(currentHasher.HardwareType != IHasher.Hardware.CPU || !OperatingSystem.IsWindows())
+                {
+                    return;
+                }
+
+                if (data.Settings.CPUThreads <= coreInformation.Count)
+                {
+                    nint processorMask = 0;
+                    nint fullMask = 0;
+
+                    coreInformation.ForEach(x =>
+                    {
+                        processorMask |= (nint)x.PhysicalMask;
+                        fullMask |= (nint)x.FullMask;
+                    });
+
+                    Process currentProcess = Process.GetCurrentProcess();
+
+                    if (currentProcess.ProcessorAffinity == fullMask)
+                    {
+                        currentProcess.ProcessorAffinity = processorMask;
+                    }
+                }
+            }
+
+            void ResetAffinity()
+            {
+                if (currentHasher.HardwareType != IHasher.Hardware.CPU || !OperatingSystem.IsWindows())
+                {
+                    return;
+                }
+
+                if (data.Settings.CPUThreads <= coreInformation.Count)
+                {
+                    nint processorMask = 0;
+                    nint fullMask = 0;
+
+                    coreInformation.ForEach(x =>
+                    {
+                        processorMask |= (nint)x.PhysicalMask;
+                        fullMask |= (nint)x.FullMask;
+                    });
+
+                    Process currentProcess = Process.GetCurrentProcess();
+
+                    if (currentProcess.ProcessorAffinity == processorMask)
+                    {
+                        currentProcess.ProcessorAffinity = fullMask;
+                    }
+                }
+            }
         }
 
         void CurrentHasher_OnHashrateUpdate(object? sender, HashrateInfo e)
@@ -188,7 +281,14 @@ namespace OrionClientLib.Modules
             _render.UpdateCell(_hasherIndex, 1, currentInfo.CurrentRate.ChallengeSolutionsPerSecond.ToString());
             _render.UpdateCell(_hasherIndex, 2, currentInfo.MinRate.SolutionsPerSecond.ToString());
             _render.UpdateCell(_hasherIndex, 3, currentInfo.MaxRate.SolutionsPerSecond.ToString());
-            _render.UpdateCell(_hasherIndex, 4, $"{Math.Max(0, _totalSeconds - currentInfo.CurrentRate.TotalTime.TotalSeconds):0.00}s");
+
+            if(currentInfo.Hasher is IGPUHasher)
+            {
+                _render.UpdateCell(_hasherIndex, 4, currentInfo.CurrentRate.HashxNoncesPerSecond.ToString());
+                _render.UpdateCell(_hasherIndex, 5, currentInfo.CurrentRate.EquihashNoncesPerSecond.ToString());
+            }
+
+            _render.UpdateCell(_hasherIndex, 6, $"{Math.Max(0, _totalSeconds - currentInfo.CurrentRate.TotalTime.TotalSeconds):0.00}s");
 
             //Console.WriteLine($"{currentInfo.Hasher.Name} -- Average: {currentInfo.CurrentRate.SolutionsPerSecond}, Min: {currentInfo.MinRate.SolutionsPerSecond}, Max: {currentInfo.MaxRate.SolutionsPerSecond}. Runtime: {currentInfo.CurrentRate.TotalTime}");
         }
@@ -197,10 +297,13 @@ namespace OrionClientLib.Modules
         {
             _stop = true;
             _currentTokenSource?.Cancel();
+            _currentTokenSource?.Dispose();
         }
 
         private CancellationToken GetNewToken()
         {
+            _currentTokenSource?.Dispose();
+
             _currentTokenSource = new CancellationTokenSource();
             return _currentTokenSource.Token;
         }
