@@ -114,6 +114,17 @@ namespace OrionClient
 
             #endregion
 
+            if(args.Length > 0)
+            {
+                if (args[0] == "mine")
+                {
+                    _currentModule = _modules.FirstOrDefault(x => x is MinerModule);
+
+                    Data data = new Data(_hashers, _pools, _settings);
+                    var result = await _currentModule?.InitializeAsync(data);
+                }
+            }
+
             while (true)
             {
                 Data data = new Data(_hashers, _pools, _settings);

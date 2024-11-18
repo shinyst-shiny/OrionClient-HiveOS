@@ -269,6 +269,9 @@ namespace OrionClientLib.Modules
             _poolInfoTable.InsertRow(0, e);
 
             _uiLayout["poolInfo"].Update(_poolInfoTable);
+
+            //Output to log
+
         }
 
         private void Hasher_OnHashrateUpdate(object? sender, Hashers.Models.HashrateInfo e)

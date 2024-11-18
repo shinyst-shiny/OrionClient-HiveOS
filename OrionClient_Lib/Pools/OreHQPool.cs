@@ -60,6 +60,7 @@ namespace OrionClientLib.Pools
         protected MinerPoolInformation _minerInformation;
         protected HQPoolSettings _poolSettings;
         protected ulong _timestamp = 0;
+        protected DifficultyInfo _bestDifficulty;
 
         protected int _currentBestDifficulty = 0;
         protected string _errorMessage = String.Empty;
@@ -98,6 +99,12 @@ namespace OrionClientLib.Pools
 
                 if (message == serverMineSend)
                 {
+                    //"info" log with best difficulty submitted
+                    if(_bestDifficulty != null)
+                    {
+                        _logger.Log(LogLevel.Info, $"Challenge Id: {_bestDifficulty.ChallengeId}. Best Difficulty: {_bestDifficulty.BestDifficulty}. Best Nonce: {_bestDifficulty.BestNonce}");
+                    }
+
                     //Continue to attempt to send readyup message until successful
                     if(!_sendingReadyUp)
                     {
@@ -785,6 +792,7 @@ namespace OrionClientLib.Pools
         protected virtual void HandleNewChallenge(OreHQChallengeResponse challengeResponse)
         {
             _currentBestDifficulty = 0;
+            _bestDifficulty = null;
 
             OnChallengeUpdate?.Invoke(this, new NewChallengeInfo
             {
@@ -860,7 +868,7 @@ namespace OrionClientLib.Pools
 
             if(result)
             {
-                _logger.Log(LogLevel.Info, $"Waiting for new challenge");
+                _logger.Log(LogLevel.Debug, $"Waiting for new challenge");
 
                 return result;
             }
@@ -872,7 +880,7 @@ namespace OrionClientLib.Pools
 
         protected virtual async Task<bool> SendPoolSubmission(DifficultyInfo info)
         {
-            _logger.Log(LogLevel.Debug, $"Sending solution. Diff: {info.BestDifficulty}. Challenge id: {info.ChallengeId}. Nonce: {info.BestNonce}");
+            _logger.Log(LogLevel.Debug, $"Sending solution. Diff: {info.BestDifficulty}. Challenge Id: {info.ChallengeId}. Nonce: {info.BestNonce}");
 
             byte[] nonce = new byte[24];
             info.BestSolution.CopyTo(nonce, 0);
@@ -887,6 +895,14 @@ namespace OrionClientLib.Pools
                 PublicKey = _wallet.Account.PublicKey,
                 B58Signature = encoder.EncodeData(_wallet.Account.Sign(nonce))
             });
+
+            if(result)
+            {
+                if(_bestDifficulty == null || info.BestDifficulty > _bestDifficulty.BestDifficulty)
+                {
+                    _bestDifficulty = info;
+                }
+            }
 
             return result;
         }

@@ -163,7 +163,7 @@ namespace OrionClientLib.Hashers
             _newChallengeWait.Set();
             _pauseMining.Set();
             _challengeStartTime = _sw.Elapsed;
-            _logger.Log(LogLevel.Debug, $"New challenge. Challenge Id: {challengeId}. Range: {startNonce} - {endNonce}");
+            _logger.Log(LogLevel.Debug, $"[CPU] New challenge. Challenge Id: {challengeId}. Range: {startNonce} - {endNonce}");
 
             return true;
         }
