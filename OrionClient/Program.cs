@@ -1,4 +1,5 @@
 ﻿using Equix;
+using Hardware.Info;
 using NLog;
 using Org.BouncyCastle.Crypto.Signers;
 using OrionClientLib;
@@ -121,7 +122,22 @@ namespace OrionClient
                     _currentModule = _modules.FirstOrDefault(x => x is MinerModule);
 
                     Data data = new Data(_hashers, _pools, _settings);
-                    var result = await _currentModule?.InitializeAsync(data);
+                    (IHasher? cpuHasher, IHasher? gpuHasher) = data.GetChosenHasher();
+
+                    if((cpuHasher != null && cpuHasher is not DisabledHasher) || (gpuHasher != null && gpuHasher is not DisabledHasher))
+                    {
+                        var result = await _currentModule?.InitializeAsync(data);
+
+                        if(!result.success)
+                        {
+                            _message = $"[red]{result.errorMessage}[/]\n";
+                            _currentModule = null;
+                        }
+                    }
+                    else
+                    {
+                        _currentModule = null;
+                    }
                 }
             }
 
