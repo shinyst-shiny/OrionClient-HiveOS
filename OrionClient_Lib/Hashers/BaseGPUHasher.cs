@@ -188,6 +188,7 @@ namespace OrionClientLib.Hashers
         private void DHasher_OnHashrateUpdate(object? sender, HashrateInfo e)
         {
             e.TotalTime = _sw.Elapsed - _challengeStartTime;
+            e.CurrentThreads = _threads;
 
             OnHashrateUpdate?.Invoke(this, e);
         }
