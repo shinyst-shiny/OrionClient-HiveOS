@@ -125,7 +125,7 @@ namespace OrionClientLib.Hashers
             }
 
             //TODO: Allow additional buffer room
-            int maxNonces = (int)((ulong)Math.Min(3000000000, devicesToUse.Min(x => x.MemorySize)) / GPUDeviceHasher.MemoryPerNonce);
+            int maxNonces = (int)((ulong)devicesToUse.Min(x => x.MemorySize) / GPUDeviceHasher.MemoryPerNonce);
 
             //Reduce to a power of 2
             maxNonces = (int)Math.Pow(2, (int)Math.Log2(maxNonces));
@@ -694,8 +694,6 @@ namespace OrionClientLib.Hashers
                             //Return data
                             if (cpuData != null)
                             {
-                                _logger.Log(LogLevel.Warn, $"Data returned");
-
                                 _readyCPUData.TryAdd(cpuData);
                             }
 
