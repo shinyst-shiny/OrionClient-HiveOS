@@ -27,6 +27,8 @@ using Org.BouncyCastle.Asn1.Cmp;
 using Org.BouncyCastle.Asn1.X509;
 using OrionClientLib.Hashers.GPU;
 using ILGPU.Runtime.CPU;
+using OrionClientLib.Hashers.GPU.Baseline;
+using System.Diagnostics.CodeAnalysis;
 
 namespace OrionClientLib.Hashers
 {
@@ -72,6 +74,8 @@ namespace OrionClientLib.Hashers
 
         private ulong _currentNonce = 0;
 
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Interlocked))] //Needed for GPU
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(CudaBaselineGPUHasher))] //Need to add for each GPU to run on linux
         public async Task<bool> InitializeAsync(IPool pool, Settings settings)
         {
             if (Initialized)
@@ -1104,6 +1108,7 @@ namespace OrionClientLib.Hashers
         {
             //If copies are too slow, can change this back to pinned
 
+            public TimeSpan ProgramGenerationTime { get; set; }
             public Instruction[] InstructionData { get; private set; }
             public SipState[] Keys { get; private set; }
             public EquixSolution[] Solutions { get; private set; }

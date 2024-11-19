@@ -44,9 +44,6 @@ namespace OrionClient
 
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Settings))]
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Program))]
-        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(OreHQPoolStake))]
-        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Interlocked))] //Needed for GPU
-        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(CudaBaselineGPUHasher))] //Need to add for each GPU to run on linux
         static async Task Main(string[] args)
         {
             Console.Clear();

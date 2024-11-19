@@ -19,6 +19,7 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Data.SqlTypes;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -150,6 +151,7 @@ namespace OrionClientLib.Pools
             }
         }
 
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(OreHQPoolStake))]
         public override async Task<bool> ConnectAsync(CancellationToken token)
         {
             if(!await UpdateTimestampAsync(token))
