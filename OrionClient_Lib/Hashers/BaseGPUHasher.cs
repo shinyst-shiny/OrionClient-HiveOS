@@ -88,6 +88,12 @@ namespace OrionClientLib.Hashers
             _running = true;
             //Use total CPU threads for now
             _threads = settings.CPUThreads; //TODO: Change to use remaining threads
+
+            if(settings.ProgramGenerationThreads > 0)
+            {
+                _threads = settings.ProgramGenerationThreads;
+            }
+
             _info = new HasherInfo();
 
             if (_pool != null)

@@ -27,6 +27,7 @@ namespace OrionClientLib
 
         public bool AutoSetCPUAffinity { get; set; } = true;
         public int MaxGPUBlockSize { get; set; } = 2048;
+        public int ProgramGenerationThreads { get; set; } = -1;
 
         //public bool EnableDebugging { get; set; }
 
