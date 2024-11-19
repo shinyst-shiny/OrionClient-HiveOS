@@ -29,6 +29,7 @@ using OrionClientLib.Hashers.GPU;
 using ILGPU.Runtime.CPU;
 using OrionClientLib.Hashers.GPU.Baseline;
 using System.Diagnostics.CodeAnalysis;
+using Solnet.Rpc.Models;
 
 namespace OrionClientLib.Hashers
 {
@@ -556,7 +557,6 @@ namespace OrionClientLib.Hashers
             private bool _copyFromWaiting;
             private bool _executingWaiting;
 
-            private List<GPUDeviceData> _deviceData = new List<GPUDeviceData>();
 
             //Used to verify GPU solutions
             private Solver _solver = new Solver();
@@ -569,8 +569,17 @@ namespace OrionClientLib.Hashers
             private HasherInfo _hasherInfo;
 
 
+            private List<GPUDeviceData> _deviceData = new List<GPUDeviceData>();
+
+            private BlockingCollection<GPUDeviceData> _copyToData = new BlockingCollection<GPUDeviceData>(new ConcurrentQueue<GPUDeviceData>());
+            private BlockingCollection<GPUDeviceData> _executeData = new BlockingCollection<GPUDeviceData>(new ConcurrentQueue<GPUDeviceData>());
+            private BlockingCollection<GPUDeviceData> _copyFromData = new BlockingCollection<GPUDeviceData>(new ConcurrentQueue<GPUDeviceData>());
+
             private BlockingCollection<CPUData> _readyCPUData;
             private BlockingCollection<CPUData> _availableCPUData;
+
+
+
             private Action<ArrayView<Instruction>, ArrayView<SipState>, ArrayView<ulong>> _hashxMethod;
             private Action<ArrayView<ulong>, ArrayView<EquixSolution>, ArrayView<ushort>, ArrayView<uint>> _equihashMethod;
 
@@ -636,6 +645,7 @@ namespace OrionClientLib.Hashers
 
                     GPUDeviceData deviceData = new GPUDeviceData(instructions, keys, heap, hashes, solutions, solutionCounts, _nonceCount);
                     _deviceData.Add(deviceData);
+                    _copyToData.TryAdd(deviceData);
                 }
 
                 _gpuCopyToTask = new Task(GPUCopyTo, TaskCreationOptions.LongRunning);
@@ -693,12 +703,10 @@ namespace OrionClientLib.Hashers
 
                         _copyToWaiting = false;
 
-                        GPUDeviceData deviceData = GetDeviceData(GPUDeviceData.Stage.None);
+                        GPUDeviceData deviceData = null;
 
-                        while (deviceData == null && !_hasNotice)
+                        while (!GetDeviceData(GPUDeviceData.Stage.CopyTo, 50, out deviceData) && !_hasNotice)
                         {
-                            Thread.Sleep(100);
-                            deviceData = GetDeviceData(GPUDeviceData.Stage.None);
                         }
 
                         CPUData cpuData = null;
@@ -716,6 +724,11 @@ namespace OrionClientLib.Hashers
                                 _readyCPUData.TryAdd(cpuData);
                             }
 
+                            if(deviceData != null)
+                            {
+                                _copyToData.TryAdd(deviceData);
+                            }
+
                             //Mining paused, exiting, or new challenge are all handled by continuing loop
                             continue;
                         }
@@ -730,7 +743,7 @@ namespace OrionClientLib.Hashers
                         //Wait for copy to finish
                         stream.Synchronize();
 
-                        deviceData.CurrentStage = GPUDeviceData.Stage.Execute;
+                        _executeData.TryAdd(deviceData);
                     }
                 }
                 catch (Exception ex)
@@ -753,16 +766,20 @@ namespace OrionClientLib.Hashers
 
                         _executingWaiting = false;
 
-                        GPUDeviceData deviceData = GetDeviceData(GPUDeviceData.Stage.Execute);
+                        GPUDeviceData deviceData = null;
 
-                        while (deviceData == null && !_hasNotice)
+                        while (!GetDeviceData(GPUDeviceData.Stage.Execute, 50, out deviceData) && !_hasNotice)
                         {
-                            Thread.Sleep(100);
-                            deviceData = GetDeviceData(GPUDeviceData.Stage.Execute);
+
                         }
 
                         if (_hasNotice)
                         {
+                            if(deviceData != null)
+                            {
+                                _copyToData.TryAdd(deviceData);
+                            }
+
                             continue;
                         }
 
@@ -775,7 +792,7 @@ namespace OrionClientLib.Hashers
                         //Wait for kernels to finish
                         _accelerator.Synchronize();
 
-                        deviceData.CurrentStage = GPUDeviceData.Stage.Solution;
+                        _copyFromData.TryAdd(deviceData);
                         deviceData.HashXTime = marker2.MeasureFrom(marker1);
                         deviceData.EquihashTime = marker3.MeasureFrom(marker2);
                     }
@@ -802,16 +819,20 @@ namespace OrionClientLib.Hashers
 
                         _copyFromWaiting = false;
 
-                        GPUDeviceData deviceData = GetDeviceData(GPUDeviceData.Stage.Solution);
+                        GPUDeviceData deviceData = null;
 
-                        while (deviceData == null && !_hasNotice)
+                        while (!GetDeviceData(GPUDeviceData.Stage.Solution, 50, out deviceData) && !_hasNotice)
                         {
-                            Thread.Sleep(100);
-                            deviceData = GetDeviceData(GPUDeviceData.Stage.Solution);
+
                         }
 
                         if (_hasNotice)
                         {
+                            if(deviceData != null)
+                            {
+                                _copyToData.TryAdd(deviceData);
+                            }
+
                             continue;
                         }
 
@@ -965,7 +986,7 @@ namespace OrionClientLib.Hashers
                             _logger.Log(LogLevel.Warn, $"Failed to verify {failedPercent:0.00}% of the total solutions in the batch on {_device.Name} [{_deviceId}]");
                         }
 
-                        deviceData.CurrentStage = GPUDeviceData.Stage.None;
+                        _copyToData.TryAdd(deviceData);
                         _hasherInfo.AddSolutionCount((ulong)totalSolutions);
 
                         OnHashrateUpdate?.Invoke(this, new HashrateInfo
@@ -1006,16 +1027,34 @@ namespace OrionClientLib.Hashers
 
             public void ResetData()
             {
+                //Remove all from collections
+                while(_copyToData.TryTake(out var _) || _executeData.TryTake(out var _) || _copyFromData.TryTake(out var _))
+                {
+
+                }
+
                 foreach(var deviceData in _deviceData)
                 {
-                    deviceData.CurrentStage = GPUDeviceData.Stage.None;
                     deviceData.CurrentCPUData = null;
+
+                    _copyToData.TryAdd(deviceData);
                 }
             }
 
-            private GPUDeviceData GetDeviceData(GPUDeviceData.Stage stage)
+            private bool GetDeviceData(GPUDeviceData.Stage stage, int timeout, out GPUDeviceData data)
             {
-                return _deviceData.FirstOrDefault(x => x.CurrentStage == stage);
+                switch (stage)
+                {
+                    case GPUDeviceData.Stage.CopyTo:
+                        return _copyToData.TryTake(out data, timeout);
+                    case GPUDeviceData.Stage.Execute:
+                        return _executeData.TryTake(out data, timeout);
+                    case GPUDeviceData.Stage.Solution:
+                        return _copyFromData.TryTake(out data, timeout);
+                }
+
+                data = null;
+                return false;
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1052,9 +1091,8 @@ namespace OrionClientLib.Hashers
 
             private class GPUDeviceData : IDisposable
             {
-                public enum Stage { None, Execute, Solution };
+                public enum Stage { CopyTo, Execute, Solution };
 
-                public Stage CurrentStage { get; set; } = Stage.None;
                 public TimeSpan HashXTime { get; set; }
                 public TimeSpan EquihashTime { get; set; }
                 public TimeSpan ExecutionTime => HashXTime + EquihashTime;
