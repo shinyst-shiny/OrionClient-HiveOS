@@ -50,8 +50,6 @@ namespace OrionClientLib.Hashers
         private int _threads = Environment.ProcessorCount;
         private Task _taskRunner;
 
-        private nint _currentAffinity;
-
         public async Task<bool> InitializeAsync(IPool pool, Settings settings)
         {
             if (Initialized)

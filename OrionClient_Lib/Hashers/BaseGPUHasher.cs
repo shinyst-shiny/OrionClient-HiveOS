@@ -136,15 +136,23 @@ namespace OrionClientLib.Hashers
             {
                 var device = devicesToUse[i];
 
-                GPUDeviceHasher dHasher = new GPUDeviceHasher(HashxKernel(), EquihashKernel(), device.CreateAccelerator(_context), 
+                GPUDeviceHasher dHasher = new GPUDeviceHasher(HashxKernel(), EquihashKernel(), device.CreateAccelerator(_context),
                                                               device, i, _setupCPUData, _availableCPUData, _info,
                                                               GetHashXKernelConfig(device, maxNonces), GetEquihashKernelConfig(device, maxNonces));
+                try
+                {
 
-                dHasher.OnDifficultyUpdate += DHasher_OnDifficultyUpdate;
-                dHasher.OnHashrateUpdate += DHasher_OnHashrateUpdate;
-                dHasher.Initialize(maxNonces);
+                    dHasher.OnDifficultyUpdate += DHasher_OnDifficultyUpdate;
+                    dHasher.OnHashrateUpdate += DHasher_OnHashrateUpdate;
+                    dHasher.Initialize(maxNonces);
 
-                _gpuDevices.Add(dHasher);
+                    _gpuDevices.Add(dHasher);
+                }
+                catch(Exception ex)
+                {
+                    _logger.Log(LogLevel.Error, ex, $"Failed to initialize device {device.Name} [{i}]. Reason: {ex.Message}");
+                    dHasher?.Dispose();
+                }
             }
 
             for(int i =0; i < devicesToUse.Count * _maxQueueSize * 2; i++)
@@ -542,14 +550,17 @@ namespace OrionClientLib.Hashers
 
             private BlockingCollection<CPUData> _readyCPUData;
             private BlockingCollection<CPUData> _availableCPUData;
-            private Action<ArrayView<Instruction>, ArrayView<SipState>, ArrayView<ulong>> _hashxKernel;
-            private Action<ArrayView<ulong>, ArrayView<EquixSolution>, ArrayView<ushort>, ArrayView<uint>> _equihashKernel;
+            private Action<ArrayView<Instruction>, ArrayView<SipState>, ArrayView<ulong>> _hashxMethod;
+            private Action<ArrayView<ulong>, ArrayView<EquixSolution>, ArrayView<ushort>, ArrayView<uint>> _equihashMethod;
+
+            private Action<KernelConfig, ArrayView<Instruction>, ArrayView<SipState>, ArrayView<ulong>> _hashxKernel;
+            private Action<KernelConfig, ArrayView<ulong>, ArrayView<EquixSolution>, ArrayView<ushort>, ArrayView<uint>> _equihashKernel;
 
             private int _nonceCount = 0;
 
             private Task _runningTask = null;
             private CancellationTokenSource _runToken;
-            private bool _running => !_runToken.IsCancellationRequested;
+            private bool _running => _runToken?.IsCancellationRequested != true;
 
             private Task _gpuCopyToTask = null;
             private Task _gpuCopyFromTask = null;
@@ -569,8 +580,8 @@ namespace OrionClientLib.Hashers
                          KernelConfig hashxConfig,
                          KernelConfig equihashConfig)
             {
-                _hashxKernel = hashxKernel;
-                _equihashKernel = equihashKernel;
+                _hashxMethod = hashxKernel;
+                _equihashMethod = equihashKernel;
                 _readyCPUData = readyCPUData;
                 _availableCPUData = availableCPUData;
                 _deviceId = deviceId;
@@ -602,7 +613,7 @@ namespace OrionClientLib.Hashers
                     MemoryBuffer1D<EquixSolution, Stride1D.Dense> solutions = _accelerator.Allocate1D<EquixSolution>(_nonceCount * EquixSolution.MaxLength);
                     MemoryBuffer1D<uint, Stride1D.Dense> solutionCounts = _accelerator.Allocate1D<uint>(_nonceCount);
 
-                    GPUDeviceData deviceData = new GPUDeviceData(instructions, keys, heap, hashes, solutions, solutionCounts);
+                    GPUDeviceData deviceData = new GPUDeviceData(instructions, keys, heap, hashes, solutions, solutionCounts, _nonceCount);
                     _deviceData.Add(deviceData);
                 }
 
@@ -616,7 +627,10 @@ namespace OrionClientLib.Hashers
                 _runningTask = new Task(Execute, _runToken.Token, TaskCreationOptions.LongRunning);
                 _runningTask.Start();
 
-                _logger.Log(LogLevel.Debug, $"Initialized GPU device: {_device.Name}");
+                _hashxKernel = _accelerator.LoadStreamKernel(_hashxMethod);
+                _equihashKernel = _accelerator.LoadStreamKernel(_equihashMethod);
+
+                _logger.Log(LogLevel.Debug, $"Initialized GPU device: {_device.Name} [{_deviceId}]");
             }
 
             public async Task WaitForStopAsync()
@@ -689,7 +703,7 @@ namespace OrionClientLib.Hashers
 
                         //Set as the current CPU data
                         deviceData.CurrentCPUData = cpuData;
-
+                        Array.Copy(cpuData.NoncesUsed, deviceData.CurrentNonces, cpuData.NoncesUsed.Length);
                         //Copies to device.
                         deviceData.ProgramInstructions.View.CopyFromCPU(stream, cpuData.InstructionData);
                         deviceData.Keys.View.CopyFromCPU(stream, cpuData.Keys);
@@ -708,13 +722,6 @@ namespace OrionClientLib.Hashers
 
             private void Execute()
             {
-                _logger.Log(LogLevel.Debug, $"[GPU] Loading kernels to {_device.Name} [{_deviceId}]");
-
-                var hashxKernel = _accelerator.LoadStreamKernel(_hashxKernel);
-                var equixKernel = _accelerator.LoadStreamKernel(_equihashKernel);
-
-                _logger.Log(LogLevel.Debug, $"[GPU] Finished loading kernels for {_device.Name} [{_deviceId}]");
-
                 try
                 {
                     while (_running)
@@ -741,9 +748,9 @@ namespace OrionClientLib.Hashers
                         }
 
                         using var marker1 = _accelerator.AddProfilingMarker();
-                        hashxKernel(_hashxConfig, deviceData.ProgramInstructions.View, deviceData.Keys.View, deviceData.Hashes.View);
+                        _hashxKernel(_hashxConfig, deviceData.ProgramInstructions.View, deviceData.Keys.View, deviceData.Hashes.View);
                         using var marker2 = _accelerator.AddProfilingMarker();
-                        equixKernel(_equihashConfig, deviceData.Hashes.View, deviceData.Solutions.View, deviceData.Heap.View, deviceData.SolutionCounts.View);
+                        _equihashKernel(_equihashConfig, deviceData.Hashes.View, deviceData.Solutions.View, deviceData.Heap.View, deviceData.SolutionCounts.View);
                         using var marker3 = _accelerator.AddProfilingMarker();
 
                         //Wait for kernels to finish
@@ -811,10 +818,11 @@ namespace OrionClientLib.Hashers
                         Span<ushort> testSolution = new Span<ushort>(new ushort[8]);
 
                         int totalSolutions = 0;
+                        int totalFailed = 0;
                         int currentBestDifficulty = _hasherInfo.DifficultyInfo.BestDifficulty;
                         int prevBestDifficulty = currentBestDifficulty;
 
-                        for (int i = 0; i < deviceData.CurrentCPUData.NoncesUsed.Length; i++)
+                        for (int i = 0; i < deviceData.CurrentNonces.Length; i++)
                         {
                             Span<EquixSolution> solutions = allSolutions.Slice(8 * i, 8);
                             uint solutionCount = Math.Min(8, solutionCounts[i]);
@@ -828,7 +836,7 @@ namespace OrionClientLib.Hashers
 
                                 testSolution.Sort();
 
-                                ulong nonce = deviceData.CurrentCPUData.NoncesUsed[i];
+                                ulong nonce = deviceData.CurrentNonces[i];
 
                                 BinaryPrimitives.WriteUInt64LittleEndian(nonceOutput.Slice(16), nonce);
                                 MemoryMarshal.Cast<ushort, byte>(testSolution).CopyTo(nonceOutput);
@@ -845,6 +853,7 @@ namespace OrionClientLib.Hashers
                                     //A small percent of solutions do end up invalid
                                     if (!VerifyResultAndReorder(nonce, solutions.Slice(z, 1)))
                                     {
+                                        ++totalFailed;
 #if DEBUG
                                         _logger.Log(LogLevel.Warn, $"Solution verification failed. Nonce: {nonce}. Solution: {solutions.Slice(z, 1)[0]}. Expected Difficulty: {difficulty}. Skipping");
 
@@ -928,6 +937,14 @@ namespace OrionClientLib.Hashers
                         }
 
                         #endregion
+
+                        double failedPercent = (double)totalFailed / totalSolutions * 100;
+                        const double failureRatePercent = 1;
+
+                        if(failedPercent > failureRatePercent)
+                        {
+                            _logger.Log(LogLevel.Warn, $"Failed to verify {failedPercent:0.00}% of the total solutions in the batch on {_device.Name} [{_deviceId}]");
+                        }
 
                         deviceData.CurrentStage = GPUDeviceData.Stage.None;
                         _hasherInfo.AddSolutionCount((ulong)totalSolutions);
@@ -1033,14 +1050,14 @@ namespace OrionClientLib.Hashers
                 public MemoryBuffer1D<ushort, Stride1D.Dense> Heap { get; private set; }
 
                 public CPUData CurrentCPUData { get; set; }
-
+                public ulong[] CurrentNonces { get; private set; }
 
                 public GPUDeviceData(MemoryBuffer1D<Instruction, Stride1D.Dense> programInstructions, 
                                      MemoryBuffer1D<SipState, Stride1D.Dense> keys,
                                      MemoryBuffer1D<ushort, Stride1D.Dense> heap,
                                      MemoryBuffer1D<ulong, Stride1D.Dense> hashes,
                                      MemoryBuffer1D<EquixSolution, Stride1D.Dense> solutions,
-                                     MemoryBuffer1D<uint, Stride1D.Dense> solutionsCounts)
+                                     MemoryBuffer1D<uint, Stride1D.Dense> solutionsCounts, int nonceCount)
                 {
                     ProgramInstructions = programInstructions;
                     Keys = keys;
@@ -1048,6 +1065,7 @@ namespace OrionClientLib.Hashers
                     Hashes = hashes;
                     Solutions = solutions;
                     SolutionCounts = solutionsCounts;
+                    CurrentNonces = new ulong[nonceCount];
                 }
 
                 public void Dispose()
