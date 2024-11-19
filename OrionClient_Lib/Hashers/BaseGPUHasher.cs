@@ -127,6 +127,11 @@ namespace OrionClientLib.Hashers
             //TODO: Allow additional buffer room
             int maxNonces = (int)((ulong)devicesToUse.Min(x => x.MemorySize) / GPUDeviceHasher.MemoryPerNonce);
 
+            if(settings.MaxGPUBlockSize > 0)
+            {
+                maxNonces = Math.Min(maxNonces, settings.MaxGPUBlockSize);
+            }
+
             //Reduce to a power of 2
             maxNonces = (int)Math.Pow(2, (int)Math.Log2(maxNonces));
 
