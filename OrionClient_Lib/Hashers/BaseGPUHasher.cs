@@ -233,6 +233,8 @@ namespace OrionClientLib.Hashers
                         continue;
                     }
 
+                    TimeSpan start = _sw.Elapsed;
+
                     #region Program Generation
 
                     int rangeSize = _totalNonces / _threads;
@@ -348,6 +350,8 @@ namespace OrionClientLib.Hashers
                     });
 
                     #endregion
+
+                    cpuData.ProgramGenerationTime = _sw.Elapsed - start;
 
                     if (_hasNotice)
                     {
@@ -968,6 +972,7 @@ namespace OrionClientLib.Hashers
                         {
                             Index = _deviceId,
                             ExecutionTime = deviceData.ExecutionTime,
+                            ProgramGenerationTime = deviceData.CurrentCPUData.ProgramGenerationTime,
                             GPUEquihashTime = deviceData.EquihashTime,
                             GPUHashXTime = deviceData.HashXTime,
                             NumNonces = (ulong)_nonceCount,

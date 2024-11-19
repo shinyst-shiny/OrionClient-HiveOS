@@ -278,7 +278,14 @@ namespace OrionClientLib.Modules
             currentInfo.CurrentRate = e;
 
             //Update data
-            _render.UpdateCell(_hasherIndex, 1, currentInfo.CurrentRate.ChallengeSolutionsPerSecond.ToString());
+            if(e.ProgramGenerationTooLong)
+            {
+                _render.UpdateCell(_hasherIndex, 1, $"[red]{currentInfo.CurrentRate.ChallengeSolutionsPerSecond}[/]");
+            }
+            else
+            {
+                _render.UpdateCell(_hasherIndex, 1, currentInfo.CurrentRate.ChallengeSolutionsPerSecond.ToString());
+            }
             _render.UpdateCell(_hasherIndex, 2, currentInfo.MinRate.SolutionsPerSecond.ToString());
             _render.UpdateCell(_hasherIndex, 3, currentInfo.MaxRate.SolutionsPerSecond.ToString());
 

@@ -281,7 +281,16 @@ namespace OrionClientLib.Modules
 
             _hashrateTable.UpdateCell(index, 2, e.CurrentThreads == -1 ? "-" : e.CurrentThreads.ToString());
             _hashrateTable.UpdateCell(index, 3, hasher.IsMiningPaused ? "[yellow]Paused[/]" :"[green]Mining[/]");
-            _hashrateTable.UpdateCell(index, 4, e.ChallengeSolutionsPerSecond.ToString());
+
+            if(hasher.HardwareType == IHasher.Hardware.GPU && e.ProgramGenerationTooLong)
+            {
+                _hashrateTable.UpdateCell(index, 4, $"[red]{e.ChallengeSolutionsPerSecond}[/]");
+            }
+            else
+            {
+                _hashrateTable.UpdateCell(index, 4, e.ChallengeSolutionsPerSecond.ToString());
+            }
+
             _hashrateTable.UpdateCell(index, 5, e.SolutionsPerSecond.ToString());
             _hashrateTable.UpdateCell(index, 6, e.HighestDifficulty.ToString());
             _hashrateTable.UpdateCell(index, 7, e.ChallengeId.ToString());

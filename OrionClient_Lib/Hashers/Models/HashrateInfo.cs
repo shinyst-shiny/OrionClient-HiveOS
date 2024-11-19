@@ -10,8 +10,11 @@ namespace OrionClientLib.Hashers.Models
 {
     public class HashrateInfo
     {
+        public bool ProgramGenerationTooLong => ProgramGenerationTime.TotalSeconds > 0 && ProgramGenerationTime > ExecutionTime;
+
         public int Index { get; set; }
         public TimeSpan ExecutionTime { get; set; }
+        public TimeSpan ProgramGenerationTime { get; set; }
         public TimeSpan GPUHashXTime { get; set; }
         public TimeSpan GPUEquihashTime { get; set; }
         public TimeSpan TotalTime { get; set; }
