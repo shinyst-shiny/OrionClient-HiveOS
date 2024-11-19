@@ -65,6 +65,7 @@ namespace OrionClientLib.Hashers
         private List<GPUDeviceHasher> _gpuDevices = new List<GPUDeviceHasher>();
         private List<CPUData> _gpuData = new List<CPUData>();
         private Context _context;
+        private int _totalNonces = 0;
 
         private BlockingCollection<CPUData> _availableCPUData = new BlockingCollection<CPUData>(new ConcurrentQueue<CPUData>());
         private BlockingCollection<CPUData> _setupCPUData = new BlockingCollection<CPUData>(new ConcurrentQueue<CPUData>());
@@ -124,15 +125,16 @@ namespace OrionClientLib.Hashers
             }
 
             //TODO: Allow additional buffer room
-            int maxNonces = (int)((ulong)devicesToUse.Min(x => x.MemorySize) / GPUDeviceHasher.MemoryPerNonce);
+            int maxNonces = (int)((ulong)Math.Min(3000000000, devicesToUse.Min(x => x.MemorySize)) / GPUDeviceHasher.MemoryPerNonce);
 
             //Reduce to a power of 2
             maxNonces = (int)Math.Pow(2, (int)Math.Log2(maxNonces));
 
             //Reduce to 4096 being the max
             maxNonces = Math.Min(_maxNonces, maxNonces);
+            _totalNonces = maxNonces;
 
-            for(int i = 0; i < devicesToUse.Count; i++)
+            for (int i = 0; i < devicesToUse.Count; i++)
             {
                 var device = devicesToUse[i];
 
@@ -155,7 +157,7 @@ namespace OrionClientLib.Hashers
                 }
             }
 
-            for(int i =0; i < devicesToUse.Count * _maxQueueSize * 2; i++)
+            for (int i =0; i < devicesToUse.Count * _maxQueueSize * 2; i++)
             {
                 _availableCPUData.Add(new CPUData(maxNonces));
             }
@@ -218,14 +220,14 @@ namespace OrionClientLib.Hashers
 
                     #region Program Generation
 
-                    int rangeSize = _maxNonces / _threads;
+                    int rangeSize = _totalNonces / _threads;
 
                     if(rangeSize == 0)
                     {
                         rangeSize++;
                     }
 
-                    var rangePartitioner = Partitioner.Create(0, _maxNonces, rangeSize);
+                    var rangePartitioner = Partitioner.Create(0, _totalNonces, rangeSize);
 
                     Parallel.ForEach(rangePartitioner, new ParallelOptions { MaxDegreeOfParallelism = _threads }, (range, loopState) =>
                     {
