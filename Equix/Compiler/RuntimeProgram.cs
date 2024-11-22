@@ -505,20 +505,6 @@ namespace DrillX.Compiler
 
                 (RegisterId dst, RegisterId src, uint operand) = ((byte)instruction.Dst, (byte)instruction.Src, (uint)instruction.Operand);
 
-                //Console.WriteLine($"PC: {programCounter}. Instruction: {instruction.Type}. D: {instruction.Destination()} S: {instruction.Source()}. Registers: {String.Join(", ", regs.Registers)}");
-
-
-                unchecked
-                {
-                    var t = (long)11726471148735977661;
-                }
-
-                var aasdf = regs.Registers.Cast<long>().ToArray();
-
-                if (programCounter / 32 == 15)
-                {
-                    //return;
-                }
                 switch (instruction.Type)
                 {
                     case OpCode.Target:
@@ -633,9 +619,6 @@ namespace DrillX.Compiler
 
                 }
             }
-
-            var aasdf2 = regs.Registers.Cast<long>().ToArray();
-
         }
 
         private struct RegisterFile

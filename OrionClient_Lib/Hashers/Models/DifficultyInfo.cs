@@ -8,6 +8,8 @@ namespace OrionClientLib.Hashers.Models
 {
     public class DifficultyInfo
     {
+        public bool IsCPU { get; private set; }
+
         public ulong BestNonce { get; private set; }
         public int BestDifficulty { get; private set; }
         public byte[] BestSolution { get; private set; }
@@ -25,7 +27,7 @@ namespace OrionClientLib.Hashers.Models
             ChallengeId = challengeId;
         }
 
-        public void UpdateDifficulty(int difficulty, byte[] solution, ulong nonce)
+        public void UpdateDifficulty(int difficulty, byte[] solution, ulong nonce, bool isCPU)
         {
             lock (_locker)
             {
@@ -37,6 +39,7 @@ namespace OrionClientLib.Hashers.Models
                 BestDifficulty = difficulty;
                 BestNonce = nonce;
                 BestSolution = solution;
+                IsCPU = isCPU;
             }
         }
 
@@ -49,7 +52,8 @@ namespace OrionClientLib.Hashers.Models
                     BestDifficulty = BestDifficulty,
                     BestNonce = BestNonce,
                     BestSolution = BestSolution,
-                    ChallengeId = ChallengeId
+                    ChallengeId = ChallengeId,
+                    IsCPU = IsCPU
                 };
             }
         }

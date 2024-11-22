@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json;
 using OrionClientLib.Modules.Models;
+using OrionClientLib.Modules.SettingsData;
 using Solnet.Wallet;
 using Solnet.Wallet.Utilities;
 using System;
@@ -15,7 +16,6 @@ namespace OrionClientLib
     {
         public static string FilePath = Path.Combine(AppContext.BaseDirectory, "settings.json");
 
-        public int CPUThreads { get; set; } = 1;
         public string Pool { get; set; }
         public string CPUHasher { get; set; } = "Stock";
         public string GPUHasher { get; set; } = "Disabled";
@@ -25,18 +25,52 @@ namespace OrionClientLib
         public string KeyFile { get; set; }
         public string PublicKey { get; set; }
 
+        [Obsolete]
+        public int CPUThreads { get; set; } = 1;
+        [Obsolete]
         public bool AutoSetCPUAffinity { get; set; } = true;
+
+        [Obsolete]
         public int MaxGPUBlockSize { get; set; } = 2048;
+        [Obsolete]
         public int ProgramGenerationThreads { get; set; } = -1;
 
         //public bool EnableDebugging { get; set; }
+        public bool MigratedSettings { get; set; } = false;
+
+
+        [SettingDetails("CPU Settings", "View CPU settings")]
+        public CPUSettings CPUSetting { get; set; } = new CPUSettings();
+        [SettingDetails("GPU Settings", "View GPU settings")]
+        public GPUSettings GPUSetting { get; set; } = new GPUSettings();
+
+        public class CPUSettings
+        {
+            [SettingDetails("Threads", "Total threads to use for mining")]
+            [ThreadValidator]
+            public int CPUThreads { get; set; } = 1;
+
+            [SettingDetails("Auto Set CPU Affinity", "Automatically sets CPU affinity when only CPU mining is enabled and only using physical thread count (windows only)")]
+            public bool AutoSetCPUAffinity { get; set; } = true;
+        }
+
+        public class GPUSettings
+        {
+            [SettingDetails("GPU Block Size", "Higher values use more ram and take longer to run. Lower values can cause lower hashrates")]
+            [OptionSettingValidation<int>(2048, 1024, 512, 256, 256, 128)]
+            public int MaxGPUBlockSize { get; set; } = 2048;
+
+            [SettingDetails("Program Generation Threads", "Total CPU threads to use to generation program instructions")]
+            [ThreadValidator]
+            public int ProgramGenerationThreads { get; set; } = -1;
+        }
 
         public static async Task<Settings> LoadAsync()
         {
             if (!File.Exists(FilePath))
             {
                 Settings settings = new Settings();
-                settings.CPUThreads = Environment.ProcessorCount;
+                settings.CPUSetting.CPUThreads = Environment.ProcessorCount;
 
                 return settings;
             }
@@ -47,6 +81,18 @@ namespace OrionClientLib
             if (t == null)
             {
                 throw new Exception("Failed to read setting file");
+            }
+
+            //Migrats to new settings
+            if (!t.MigratedSettings)
+            {
+                t.CPUSetting.CPUThreads = t.CPUSetting.CPUThreads;
+#pragma warning disable CS0612 // Type or member is obsolete
+                t.CPUSetting.AutoSetCPUAffinity = t.AutoSetCPUAffinity;
+                t.GPUSetting.MaxGPUBlockSize = t.MaxGPUBlockSize;
+                t.GPUSetting.ProgramGenerationThreads = t.ProgramGenerationThreads;
+#pragma warning restore CS0612 // Type or member is obsolete
+                t.MigratedSettings = true;
             }
 
             return t;

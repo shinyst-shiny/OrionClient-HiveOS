@@ -82,7 +82,7 @@ namespace OrionClientLib.Modules
 
             bool cpuEnabled = cpuHasher != null && cpuHasher is not DisabledHasher;
             bool gpuEnabled = gpuHasher != null && gpuHasher is not DisabledHasher;
-            bool setAffinity = cpuEnabled && !gpuEnabled && _currentData.Settings.AutoSetCPUAffinity;
+            bool setAffinity = cpuEnabled && !gpuEnabled && _currentData.Settings.CPUSetting.AutoSetCPUAffinity;
 
             //TODO: Check for efficiency cores
             if(OperatingSystem.IsWindows() && setAffinity)
@@ -90,7 +90,7 @@ namespace OrionClientLib.Modules
                 List<CoreInfo> coreInformation = SystemInformation.GetCoreInformation();
 
                 //Only use physical cores
-                if(coreInformation.Count <= _currentData.Settings.CPUThreads)
+                if(coreInformation.Count <= _currentData.Settings.CPUSetting.CPUThreads)
                 {
                     nint processorMask = 0;
                     nint fullMask = 0;
@@ -170,14 +170,14 @@ namespace OrionClientLib.Modules
 
             bool cpuEnabled = cpuHasher != null && cpuHasher is not DisabledHasher;
             bool gpuEnabled = gpuHasher != null && gpuHasher is not DisabledHasher;
-            bool setAffinity = OperatingSystem.IsWindows() && cpuEnabled && !gpuEnabled && _currentData.Settings.AutoSetCPUAffinity;
+            bool setAffinity = OperatingSystem.IsWindows() && cpuEnabled && !gpuEnabled && _currentData.Settings.CPUSetting.AutoSetCPUAffinity;
 
             if (OperatingSystem.IsWindows() && setAffinity)
             {
                 List<CoreInfo> coreInformation = SystemInformation.GetCoreInformation();
 
                 //Only use physical cores
-                if (coreInformation.Count <= _currentData.Settings.CPUThreads)
+                if (coreInformation.Count <= _currentData.Settings.CPUSetting.CPUThreads)
                 {
                     nint processorMask = 0;
                     nint fullMask = 0;
@@ -257,6 +257,8 @@ namespace OrionClientLib.Modules
                 _logger.Log(LogLevel.Warn, $"Pool info table expects {_poolInfoTable.Columns.Count} columns. Received: {e.Length}");
                 return;
             }
+
+            _poolInfoTable.ShowRowSeparators = true;
 
             //Allows 10 rows
             if (_poolInfoTable.Rows.Count >= 10)

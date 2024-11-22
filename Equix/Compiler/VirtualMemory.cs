@@ -16,7 +16,7 @@ namespace DrillX.Compiler
         {
             void* mem;
 
-            if (OperatingSystem.IsWindows())
+            if (OperatingSystem.IsOSPlatformVersionAtLeast("windows", 5, 1, 2600))
             {
                 mem = PInvoke.VirtualAlloc(null, bytes, VIRTUAL_ALLOCATION_TYPE.MEM_COMMIT, PAGE_PROTECTION_FLAGS.PAGE_EXECUTE_READWRITE);
             }
@@ -43,7 +43,7 @@ namespace DrillX.Compiler
 
         public static int PageProtect(void* ptr, nuint bytes, bool executeRead)
         {
-            if (OperatingSystem.IsWindows())
+            if (OperatingSystem.IsOSPlatformVersionAtLeast("windows", 5, 1, 2600))
             {
                 PAGE_PROTECTION_FLAGS oldp;
 
@@ -79,7 +79,7 @@ namespace DrillX.Compiler
 
         public static void HashxVmFree(void* ptr, nuint bytes)
         {
-            if (OperatingSystem.IsWindows())
+            if (OperatingSystem.IsOSPlatformVersionAtLeast("windows", 5, 1, 2600))
             {
                 PInvoke.VirtualFree(ptr, 0, VIRTUAL_FREE_TYPE.MEM_RELEASE);
             }

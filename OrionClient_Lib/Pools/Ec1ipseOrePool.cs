@@ -18,6 +18,6 @@ namespace OrionClientLib.Pools
         public override bool HideOnPoolList { get; } = false;
         public override string HostName { get; protected set; } = "ec1ipse.me";
 
-        public override double MiniumumRewardPayout => 0.05;
+        public override Dictionary<Coin, double> MiniumumRewardPayout => new Dictionary<Coin, double> { { Coin.Ore, 0.05 } };
     }
 }

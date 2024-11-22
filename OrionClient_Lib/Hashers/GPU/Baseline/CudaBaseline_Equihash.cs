@@ -302,7 +302,7 @@ namespace OrionClientLib.Hashers.GPU.Baseline
             const int indiceALength = NumCoarseBuckets; //1KB
             const int indiceBLength = NumCoarseBuckets; //1KB
             const int cacheLength = CacheSize * BlockSize; //~38KB
-            const int cache2Length = Cache2Size * BlockSize;
+           // const int cache2Length = Cache2Size * BlockSize;
             //var sMemory = SharedMemory.Allocate<byte>(MaxSharedSize);
 
             var scratchIndices = SharedMemory.Allocate<byte>(scratchIndiceLength);// sMemory.SubView(scratchIndiceOffset, scratchIndiceLength).Cast<byte>();// SharedMemory.Allocate<byte>(NumFineBuckets / 2 * BlockSize);

@@ -92,11 +92,11 @@ namespace OrionClientLib.Hashers
             _pool = pool;
             _running = true;
             //Use total CPU threads for now
-            _threads = settings.CPUThreads; //TODO: Change to use remaining threads
+            _threads = settings.CPUSetting.CPUThreads; //TODO: Change to use remaining threads
 
-            if(settings.ProgramGenerationThreads > 0)
+            if(settings.GPUSetting.ProgramGenerationThreads > 0)
             {
-                _threads = settings.ProgramGenerationThreads;
+                _threads = settings.GPUSetting.ProgramGenerationThreads;
             }
 
             _info = new HasherInfo();
@@ -138,9 +138,9 @@ namespace OrionClientLib.Hashers
             //TODO: Allow additional buffer room
             int maxNonces = (int)((ulong)devicesToUse.Min(x => x.MemorySize) / GPUDeviceHasher.MemoryPerNonce);
 
-            if(settings.MaxGPUBlockSize > 0)
+            if(settings.GPUSetting.MaxGPUBlockSize > 0)
             {
-                maxNonces = Math.Min(maxNonces, settings.MaxGPUBlockSize);
+                maxNonces = Math.Min(maxNonces, settings.GPUSetting.MaxGPUBlockSize);
             }
 
             //Reduce to a power of 2
@@ -458,7 +458,7 @@ namespace OrionClientLib.Hashers
                     return context.Devices.Where(x => x.AcceleratorType != AcceleratorType.CPU).ToList();
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return null;
             }
@@ -903,7 +903,7 @@ namespace OrionClientLib.Hashers
                                     }
 
                                     currentBestDifficulty = difficulty;
-                                    _hasherInfo.UpdateDifficulty(difficulty, MemoryMarshal.Cast<ushort, byte>(eSolution).ToArray(), nonce);
+                                    _hasherInfo.UpdateDifficulty(difficulty, MemoryMarshal.Cast<ushort, byte>(eSolution).ToArray(), nonce, false);
                                 }
 
                                 [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -1,5 +1,7 @@
 ﻿using Equix;
 using Hardware.Info;
+using ILGPU;
+using ILGPU.IR;
 using NLog;
 using Org.BouncyCastle.Crypto.Signers;
 using OrionClientLib;
@@ -11,13 +13,14 @@ using OrionClientLib.Hashers.Models;
 using OrionClientLib.Modules;
 using OrionClientLib.Modules.Models;
 using OrionClientLib.Pools;
+using OrionClientLib.Pools.CoalPool;
 using OrionClientLib.Pools.HQPool;
 using Solnet.Wallet;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
-using System.Management;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
@@ -46,8 +49,6 @@ namespace OrionClient
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Program))]
         static async Task Main(string[] args)
         {
-            Console.Clear();
-
             if (!IsSupported())
             {
                 Console.WriteLine($"Only x64 Windows/Linux is currently supported");
@@ -267,7 +268,7 @@ namespace OrionClient
             (IHasher cpuHasher, IHasher gpuHasher) = data.GetChosenHasher();
             IPool pool = data.GetChosenPool();
 
-            prompt.Title($"Wallet: {publicKey ?? "N/A"}\nHasher: CPU - {cpuHasher?.Name ?? "N/A"} ({_settings.CPUThreads} threads), GPU - {gpuHasher?.Name ?? "N/A"}\nPool: {pool?.DisplayName ?? "N/A"}" +
+            prompt.Title($"Wallet: {publicKey ?? "N/A"}\nHasher: CPU - {cpuHasher?.Name ?? "N/A"} ({_settings.CPUSetting.CPUThreads} threads), GPU - {gpuHasher?.Name ?? "N/A"}\nPool: {pool?.DisplayName ?? "N/A"}" +
                 $"{(!String.IsNullOrEmpty(_message) ? $"\n\n[red]Error: {_message}[/]\n" : String.Empty)}");
             _message = String.Empty;
 

@@ -33,11 +33,11 @@ namespace OrionClientLib.Hashers.Models
             DifficultyInfo = new DifficultyInfo(challengeId);
         }
 
-        public void UpdateDifficulty(int difficulty, byte[] solution, ulong nonce)
+        public void UpdateDifficulty(int difficulty, byte[] solution, ulong nonce, bool isCPU = true)
         {
             if (nonce >= StartNonce && nonce <= EndNonce)
             {
-                DifficultyInfo.UpdateDifficulty(difficulty, solution, nonce);
+                DifficultyInfo.UpdateDifficulty(difficulty, solution, nonce, isCPU);
             }
         }
 

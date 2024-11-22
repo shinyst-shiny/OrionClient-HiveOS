@@ -5,6 +5,7 @@ using Newtonsoft.Json.Linq;
 using NLog;
 using Org.BouncyCastle.Asn1.Cmp;
 using Org.BouncyCastle.Bcpg.OpenPgp;
+using Org.BouncyCastle.Crypto.Engines;
 using Org.BouncyCastle.Crypto.Signers;
 using OrionClientLib.CoinPrograms;
 using OrionClientLib.Hashers.Models;
@@ -16,6 +17,7 @@ using Solnet.Wallet.Utilities;
 using Spectre.Console;
 using System;
 using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data.SqlTypes;
 using System.Diagnostics;
@@ -54,7 +56,7 @@ namespace OrionClientLib.Pools
         public abstract override bool HideOnPoolList { get; }
         public override bool RequiresKeypair { get; } = true;
         public override Uri WebsocketUrl => new Uri($"wss://{HostName}/v2/ws?timestamp={_timestamp}");
-        public virtual double MiniumumRewardPayout => 0;
+        public virtual Dictionary<Coin, double> MiniumumRewardPayout => new Dictionary<Coin, double> { { Coins, 0 } };
 
 
         protected HttpClient _client;
@@ -138,10 +140,7 @@ namespace OrionClientLib.Pools
                         break;
                     case OreHQResponseTypes.SubmissionResult:
                         {
-                            OreHQPoolSubmissionResponse submissionResponse = new OreHQPoolSubmissionResponse();
-                            submissionResponse.Deserialize(buffer);
-
-                            HandleSubmissionResult(submissionResponse);
+                            HandleSubmissionResult(buffer);
                         }
                         break;
                     default:
@@ -274,14 +273,28 @@ namespace OrionClientLib.Pools
 
                 builder.AppendLine();
 
-                builder.AppendLine($"{"Wallet Balance".PadRight(14)} {_minerInformation.WalletBalance} {Coins}");
-                builder.AppendLine($"{"Mining Rewards".PadRight(14)} {_minerInformation.TotalMiningRewards} {Coins} " +
-                    $"{(_minerInformation.TotalMiningRewards.BalanceChangeSinceUpdate > 0 ? $"([green]+{_minerInformation.TotalMiningRewards.BalanceChangeSinceUpdate:0.00000000000}[/])" : String.Empty)}" +
-                    $"{(_minerInformation.TotalMiningRewards.TotalChange > 0 ? $"[[[Cyan]+{_minerInformation.TotalMiningRewards.TotalChange:0.00000000000} since start[/]]]" : String.Empty)}");
-               
-                builder.AppendLine($"{"Stake Rewards".PadRight(14)} {_minerInformation.TotalStakeRewards} {Coins} " +
-                    $"{(_minerInformation.TotalStakeRewards.BalanceChangeSinceUpdate > 0 ? $"([green]+{_minerInformation.TotalStakeRewards.BalanceChangeSinceUpdate:0.00000000000}[/])" : String.Empty)}" +
-                    $"{(_minerInformation.TotalStakeRewards.TotalChange > 0 ? $"[[[Cyan]+{_minerInformation.TotalStakeRewards.TotalChange:0.00000000000} since start[/]]]" : String.Empty)}");
+                foreach(Coin c in Enum.GetValues(typeof(Coin)))
+                {
+                    if(!Coins.HasFlag(c))
+                    {
+                        continue;
+                    }
+
+                    var walletBalance = _minerInformation.WalletBalance[c];
+                    var miningReward = _minerInformation.TotalMiningRewards[c];
+                    var stakeReward = _minerInformation.TotalStakeRewards[c];
+
+                    builder.AppendLine($"{c} Info:");
+                    builder.AppendLine($"   {"Wallet Balance".PadRight(14)} {walletBalance} {c}");
+                    builder.AppendLine($"   {"Mining Rewards".PadRight(14)} {miningReward} {c} " +
+                        $"{(miningReward.BalanceChangeSinceUpdate > 0 ? $"([green]+{miningReward.BalanceChangeSinceUpdate:0.00000000000}[/])" : String.Empty)}" +
+                        $"{(miningReward.TotalChange > 0 ? $"[[[Cyan]+{miningReward.TotalChange:0.00000000000} since start[/]]]" : String.Empty)}");
+                    builder.AppendLine($"   {"Stake Rewards".PadRight(14)} {stakeReward} {c} " +
+                    $"{(stakeReward.BalanceChangeSinceUpdate > 0 ? $"([green]+{stakeReward.BalanceChangeSinceUpdate:0.00000000000}[/])" : String.Empty)}" +
+                    $"{(stakeReward.TotalChange > 0 ? $"[[[Cyan]+{stakeReward.TotalChange:0.00000000000} since start[/]]]" : String.Empty)}");
+
+                    builder.AppendLine();
+                }
 
                 if (_minerInformation.Stakes?.Count > 0)
                 {
@@ -306,29 +319,49 @@ namespace OrionClientLib.Pools
                     _errorMessage = String.Empty;
                 }
 
-                SelectionPrompt<string> choices = new SelectionPrompt<string>();
+                SelectionPrompt<(string, Coin)> choices = new SelectionPrompt<(string, Coin)>();
                 choices.Title(builder.ToString());
+                choices.UseConverter((obj) =>
+                {
+                    return obj.Item1;
+                });
 
                 const string claimRewardBalance = "Claim Mining Rewards";
                 const string claimStakeBalance = "Claim Staking Rewards";
                 const string changeWallet = "Change Claim Wallet";
                 const string refreshBalance = "Refresh Balance";
 
-                if (_minerInformation.TotalMiningRewards.CurrentBalance > MiniumumRewardPayout)
+                foreach(Coin c in Enum.GetValues(typeof(Coin)))
                 {
-                    choices.AddChoice(claimRewardBalance);
+                    if(!Coins.HasFlag(c))
+                    {
+                        continue;
+                    }
+
+                    List<(string, Coin)> innerChoices = new List<(string, Coin)>();
+
+                    if (_minerInformation.TotalMiningRewards[c].CurrentBalance >= MiniumumRewardPayout[c])
+                    {
+                        innerChoices.Add((claimRewardBalance, c));
+                    }
+
+                    if (_minerInformation.TotalStakeRewards[c].CurrentBalance >= MiniumumRewardPayout[c])
+                    {
+                        innerChoices.Add((claimStakeBalance, c));
+                    }
+
+                    if(innerChoices.Count > 0)
+                    {
+                        choices.AddChoiceGroup(($"{c} ({MiniumumRewardPayout[c]} min payout)", Coins), innerChoices);
+                    }
                 }
 
-                if (_minerInformation.Stakes?.Any(x => x.RewardsUI > MiniumumRewardPayout) == true)
-                {
-                    choices.AddChoice(claimStakeBalance);
-                }
 
-                choices.AddChoice(refreshBalance);
-                choices.AddChoice(changeWallet);
-                choices.AddChoice("Exit");
+                choices.AddChoice((refreshBalance, Coins));
+                choices.AddChoice((changeWallet, Coins));
+                choices.AddChoice(("Exit", Coins));
 
-                string choice = await choices.ShowAsync(AnsiConsole.Console, token);
+                (string choice, Coin coin) = await choices.ShowAsync(AnsiConsole.Console, token);
 
                 switch (choice)
                 {
@@ -339,10 +372,10 @@ namespace OrionClientLib.Pools
                         await SetClaimWalletOptionAsync(token);
                         break;
                     case claimStakeBalance:
-                        await ClaimStakeOptionAsync(token);
+                        await ClaimStakeOptionAsync(coin, token);
                         break;
                     case claimRewardBalance:
-                        await ClaimRewardsOptionAsync(token);
+                        await ClaimRewardsOptionAsync(coin, token);
                         break;
                     default:
                         return;
@@ -385,17 +418,17 @@ namespace OrionClientLib.Pools
 
             if (result?.ToLower() == "clear")
             {
-                _poolSettings.ClaimWallet = null;
+                _poolSettings.ClaimWallet = String.Empty;
             }
             else
             {
-                _poolSettings.ClaimWallet = result;
+                _poolSettings.ClaimWallet = result ?? String.Empty;
             }
 
             await _poolSettings.SaveAsync();
         }
 
-        protected async Task ClaimStakeOptionAsync(CancellationToken token)
+        protected async Task ClaimStakeOptionAsync(Coin coin, CancellationToken token)
         {
             string message = String.Empty;
 
@@ -411,7 +444,7 @@ namespace OrionClientLib.Pools
                     return pool == null ? "Exit" : $"{pool.PoolName}: {pool.RewardsUI} {Coins}";
                 });
 
-                selectionPrompt.AddChoices(_minerInformation.Stakes.Where(x => x.RewardsUI > MiniumumRewardPayout));
+                selectionPrompt.AddChoices(_minerInformation.Stakes.Where(x => x.RewardsUI > MiniumumRewardPayout[coin]));
                 selectionPrompt.AddChoice(null);
                 message = String.Empty;
 
@@ -424,11 +457,11 @@ namespace OrionClientLib.Pools
                 }
 
                 //Display claim prompt
-                TextPrompt<double> claimPrompt = new TextPrompt<double>($"Enter claim amount between ({MiniumumRewardPayout}-{result.RewardsUI}): ");
+                TextPrompt<double> claimPrompt = new TextPrompt<double>($"Enter claim amount between ({MiniumumRewardPayout[coin]}-{result.RewardsUI}): ");
                 claimPrompt.DefaultValue(result.RewardsUI);
                 claimPrompt.Validate((v) =>
                 {
-                    return v == 0 || (v >= MiniumumRewardPayout && v <= result.RewardsUI);
+                    return v == 0 || (v >= MiniumumRewardPayout[coin] && v <= result.RewardsUI);
                 });
 
                 double claimAmount = await claimPrompt.ShowAsync(AnsiConsole.Console, token);
@@ -469,7 +502,7 @@ namespace OrionClientLib.Pools
             }
         }
 
-        protected async Task ClaimRewardsOptionAsync(CancellationToken token)
+        protected async Task ClaimRewardsOptionAsync(Coin coin, CancellationToken token)
         {
             string message = String.Empty;
 
@@ -478,11 +511,11 @@ namespace OrionClientLib.Pools
             AnsiConsole.Clear();
 
             //Display claim prompt
-            TextPrompt<double> claimPrompt = new TextPrompt<double>($"Enter claim amount between ({MiniumumRewardPayout}-{_minerInformation.TotalMiningRewards.CurrentBalance}): ");
-            claimPrompt.DefaultValue(_minerInformation.TotalMiningRewards.CurrentBalance);
+            TextPrompt<double> claimPrompt = new TextPrompt<double>($"Enter claim amount between ({MiniumumRewardPayout[coin]}-{_minerInformation.TotalMiningRewards[coin].CurrentBalance}): ");
+            claimPrompt.DefaultValue(_minerInformation.TotalMiningRewards[coin].CurrentBalance);
             claimPrompt.Validate((v) =>
             {
-                return v == 0 || (v >= MiniumumRewardPayout && v <= _minerInformation.TotalMiningRewards.CurrentBalance);
+                return v == 0 || (v >= MiniumumRewardPayout[coin] && v <= _minerInformation.TotalMiningRewards[coin].CurrentBalance);
             });
 
             double claimAmount = await claimPrompt.ShowAsync(AnsiConsole.Console, token);
@@ -496,16 +529,16 @@ namespace OrionClientLib.Pools
             string claimWallet = _poolSettings.ClaimWallet ?? _wallet.Account.PublicKey;
             bool isSame = claimWallet == _wallet.Account.PublicKey;
 
-            ConfirmationPrompt confirmationPrompt = new ConfirmationPrompt($"Claim {claimAmount} {Coins} mining rewards to {claimWallet}" +
+            ConfirmationPrompt confirmationPrompt = new ConfirmationPrompt($"Claim {claimAmount} {coin} mining rewards to {claimWallet}" +
                 $"{(!isSame ? $"\n[yellow]Warning: Claim wallet {claimWallet} is different from mining wallet {_wallet.Account.PublicKey}. Continue?[/]" : String.Empty)}?");
             confirmationPrompt.DefaultValue = false;
 
             if (await confirmationPrompt.ShowAsync(AnsiConsole.Console, token))
             {
-                ulong ulongClaimAmount = (ulong)(claimAmount * (Coins == Coin.Ore ? OreProgram.OreDecimals : CoalProgram.CoalDecimals));
+                ulong ulongClaimAmount = (ulong)(claimAmount * (coin == Coin.Ore ? OreProgram.OreDecimals : CoalProgram.CoalDecimals));
 
                 //Try claim
-                (bool success, string message) claimResult = await ClaimMiningRewards(claimWallet, ulongClaimAmount, token);
+                (bool success, string message) claimResult = await ClaimMiningRewards(coin, claimWallet, ulongClaimAmount, token);
 
                 if (claimResult.success)
                 {
@@ -583,17 +616,17 @@ namespace OrionClientLib.Pools
                 {
                     await AnsiConsole.Status().StartAsync($"Grabbing balance information", async ctx =>
                     {
-                        await Update();
+                        await Update(token);
                     });
                 }
                 else
                 {
-                    await Update();
+                    await Update(token);
                 }
 
                 return (true, String.Empty);
             }
-            catch(TaskCanceledException ex)
+            catch(TaskCanceledException)
             {
                 return (false, String.Empty);
             }
@@ -601,65 +634,97 @@ namespace OrionClientLib.Pools
             {
                 return (false, ex.Message);
             }
-
-            async Task Update()
-            {
-                var balanceInfo = await GetBalanceAsync(token);
-
-                if (balanceInfo.success)
-                {
-                    _minerInformation.UpdateWalletBalance(balanceInfo.balance);
-
-                }
-
-                var rewardInfo = await GetRewardAsync(token);
-
-                if (rewardInfo.success)
-                {
-                    _minerInformation.UpdateMiningRewards(rewardInfo.reward);
-
-                }
-
-                _minerInformation.UpdateStakes(await GetStakingInformationAsync(token));
-            }
         }
 
-        protected virtual async Task<(double value, bool success)> GetF64DataAsync(string endpoint, CancellationToken token)
+        protected virtual async Task Update(CancellationToken token)
         {
+            var balanceInfo = await GetBalanceAsync(token);
+
+            if (balanceInfo.success)
+            {
+                foreach(var bInfo in balanceInfo.balances)
+                {
+                    _minerInformation.UpdateWalletBalance(bInfo.coin, bInfo.balance);
+                }
+            }
+
+            var rewardInfo = await GetRewardAsync(token);
+
+            if (rewardInfo.success)
+            {
+                foreach (var rInfo in rewardInfo.balances)
+                {
+                    _minerInformation.UpdateMiningRewards(rInfo.coin, rInfo.reward);
+                }
+
+            }
+
+            _minerInformation.UpdateStakes(await GetStakingInformationAsync(token));
+        }
+
+        protected virtual async Task<(List<(Coin, double)> value, bool success)> GetDataAsync(string endpoint, CancellationToken token)
+        {
+            List<(Coin, double)> balanceData = new List<(Coin, double)>();
+
             try
             {
                 using var response = await _client.GetAsync($"/miner/{endpoint}?pubkey={_publicKey}", token);
 
                 if (response.StatusCode == HttpStatusCode.BadRequest)
                 {
-                    return default;
+                    return (balanceData, false);
                 }
 
                 string data = await response.Content.ReadAsStringAsync();
 
                 if (!double.TryParse(data, out double value))
                 {
-                    return default;
+                    return (balanceData, false);
                 }
 
-                return (value, true);
+                balanceData.Add((Coins, value));
+
+                return (balanceData, true);
             }
             catch(Exception ex)
             {
                 _logger.Log(LogLevel.Warn, $"Failed to request {endpoint} data from pool. Reason: {ex.Message}");
 
-                return default;
+                return (balanceData, false);
             }
         }
 
-        protected virtual async Task<(double balance, bool success)> GetBalanceAsync(CancellationToken token)
+        protected virtual async Task<(List<(Coin coin, double balance)> balances, bool success)> GetBalanceAsync(CancellationToken token)
         {
-            return await GetF64DataAsync("balance", token);
+            List<(Coin, double)> balances = new List<(Coin, double)>();
+
+            var result = await GetDataAsync("balance", token);
+
+            if(!result.success)
+            {
+                return (balances, false);
+            }
+
+            balances.AddRange(result.value);
+
+            return (balances, true);
         }
 
-        protected virtual async Task<(double reward, bool success)> GetRewardAsync(CancellationToken token)
+        protected virtual async Task<(List<(Coin coin, double reward)> balances, bool success)> GetRewardAsync(CancellationToken token)
         {
-            return await GetF64DataAsync("rewards", token);
+            List<(Coin, double)> rewards = new List<(Coin, double)>();
+
+            var result = await GetDataAsync("rewards", token);
+
+            if (!result.success)
+            {
+                return (rewards, false);
+            }
+
+            rewards.AddRange(result.value);
+
+            return (rewards, true);
+
         }
 
         protected virtual async Task<List<OreHQPoolStake>> GetStakingInformationAsync(CancellationToken token)
@@ -730,7 +795,7 @@ namespace OrionClientLib.Pools
             }
         }
 
-        protected virtual async Task<(bool success, string message)> ClaimMiningRewards(string claimWallet, ulong amount, CancellationToken token)
+        protected virtual async Task<(bool success, string message)> ClaimMiningRewards(Coin coin, string claimWallet, ulong amount, CancellationToken token)
         {
             try
             {
@@ -806,9 +871,12 @@ namespace OrionClientLib.Pools
             });
         }
 
-        protected virtual async void HandleSubmissionResult(OreHQPoolSubmissionResponse submissionResponse)
+        protected virtual async void HandleSubmissionResult(ArraySegment<byte> buffer)
         {
-            CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            OreHQPoolSubmissionResponse submissionResponse = new OreHQPoolSubmissionResponse();
+            submissionResponse.Deserialize(buffer);
+
+            using CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
             //This data takes ~20s to update properly, so everything is off by 1 update
             await RefreshStakeBalancesAsync(false, cts.Token);
@@ -820,8 +888,8 @@ namespace OrionClientLib.Pools
                 $"{submissionResponse.MinerEarnedRewards:0.00000000000}",
                 //$"{_minerInformation.TotalStakeRewards.BalanceChangeSinceUpdate:0.00000000000}",
                 $"{submissionResponse.TotalRewards:0.00000000000}",
-                $"{_minerInformation.TotalMiningRewards:0.00000000000}",
-                $"{_minerInformation.TotalStakeRewards:0.00000000000}",
+                $"{_minerInformation.TotalMiningRewards[Coins]:0.00000000000}",
+                $"{_minerInformation.TotalStakeRewards[Coins]:0.00000000000}",
             ]);
         }
 
@@ -882,7 +950,7 @@ namespace OrionClientLib.Pools
 
         protected virtual async Task<bool> SendPoolSubmission(DifficultyInfo info)
         {
-            _logger.Log(LogLevel.Debug, $"Sending solution. Diff: {info.BestDifficulty}. Challenge Id: {info.ChallengeId}. Nonce: {info.BestNonce}");
+            _logger.Log(LogLevel.Debug, $"[{(info.IsCPU ? "CPU" : "GPU")}] Sending solution. Diff: {info.BestDifficulty}. Challenge Id: {info.ChallengeId}. Nonce: {info.BestNonce}");
 
             byte[] nonce = new byte[24];
             info.BestSolution.CopyTo(nonce, 0);
@@ -915,9 +983,9 @@ namespace OrionClientLib.Pools
 
         protected class MinerPoolInformation
         {
-            public BalanceTracker<double> TotalStakeRewards { get; private set; } = new BalanceTracker<double>();
-            public BalanceTracker<double> TotalMiningRewards { get; private set; } = new BalanceTracker<double>();
-            public BalanceTracker<double> WalletBalance { get; private set; } = new BalanceTracker<double>();
+            public ConcurrentDictionary<Coin, BalanceTracker<double>> TotalStakeRewards { get; private set; } = new ConcurrentDictionary<Coin, BalanceTracker<double>>();
+            public ConcurrentDictionary<Coin, BalanceTracker<double>> TotalMiningRewards { get; private set; } = new ConcurrentDictionary<Coin, BalanceTracker<double>>();
+            public ConcurrentDictionary<Coin, BalanceTracker<double>> WalletBalance { get; private set; } = new ConcurrentDictionary<Coin, BalanceTracker<double>>();
 
             public List<OreHQPoolStake> Stakes { get; set; }
 
@@ -925,6 +993,16 @@ namespace OrionClientLib.Pools
 
             public MinerPoolInformation(Coin coin)
             {
+                foreach(Coin c in Enum.GetValues(typeof(Coin)))
+                {
+                    if(coin.HasFlag(c))
+                    {
+                        TotalStakeRewards.TryAdd(c, new BalanceTracker<double>());
+                        TotalMiningRewards.TryAdd(c, new BalanceTracker<double>());
+                        WalletBalance.TryAdd(c, new BalanceTracker<double>());
+                    }
+                }
+
                 _coin = coin;
             }
 
@@ -939,14 +1017,14 @@ namespace OrionClientLib.Pools
 
                 double totalStakeRewards = 0;
 
-                var stakeMints = _coin == Coin.Ore ? OreProgram.BoostMints : null;
+                var stakeMints = _coin.HasFlag(Coin.Ore) ? OreProgram.BoostMints : null;
 
                 if(stakeMints == null)
                 {
                     return;
                 }
 
-                var boostAccounts = _coin == Coin.Ore ? OreProgram.BoostMints : null;
+                var boostAccounts = _coin.HasFlag(Coin.Ore) ? OreProgram.BoostMints : null;
                 
                 foreach(OreHQPoolStake stake in stakes)
                 {
@@ -956,20 +1034,20 @@ namespace OrionClientLib.Pools
                         stake.Decimals = Math.Pow(10, d.decimals);
                     }
 
-                    totalStakeRewards += stake.RewardsBalance / (_coin == Coin.Ore ? OreProgram.OreDecimals : CoalProgram.CoalDecimals);
+                    totalStakeRewards += stake.RewardsBalance / (_coin.HasFlag(Coin.Ore) ? OreProgram.OreDecimals : CoalProgram.CoalDecimals);
                 }
 
-                TotalStakeRewards.Update(totalStakeRewards);
+                TotalStakeRewards[Coin.Ore].Update(totalStakeRewards);
             }
 
-            public void UpdateMiningRewards(double rewards)
+            public void UpdateMiningRewards(Coin coin, double rewards)
             {
-                TotalMiningRewards.Update(rewards);
+                TotalMiningRewards[coin].Update(rewards);
             }
 
-            public void UpdateWalletBalance(double balance)
+            public void UpdateWalletBalance(Coin coin, double balance)
             {
-                WalletBalance.Update(balance);
+                WalletBalance[coin].Update(balance);
             }
         }
 

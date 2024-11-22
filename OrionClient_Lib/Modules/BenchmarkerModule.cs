@@ -28,17 +28,15 @@ namespace OrionClientLib.Modules
         private const int _totalSeconds = 30;
         private bool _stop = false;
         private CancellationTokenSource _currentTokenSource;
-        private Step _currentStep = Step.Initial;
         private int _hasherIndex = 0;
-        private List<HasherInfo> _chosenHashers;
+        private List<HasherInfo> _chosenHashers = new List<HasherInfo>();
         private Table _render = null;
         private bool _finished = false;
 
         public async Task<(bool, string)> InitializeAsync(Data data)
         {
             _stop = false;
-            _currentStep = Step.Initial;
-            _chosenHashers = null;
+            _chosenHashers.Clear();
             _hasherIndex = 0;
             _render = null;
             _finished = false;
@@ -131,7 +129,7 @@ namespace OrionClientLib.Modules
                 {
                     HasherInfo hasher = _chosenHashers[i];
 
-                    deviceTable.AddRow($"{hasher.Hasher.Name} ({data.Settings.CPUThreads} threads)",
+                    deviceTable.AddRow($"{hasher.Hasher.Name} ({data.Settings.CPUSetting.CPUThreads} threads)",
                         $"-",
                         $"-",
                         $"-",
@@ -205,7 +203,7 @@ namespace OrionClientLib.Modules
                     return;
                 }
 
-                if (data.Settings.CPUThreads <= coreInformation.Count)
+                if (data.Settings.CPUSetting.CPUThreads <= coreInformation.Count)
                 {
                     nint processorMask = 0;
                     nint fullMask = 0;
@@ -232,7 +230,7 @@ namespace OrionClientLib.Modules
                     return;
                 }
 
-                if (data.Settings.CPUThreads <= coreInformation.Count)
+                if (data.Settings.CPUSetting.CPUThreads <= coreInformation.Count)
                 {
                     nint processorMask = 0;
                     nint fullMask = 0;

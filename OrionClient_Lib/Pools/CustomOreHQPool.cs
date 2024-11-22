@@ -20,7 +20,6 @@ namespace OrionClientLib.Pools
         public override bool HideOnPoolList { get; } = false;
         public override string HostName { get; protected set; }
 
-        public override double MiniumumRewardPayout => 0.05;
         public override Uri WebsocketUrl => _poolSettings?.CustomDomain == null ? null : new Uri($"wss://{_poolSettings.CustomDomain}/v2/ws?timestamp={_timestamp}");
 
         public override void SetWalletInfo(Wallet wallet, string publicKey)

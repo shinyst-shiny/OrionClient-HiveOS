@@ -99,7 +99,7 @@ namespace OrionClientLib.Hashers.CPU
                     _info.AddSolutionCount((ulong)solutionCount);
                 }
 
-                _info.DifficultyInfo.UpdateDifficulty(bestDifficulty, bestSolution, bestNonce);
+                _info.UpdateDifficulty(bestDifficulty, bestSolution, bestNonce);
             }
             catch (Exception e)
             {

@@ -15,7 +15,7 @@ namespace Equix
         {
             List<CoreInfo> coreInfo = new List<CoreInfo>();
 
-            if (OperatingSystem.IsWindows())
+            if (OperatingSystem.IsOSPlatformVersionAtLeast("windows", 6, 0, 6000))
             {
                 uint length = 0;
                 PInvoke.GetLogicalProcessorInformation(null, ref length);

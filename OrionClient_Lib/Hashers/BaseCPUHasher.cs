@@ -59,7 +59,7 @@ namespace OrionClientLib.Hashers
 
             _pool = pool;
             _running = true;
-            _threads = settings.CPUThreads;
+            _threads = settings.CPUSetting.CPUThreads;
             _info = new HasherInfo();
 
             if (_pool != null)

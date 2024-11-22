@@ -306,16 +306,16 @@ namespace OrionClientLib.Modules
                 choices.Add((1, "(single thread)"));
                 choices.Add((0, "Custom"));
 
-                if (!choices.Any(x => x.Item1 == _settings.CPUThreads))
+                if (!choices.Any(x => x.Item1 == _settings.CPUSetting.CPUThreads))
                 {
-                    choices.Add((_settings.CPUThreads, "[[Current]]"));
+                    choices.Add((_settings.CPUSetting.CPUThreads, "[[Current]]"));
                 }
             }
 
             choices.Add((-1, "[aqua]<-- Previous Step[/]"));
 
             SelectionPrompt<(int, string)> selectionPrompt = new SelectionPrompt<(int, string)>();
-            selectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nSelect total threads. Highest value recommended. Current: {_settings.CPUThreads}");
+            selectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nSelect total threads. Highest value recommended. Current: {_settings.CPUSetting.CPUThreads}");
             selectionPrompt.UseConverter((tuple) =>
             {
                 if(tuple.Item1 > 0)
@@ -326,7 +326,7 @@ namespace OrionClientLib.Modules
                 return tuple.Item2;
             });
 
-            selectionPrompt.AddChoices(choices.OrderByDescending(x => x.Item1 == _settings.CPUThreads).ThenByDescending(x => x.Item1));
+            selectionPrompt.AddChoices(choices.OrderByDescending(x => x.Item1 == _settings.CPUSetting.CPUThreads).ThenByDescending(x => x.Item1));
 
             (int, string) choice = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
             
@@ -340,7 +340,7 @@ namespace OrionClientLib.Modules
                 while (true)
                 {
                     TextPrompt<int> textPrompt = new TextPrompt<int>($"Total threads (min: 1, max: {totalThreads}):");
-                    textPrompt.DefaultValue(_settings.CPUThreads);
+                    textPrompt.DefaultValue(_settings.CPUSetting.CPUThreads);
 
                     int result = await textPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
 
@@ -348,14 +348,14 @@ namespace OrionClientLib.Modules
 
                     if (result > 0 && result <= totalThreads)
                     {
-                        _settings.CPUThreads = result;
+                        _settings.CPUSetting.CPUThreads = result;
                         break;
                     }
                 }
             }
             else
             {
-                _settings.CPUThreads = choice.Item1;
+                _settings.CPUSetting.CPUThreads = choice.Item1;
             }
 
             return _currentStep + 1;
@@ -429,7 +429,7 @@ namespace OrionClientLib.Modules
             (Wallet wallet, string publicKey) = await _settings.GetWalletAsync();
 
             SelectionPrompt<int> selectionPrompt = new SelectionPrompt<int>();
-            selectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nAll settings can be manually changed in [b]{Settings.FilePath}[/]\n\nWallet: {publicKey ?? "??"}\nHasher: CPU - {cpuHasher?.Name ?? "N/A"} ({_settings.CPUThreads} threads), GPU - {gpuHasher?.Name ?? "N/A"}\nPool: {chosenPool?.DisplayName ?? "None"}\n");
+            selectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nAll settings can be manually changed in [b]{Settings.FilePath}[/]\n\nWallet: {publicKey ?? "??"}\nHasher: CPU - {cpuHasher?.Name ?? "N/A"} ({_settings.CPUSetting.CPUThreads} threads), GPU - {gpuHasher?.Name ?? "N/A"}\nPool: {chosenPool?.DisplayName ?? "None"}\n");
             selectionPrompt.EnableSearch();
             selectionPrompt.AddChoice(0);
             selectionPrompt.AddChoice(1);
@@ -654,13 +654,13 @@ namespace OrionClientLib.Modules
 
             if (String.IsNullOrEmpty(publicKey))
             {
-                _settings.PublicKey = null;
+                _settings.PublicKey = String.Empty;
 
                 return;
             }
 
             _settings.HasPrivateKey = false;
-            _settings.KeyFile = null;
+            _settings.KeyFile = String.Empty;
             _settings.PublicKey = publicKey;
         }
     }

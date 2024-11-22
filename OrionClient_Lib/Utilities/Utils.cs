@@ -12,7 +12,7 @@ namespace OrionClientLib.Utilities
         {
             string strExeFilePath = AppContext.BaseDirectory;
 
-            return Path.GetDirectoryName(strExeFilePath);
+            return Path.GetDirectoryName(strExeFilePath) ?? String.Empty;
         }
 
         public static string GetRoot()
