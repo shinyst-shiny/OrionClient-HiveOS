@@ -65,7 +65,7 @@ namespace OrionClientLib.Hashers.GPU.Baseline
             //return InterpetCompiled(key.V0, key.V1, key.V2, key.V3, input); 
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static ulong Digest(ArrayView<ulong> registers, SipState key)
         {
             unchecked
@@ -509,7 +509,7 @@ namespace OrionClientLib.Hashers.GPU.Baseline
 
         #region SipHash
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static ArrayView<ulong> SipHash24Ctr(SipState s, ulong input, ArrayView<ulong> ret)
         {
             s.V1 ^= 0xee;

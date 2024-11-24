@@ -10,14 +10,17 @@ namespace OrionClientLib.Modules.SettingsData
 {
     public class SettingDetailsAttribute : Attribute
     {
-        public string Name { get; set; }
-        public string Description { get; set; }
+        public string Name { get; private set; }
+        public string Description { get; private set; }
+        public bool Display { get; private set; }
+
         public SettingsValidator Validator { get; set; }
 
-        public SettingDetailsAttribute(string name, string description)
+        public SettingDetailsAttribute(string name, string description, bool display = true)
         {
             Name = name;
             Description = description;
+            Display = display;
         }
     }
 

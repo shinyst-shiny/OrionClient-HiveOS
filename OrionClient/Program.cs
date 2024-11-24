@@ -76,6 +76,7 @@ namespace OrionClient
                 new PoolModule(),
                 new BenchmarkerModule(),
                 new SetupModule(),
+                new SettingsModule(),
                 new ExitModule(),
             };
 

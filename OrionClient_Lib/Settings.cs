@@ -39,9 +39,9 @@ namespace OrionClientLib
         public bool MigratedSettings { get; set; } = false;
 
 
-        [SettingDetails("CPU Settings", "View CPU settings")]
+        [SettingDetails("View CPU Settings", "Configure CPU settings")]
         public CPUSettings CPUSetting { get; set; } = new CPUSettings();
-        [SettingDetails("GPU Settings", "View GPU settings")]
+        [SettingDetails("View GPU Settings", "Configure GPU settings")]
         public GPUSettings GPUSetting { get; set; } = new GPUSettings();
 
         public class CPUSettings
@@ -57,7 +57,7 @@ namespace OrionClientLib
         public class GPUSettings
         {
             [SettingDetails("GPU Block Size", "Higher values use more ram and take longer to run. Lower values can cause lower hashrates")]
-            [OptionSettingValidation<int>(2048, 1024, 512, 256, 256, 128)]
+            [OptionSettingValidation<int>(2048, 1024, 512, 256, 128)]
             public int MaxGPUBlockSize { get; set; } = 2048;
 
             [SettingDetails("Program Generation Threads", "Total CPU threads to use to generation program instructions")]
@@ -108,6 +108,46 @@ namespace OrionClientLib
             {
                 var oldValue = property.GetValue(oldSettings);
                 property.SetValue(this, oldValue);
+            }
+        }
+
+        public async Task<List<SettingChange>> GetChanges()
+        {
+            List<SettingChange> changes = new List<SettingChange>();
+
+            Settings oldSettings = await LoadAsync();
+
+            CheckChanges(this, oldSettings);
+
+            return changes;
+
+            void CheckChanges(object baseObj, object oldSettings, string path = null)
+            {
+                foreach (PropertyInfo property in baseObj.GetType().GetProperties())
+                {
+                    SettingDetailsAttribute details = property.GetCustomAttribute<SettingDetailsAttribute>();
+
+                    if (details != null)
+                    {
+                        var oldValue = property.GetValue(oldSettings);
+                        var newValue = property.GetValue(baseObj);
+
+                        if (property.PropertyType != typeof(string) && property.PropertyType.IsClass)
+                        {
+                            CheckChanges(newValue, oldValue, path == null ? details.Name : $"{path} > {details.Name}");
+                        }
+                        else if (!oldValue.Equals(newValue))
+                        {
+                            changes.Add(new SettingChange
+                            {
+                                OldValue = oldValue,
+                                NewValue = newValue,
+                                Path = path == null ? details.Name : $"{path} > {details.Name}",
+                                Setting = details.Name
+                            });
+                        }
+                    }
+                }
             }
         }
 
@@ -166,6 +206,14 @@ namespace OrionClientLib
             Wallet wallet = new Wallet(keyPair, seedMode: SeedMode.Bip39);
 
             return (wallet, wallet.Account.PublicKey);
+        }
+
+        public class SettingChange
+        {
+            public string Path { get; set; }
+            public string Setting { get; set; }
+            public object OldValue { get; set; }
+            public object NewValue { get; set; }
         }
     }
 
