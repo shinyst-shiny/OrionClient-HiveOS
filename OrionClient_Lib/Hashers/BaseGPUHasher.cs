@@ -155,7 +155,7 @@ namespace OrionClientLib.Hashers
                 var device = devicesToUse[i];
 
                 GPUDeviceHasher dHasher = new GPUDeviceHasher(HashxKernel(), EquihashKernel(), device.CreateAccelerator(_context),
-                                                              device, i, _setupCPUData, _availableCPUData, _info,
+                                                              device, i, _setupCPUData, _availableCPUData,
                                                               GetHashXKernelConfig(device, maxNonces), GetEquihashKernelConfig(device, maxNonces));
                 try
                 {
@@ -193,9 +193,9 @@ namespace OrionClientLib.Hashers
             OnHashrateUpdate?.Invoke(this, e);
         }
 
-        private void DHasher_OnDifficultyUpdate(object? sender, EventArgs e)
+        private void DHasher_OnDifficultyUpdate(object? sender, HasherInfo e)
         {
-            _pool?.DifficultyFound(_info.DifficultyInfo.GetUpdateCopy());
+            _pool?.DifficultyFound(e.DifficultyInfo.GetUpdateCopy());
         }
 
         private async void RunProgramGeneration()
@@ -503,15 +503,19 @@ namespace OrionClientLib.Hashers
                 _availableCPUData.TryAdd(item);
             }
 
-            _info.NewChallenge(startNonce, endNonce, challenge.ToArray(), challengeId);
+            byte[] challengeCopy = challenge.ToArray();
+
+            _info.NewChallenge(startNonce, endNonce, challengeCopy, challengeId);
             _currentNonce = startNonce;
             _newChallengeWait.Set();
             _pauseMining.Set();
             _gpuDevices.ForEach(x =>
             {
                 x.ResetData();
+                x.NewChallenge(challengeId, challengeCopy, startNonce, endNonce);
                 x.ResumeMining();
             });
+
             _challengeStartTime = _sw.Elapsed;
             _logger.Log(LogLevel.Debug, $"[GPU] New challenge. Challenge Id: {challengeId}. Range: {startNonce} - {endNonce}");
 
@@ -550,7 +554,7 @@ namespace OrionClientLib.Hashers
 
             #endregion
 
-            public event EventHandler OnDifficultyUpdate;
+            public event EventHandler<HasherInfo> OnDifficultyUpdate;
             public event EventHandler<HashrateInfo> OnHashrateUpdate;
 
             public bool Executing => !_copyToWaiting || !_copyFromWaiting || !_executingWaiting;
@@ -567,7 +571,7 @@ namespace OrionClientLib.Hashers
             private Device _device = null;
             private KernelConfig _hashxConfig;
             private KernelConfig _equihashConfig;
-            private HasherInfo _hasherInfo;
+            private HasherInfo _hasherInfo = new HasherInfo();
 
 
             private List<GPUDeviceData> _deviceData = new List<GPUDeviceData>();
@@ -578,8 +582,6 @@ namespace OrionClientLib.Hashers
 
             private BlockingCollection<CPUData> _readyCPUData;
             private BlockingCollection<CPUData> _availableCPUData;
-
-
 
             private Action<ArrayView<Instruction>, ArrayView<SipState>, ArrayView<ulong>> _hashxMethod;
             private Action<ArrayView<ulong>, ArrayView<EquixSolution>, ArrayView<ushort>, ArrayView<uint>> _equihashMethod;
@@ -607,7 +609,6 @@ namespace OrionClientLib.Hashers
                          Accelerator accelerator, Device device, int deviceId,
                          BlockingCollection<CPUData> readyCPUData, 
                          BlockingCollection<CPUData> availableCPUData,
-                         HasherInfo hasherInfo,
                          KernelConfig hashxConfig,
                          KernelConfig equihashConfig)
             {
@@ -620,7 +621,6 @@ namespace OrionClientLib.Hashers
                 _accelerator = accelerator;
                 _hashxConfig = hashxConfig;
                 _equihashConfig = equihashConfig;
-                _hasherInfo = hasherInfo;
 
                 if(accelerator is CudaAccelerator cudaAccelerator)
                 {
@@ -973,7 +973,7 @@ namespace OrionClientLib.Hashers
                             //Only notifies that there was a better difficulty found
                             if (currentBestDifficulty > prevBestDifficulty)
                             {
-                                OnDifficultyUpdate?.Invoke(this, EventArgs.Empty);
+                                OnDifficultyUpdate?.Invoke(this, _hasherInfo);
                             }
                         }
 
@@ -1040,6 +1040,11 @@ namespace OrionClientLib.Hashers
 
                     _copyToData.TryAdd(deviceData);
                 }
+            }
+
+            public void NewChallenge(int challengeId, byte[] challenge, ulong startNonce, ulong endNonce)
+            {
+                _hasherInfo.NewChallenge(startNonce, endNonce, challenge, challengeId);
             }
 
             private bool GetDeviceData(GPUDeviceData.Stage stage, int timeout, out GPUDeviceData data)
