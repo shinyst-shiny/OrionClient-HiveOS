@@ -1,23 +1,22 @@
-﻿using DrillX;
-using DrillX.Compiler;
+﻿using DrillX.Compiler;
 using DrillX.Solver;
-using ILGPU;
-using ILGPU.Runtime;
+using DrillX;
 using ILGPU.Runtime.Cuda;
-using Solnet.Rpc.Models;
+using ILGPU.Runtime;
+using ILGPU;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using OrionClientLib.Hashers.GPU.Baseline;
 
-namespace OrionClientLib.Hashers.GPU.Baseline
+namespace OrionClientLib.Hashers.GPU.RTX4090Opt
 {
-    public partial class CudaBaselineGPUHasher : BaseGPUHasher
+    public partial class Cuda4090OptGPUHasher : BaseGPUHasher
     {
-        public override string Name => "Baseline";
-        public override string Description => "Baseline GPU hashing for Nvidia GPUs";
+        public override string Name => "4090 Optimized";
+        public override string Description => "Optimized implementation for Nvidia RTX 4090 GPUs";
 
         public override Action<ArrayView<Instruction>, ArrayView<SipState>, ArrayView<ulong>> HashxKernel()
         {
@@ -48,12 +47,12 @@ namespace OrionClientLib.Hashers.GPU.Baseline
 
             var g = Math.Log2(groupSize);
 
-            //Invalid setting
-            if ((int)g != g)
+            //4090 works best at 512
+            if (device.Name.Contains("RTX 4090") || (int)g != g)
             {
                 groupSize = 512;
             }
-            
+
             return new KernelConfig(
                 new Index3D((iterationCount + groupSize - 1) / groupSize, 1, 1),
                 new Index3D(groupSize, 1, 1)
@@ -73,7 +72,7 @@ namespace OrionClientLib.Hashers.GPU.Baseline
 
         public override CudaCacheConfiguration CudaCacheOption()
         {
-            return CudaCacheConfiguration.PreferEqual;
+            return CudaCacheConfiguration.PreferL1;
         }
     }
 }

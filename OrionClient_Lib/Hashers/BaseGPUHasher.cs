@@ -30,6 +30,7 @@ using ILGPU.Runtime.CPU;
 using OrionClientLib.Hashers.GPU.Baseline;
 using System.Diagnostics.CodeAnalysis;
 using Solnet.Rpc.Models;
+using OrionClientLib.Hashers.GPU.RTX4090Opt;
 
 namespace OrionClientLib.Hashers
 {
@@ -77,6 +78,7 @@ namespace OrionClientLib.Hashers
 
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Interlocked))] //Needed for GPU
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(CudaBaselineGPUHasher))] //Need to add for each GPU to run on linux
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Cuda4090OptGPUHasher))] //Need to add for each GPU to run on linux
         public async Task<bool> InitializeAsync(IPool pool, Settings settings)
         {
             if (Initialized)
@@ -138,9 +140,9 @@ namespace OrionClientLib.Hashers
             //TODO: Allow additional buffer room
             int maxNonces = (int)((ulong)devicesToUse.Min(x => x.MemorySize) / GPUDeviceHasher.MemoryPerNonce);
 
-            if(settings.GPUSetting.MaxGPUBlockSize > 0)
+            if(settings.GPUSetting.MaxGPUNoncePerBatch > 0)
             {
-                maxNonces = Math.Min(maxNonces, settings.GPUSetting.MaxGPUBlockSize);
+                maxNonces = Math.Min(maxNonces, settings.GPUSetting.MaxGPUNoncePerBatch);
             }
 
             //Reduce to a power of 2
@@ -156,7 +158,8 @@ namespace OrionClientLib.Hashers
 
                 GPUDeviceHasher dHasher = new GPUDeviceHasher(HashxKernel(), EquihashKernel(), device.CreateAccelerator(_context),
                                                               device, i, _setupCPUData, _availableCPUData,
-                                                              GetHashXKernelConfig(device, maxNonces), GetEquihashKernelConfig(device, maxNonces));
+                                                              GetHashXKernelConfig(device, maxNonces, settings), GetEquihashKernelConfig(device, maxNonces, settings), 
+                                                              CudaCacheOption());
                 try
                 {
 
@@ -433,9 +436,11 @@ namespace OrionClientLib.Hashers
         #region GPU Implemention
 
         public abstract Action<ArrayView<Instruction>, ArrayView<SipState>, ArrayView<ulong>> HashxKernel();
-        public abstract KernelConfig GetHashXKernelConfig(Device device, int maxNonces);
+        public abstract KernelConfig GetHashXKernelConfig(Device device, int maxNonces, Settings settings);
         public abstract Action<ArrayView<ulong>, ArrayView<EquixSolution>, ArrayView<ushort>, ArrayView<uint>> EquihashKernel();
-        public abstract KernelConfig GetEquihashKernelConfig(Device device, int maxNonces);
+        public abstract KernelConfig GetEquihashKernelConfig(Device device, int maxNonces, Settings settings);
+        public abstract CudaCacheConfiguration CudaCacheOption();
+
         public bool IsSupported()
         {
             List<Device> validDevices = GetDevices(true);
@@ -610,7 +615,8 @@ namespace OrionClientLib.Hashers
                          BlockingCollection<CPUData> readyCPUData, 
                          BlockingCollection<CPUData> availableCPUData,
                          KernelConfig hashxConfig,
-                         KernelConfig equihashConfig)
+                         KernelConfig equihashConfig,
+                         CudaCacheConfiguration cacheConfiguration)
             {
                 _hashxMethod = hashxKernel;
                 _equihashMethod = equihashKernel;
@@ -626,7 +632,7 @@ namespace OrionClientLib.Hashers
                 {
                     //Equihash is better with equal or L1 preference
                     //Baseline suffers with L1 preference
-                    cudaAccelerator.CacheConfiguration = CudaCacheConfiguration.PreferEqual;
+                    cudaAccelerator.CacheConfiguration = cacheConfiguration;
                 }
             }
 

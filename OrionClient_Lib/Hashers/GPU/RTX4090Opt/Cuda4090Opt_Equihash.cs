@@ -13,13 +13,9 @@ using ILGPU.IR.Intrinsics;
 using ILGPU.IR;
 using System.Runtime.CompilerServices;
 
-namespace OrionClientLib.Hashers.GPU.Baseline
+namespace OrionClientLib.Hashers.GPU.RTX4090Opt
 {
-    //This equihash implementation needs to be rewritten as currently 4% of solutions are invalid
-    //Potential opts:
-    //  - Split loops to take advantage of larger block sizes
-    //  - Remove scratch usage
-    public partial class CudaBaselineGPUHasher
+    public partial class Cuda4090OptGPUHasher
     {
         public const int BlockSize = 128;
         public const int TotalValues = ushort.MaxValue + 1;

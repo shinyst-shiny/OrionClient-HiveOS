@@ -8,6 +8,7 @@ using OrionClientLib;
 using OrionClientLib.Hashers;
 using OrionClientLib.Hashers.CPU;
 using OrionClientLib.Hashers.GPU;
+using OrionClientLib.Hashers.GPU.RTX4090Opt;
 using OrionClientLib.Hashers.GPU.Baseline;
 using OrionClientLib.Hashers.Models;
 using OrionClientLib.Modules;
@@ -88,6 +89,7 @@ namespace OrionClient
             AddSupportedHasher(new NativeCPUHasher());
             AddSupportedHasher(new NativeCPUHasherAVX2());
             AddSupportedHasher(new CudaBaselineGPUHasher());
+            AddSupportedHasher(new Cuda4090OptGPUHasher());
             AddSupportedHasher(new DisabledCPUHasher());
             AddSupportedHasher(new DisabledGPUHasher());
 

@@ -56,9 +56,13 @@ namespace OrionClientLib
 
         public class GPUSettings
         {
-            [SettingDetails("GPU Block Size", "Higher values use more ram and take longer to run. Lower values can cause lower hashrates")]
+            [SettingDetails("GPU Batch Size", "Higher values use more ram and take longer to run. Lower values can cause lower hashrates")]
             [OptionSettingValidation<int>(2048, 1024, 512, 256, 128)]
-            public int MaxGPUBlockSize { get; set; } = 2048;
+            public int MaxGPUNoncePerBatch { get; set; } = 2048;
+
+            [SettingDetails("GPU Block Size", "Can try different values to see if HashX performance changes. GPU specific implementations will override this value.")]
+            [OptionSettingValidation<int>(512, 256, 128, 64, 32, 16)]
+            public int GPUBlockSize { get; set; } = 512;
 
             [SettingDetails("Program Generation Threads", "Total CPU threads to use to generation program instructions")]
             [ThreadValidator]
@@ -89,7 +93,7 @@ namespace OrionClientLib
                 t.CPUSetting.CPUThreads = t.CPUSetting.CPUThreads;
 #pragma warning disable CS0612 // Type or member is obsolete
                 t.CPUSetting.AutoSetCPUAffinity = t.AutoSetCPUAffinity;
-                t.GPUSetting.MaxGPUBlockSize = t.MaxGPUBlockSize;
+                t.GPUSetting.MaxGPUNoncePerBatch = t.MaxGPUBlockSize;
                 t.GPUSetting.ProgramGenerationThreads = t.ProgramGenerationThreads;
 #pragma warning restore CS0612 // Type or member is obsolete
                 t.MigratedSettings = true;
