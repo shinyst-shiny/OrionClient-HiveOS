@@ -28,6 +28,7 @@ using System.Runtime.Intrinsics;
 using System.Windows.Input;
 using System.Diagnostics;
 using OrionClientLib.Hashers.GPU.AMDBaseline;
+using OrionClientLib.Utilities;
 
 namespace OrionClient
 {
@@ -48,6 +49,7 @@ namespace OrionClient
 
         private static string _message = String.Empty;
         private static string _version = "1.2.0.0";
+        private static GithubApi.Data _updateData;
 
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Settings))]
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Program))]
@@ -59,6 +61,12 @@ namespace OrionClient
 
                 return;
             }
+
+            AnsiConsole.Clear();
+
+            Console.WriteLine("Checking for updates ...");
+
+            _updateData = await GithubApi.CheckForUpdates(_version);
 
             AnsiConsole.Clear();
 
@@ -277,7 +285,9 @@ namespace OrionClient
             (IHasher cpuHasher, IHasher gpuHasher) = data.GetChosenHasher();
             IPool pool = data.GetChosenPool();
 
-            prompt.Title($"         [lime]Orion Client v{_version}[/]\n\nWallet: {publicKey ?? "N/A"}\nHasher: CPU - {cpuHasher?.Name ?? "N/A"} ({(_settings.CPUSetting.CPUThreads > 0 ? _settings.CPUSetting.CPUThreads : Environment.ProcessorCount)} threads), GPU - {gpuHasher?.Name ?? "N/A"}\nPool: {pool?.DisplayName ?? "N/A"}" +
+            string newVersion = _updateData == null ? String.Empty : $" -- New Version {_updateData.TagName} {(_updateData.Prerelease ? $"[[Prerelease]]" : String.Empty)}";
+
+            prompt.Title($"         [lime]Orion Client v{_version}[/]{newVersion}\n\nWallet: {publicKey ?? "N/A"}\nHasher: CPU - {cpuHasher?.Name ?? "N/A"} ({(_settings.CPUSetting.CPUThreads > 0 ? _settings.CPUSetting.CPUThreads : Environment.ProcessorCount)} threads), GPU - {gpuHasher?.Name ?? "N/A"}\nPool: {pool?.DisplayName ?? "N/A"}" +
                 $"{(!String.IsNullOrEmpty(_message) ? $"\n\n[red]Error: {_message}[/]\n" : String.Empty)}");
             _message = String.Empty;
 
