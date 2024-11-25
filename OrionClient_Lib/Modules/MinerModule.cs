@@ -133,7 +133,7 @@ namespace OrionClientLib.Modules
             _poolInfoTable = new Table();
             _poolInfoTable.AddColumns(pool.TableHeaders());
 
-            _logger.Log(LogLevel.Debug, $"Checking setup requirements for '{pool.PoolName}'");
+            _logger.Log(LogLevel.Debug, $"Checking setup requirements for '{pool.Name}'");
 
             (Wallet wallet, string publicKey) = await data.Settings.GetWalletAsync();
 
@@ -218,7 +218,7 @@ namespace OrionClientLib.Modules
                 }
             }
 
-            _logger.Log(LogLevel.Debug, $"Connecting to pool '{pool.PoolName}'");
+            _logger.Log(LogLevel.Debug, $"Connecting to pool '{pool.Name}'");
 
             await pool.ConnectAsync(_cts.Token);
 

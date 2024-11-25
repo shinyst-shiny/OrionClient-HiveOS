@@ -9,12 +9,14 @@ using System.Threading.Tasks;
 
 namespace OrionClientLib.Hashers
 {
-    public abstract class DisabledHasher : IHasher
+    public abstract class DisabledHasher : IHasher, ISettingInfo
     {
         public abstract IHasher.Hardware HardwareType { get; }
 
         public string Name => $"Disabled";
         public string Description => $"Disables {HardwareType} hasher";
+        public bool Display => true;
+
         public bool Initialized => true;
         public bool IsMiningPaused => true;
         public TimeSpan CurrentChallengeTime { get; private set; } = TimeSpan.FromMinutes(5);

@@ -47,7 +47,7 @@ namespace OrionClientLib.Pools
         public override event EventHandler PauseMining;
         public override event EventHandler ResumeMining;
 
-        public abstract override string PoolName { get; }
+        public abstract override string Name { get; }
         public abstract override string DisplayName { get; }
         public abstract override string Description { get; }
         public abstract override Dictionary<string, string> Features { get; }
@@ -176,7 +176,7 @@ namespace OrionClientLib.Pools
         public override void SetWalletInfo(Wallet wallet, string publicKey)
         {
             _minerInformation ??= new MinerPoolInformation(Coins);
-            _poolSettings ??= new HQPoolSettings(PoolName);
+            _poolSettings ??= new HQPoolSettings(Name);
 
             if (!String.IsNullOrEmpty(HostName))
             {
@@ -194,7 +194,7 @@ namespace OrionClientLib.Pools
             bool isComplete = true;
             string errorMessage = String.Empty;
 
-            await AnsiConsole.Status().StartAsync($"Setting up {PoolName} pool", async ctx =>
+            await AnsiConsole.Status().StartAsync($"Setting up {Name} pool", async ctx =>
             {
                 if (_wallet == null)
                 {

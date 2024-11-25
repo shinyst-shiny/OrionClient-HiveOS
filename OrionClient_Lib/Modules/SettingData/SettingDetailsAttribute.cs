@@ -1,8 +1,10 @@
-﻿using System;
+﻿using OrionClientLib.Hashers;
+using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Linq;
 using System.Numerics;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -13,8 +15,6 @@ namespace OrionClientLib.Modules.SettingsData
         public string Name { get; private set; }
         public string Description { get; private set; }
         public bool Display { get; private set; }
-
-        public SettingsValidator Validator { get; set; }
 
         public SettingDetailsAttribute(string name, string description, bool display = true)
         {
@@ -43,7 +43,37 @@ namespace OrionClientLib.Modules.SettingsData
                 return false;
             }
 
-            return totalThreads > 0 && totalThreads <= Environment.ProcessorCount;
+            return totalThreads >= 0 && totalThreads <= Environment.ProcessorCount;
+        }
+    }
+
+    public abstract class TypeValidator : SettingValidatorAttribute
+    {
+        public List<ISettingInfo> Options;
+    }
+
+    public class TypeValidator<T> : TypeValidator where T : ISettingInfo
+    {
+        public TypeValidator()
+        {
+            Options = GetExtendedClasses<T>().Where(x => x.Display).Cast<ISettingInfo>().ToList();
+        }
+
+        public override bool Validate(object data)
+        {
+            return Options.Contains((T)data);
+        }
+
+        private List<T> GetExtendedClasses<T>(params object[] constructorArgs) 
+        {
+            List<T> objects = new List<T>();
+
+            foreach (Type type in Assembly.GetAssembly(typeof(T)).GetTypes().Where(myType => myType.IsClass && !myType.IsAbstract && myType.IsSubclassOf(typeof(T))))
+            {
+                objects.Add((T)Activator.CreateInstance(type, constructorArgs));
+            }
+
+            return objects;
         }
     }
 

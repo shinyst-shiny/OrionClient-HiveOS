@@ -18,36 +18,37 @@ using System.Threading.Tasks;
 namespace OrionClientLib.Pools
 {
     //UI lib: https://spectreconsole.net/
-    public class ExamplePool : IPool
+    public class ExamplePool : BasePool
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-        public string PoolName { get; private set; } = "Example Pool";
+        public override string Name => "Example Pool";
 
         //Name displayed
-        public string DisplayName => $"[b]{PoolName}[/]";
+        public override string DisplayName => $"[b]{Name}[/]";
+        public override bool Display => false;
 
-        public string Description { get; private set; } = "Example pool sample";
+        public override string Description => "Example pool sample";
 
         //Features displayed on pool list
         //Currently not displayed anywhere
-        public Dictionary<string, string> Features => new Dictionary<string, string>
+        public override Dictionary<string, string> Features => new Dictionary<string, string>
         {
             { "Feature 1 example", "Example feature description"},
             { "Feature 2 example", "[red]Another description[/]"}
         };
 
-        public bool HideOnPoolList => false;
+        public override bool HideOnPoolList => false;
 
-        public Coin Coins => Coin.Ore;
+        public override Coin Coins => Coin.Ore;
 
         //Whether or not a full keypair (public:private) key is required to run the pool
-        public bool RequiresKeypair => false;
+        public override bool RequiresKeypair => false;
 
-        public event EventHandler<NewChallengeInfo> OnChallengeUpdate;
-        public event EventHandler<string[]> OnMinerUpdate;
-        public event EventHandler PauseMining;
-        public event EventHandler ResumeMining;
+        public override event EventHandler<NewChallengeInfo> OnChallengeUpdate;
+        public override event EventHandler<string[]> OnMinerUpdate;
+        public override event EventHandler PauseMining;
+        public override event EventHandler ResumeMining;
 
         private IRpcClient _rpcClient = ClientFactory.GetClient(Cluster.MainNet);
         //private IRpcClient _rpcClient = ClientFactory.GetClient(RPC_URL);
@@ -60,24 +61,24 @@ namespace OrionClientLib.Pools
         private DifficultyInfo _bestDifficulty;
         private ExamplePoolSettings _settings;
 
-        public string[] TableHeaders()
+        public override string[] TableHeaders()
         {
             //Headers for a table of information the pool can provide
             //Return null to disable table
             return ["Time", "Difficulty", "Ore Reward"];
         }
 
-        public void SetWalletInfo(Wallet wallet, string publicKey)
+        public override void SetWalletInfo(Wallet wallet, string publicKey)
         {
             //This can be called multiple times
 
-            _settings ??= new ExamplePoolSettings(PoolName);
+            _settings ??= new ExamplePoolSettings(Name);
 
             //wallet is when a private key is needed. This can be null
             //publicKey is when only the public key is needed
         }
 
-        public async Task<bool> ConnectAsync(CancellationToken token)
+        public override async Task<bool> ConnectAsync(CancellationToken token)
         {
             //Handle any connection logic to the pool
 
@@ -107,7 +108,7 @@ namespace OrionClientLib.Pools
             return true;
         }
 
-        public void DifficultyFound(DifficultyInfo info)
+        public override void DifficultyFound(DifficultyInfo info)
         {
             //Gets called whenever a hasher finds a higher difficulty for current challenge
 
@@ -125,7 +126,7 @@ namespace OrionClientLib.Pools
             return;
         }
 
-        public async Task<bool> DisconnectAsync()
+        public override async Task<bool> DisconnectAsync()
         {
             //Handle any disconnection logic to the pool
 
@@ -133,13 +134,13 @@ namespace OrionClientLib.Pools
             return true;
         }
 
-        public async Task<double> GetFeeAsync(CancellationToken token)
+        public override async Task<double> GetFeeAsync(CancellationToken token)
         {
             //Returns current pool fee
             return 0;
         }
 
-        public async Task<(bool, string)> SetupAsync(CancellationToken token, bool initialSetup = false)
+        public override async Task<(bool, string)> SetupAsync(CancellationToken token, bool initialSetup = false)
         {
             //Called when someone selects the pool through the "Run Setup" menu or selects "Start Mining"
 
@@ -166,7 +167,7 @@ namespace OrionClientLib.Pools
             return (true, String.Empty);
         }
 
-        public async Task<(bool, string)> OptionsAsync(CancellationToken token)
+        public override async Task<(bool, string)> OptionsAsync(CancellationToken token)
         {
             //This is called when the user clicks the pool in the initial menu
             //You can use this to setup custom calls (staking, balance, claim, etc)

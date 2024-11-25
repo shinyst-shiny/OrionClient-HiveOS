@@ -20,7 +20,7 @@ using System.Threading.Tasks;
 
 namespace OrionClientLib.Hashers
 {
-    public abstract class BaseCPUHasher : IHasher
+    public abstract class BaseCPUHasher : IHasher, ISettingInfo
     {
         protected static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -31,6 +31,7 @@ namespace OrionClientLib.Hashers
         public event EventHandler<HashrateInfo> OnHashrateUpdate;
         public abstract string Name { get; }
         public abstract string Description { get; }
+        public virtual bool Display => true;
 
         protected Stopwatch _sw = Stopwatch.StartNew();
         protected TimeSpan _challengeStartTime;

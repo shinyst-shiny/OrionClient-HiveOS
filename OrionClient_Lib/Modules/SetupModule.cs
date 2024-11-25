@@ -161,7 +161,7 @@ namespace OrionClientLib.Modules
                 return _currentStep - 1;
             }
 
-            _settings.CPUHasher = cpuHasher.Name;
+            _settings.CPUSetting.CPUHasher = cpuHasher.Name;
 
             return await ThreadCountAsync();
         }
@@ -200,11 +200,11 @@ namespace OrionClientLib.Modules
                 return _currentStep - 1;
             }
 
-            _settings.GPUHasher = gpuHasher.Name;
+            _settings.GPUSetting.GPUHasher = gpuHasher.Name;
 
             if(gpuHasher is DisabledHasher)
             {
-                _settings.GPUHasher = gpuHasher.Name;
+                _settings.GPUSetting.GPUHasher = gpuHasher.Name;
 
                 return _currentStep + 1;
             }
@@ -227,7 +227,7 @@ namespace OrionClientLib.Modules
             //Shouldn't happen, but disable GPU hasher for now
             if (devices == null)
             {
-                _settings.GPUHasher = "Disabled";
+                _settings.GPUSetting.GPUHasher = "Disabled";
 
                 return _currentStep + 1;
             }
@@ -417,7 +417,7 @@ namespace OrionClientLib.Modules
                 AnsiConsole.Clear();
             }
 
-            _settings.Pool = chosenPool?.PoolName;
+            _settings.Pool = chosenPool?.Name;
 
             return _currentStep + 1;
         }

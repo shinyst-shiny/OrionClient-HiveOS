@@ -14,7 +14,7 @@ namespace OrionClientLib.Pools
 
     public interface IPool
     {
-        public string PoolName { get; }
+        public string Name { get; }
         public string DisplayName { get; }
         public string Description { get; }
         public Dictionary<string, string> Features { get; }
@@ -37,5 +37,33 @@ namespace OrionClientLib.Pools
 
         public string[] TableHeaders();
         public void DifficultyFound(DifficultyInfo info);
+    }
+
+    public abstract class BasePool : IPool, ISettingInfo
+    {
+        public abstract string Name { get; }
+        public abstract string DisplayName { get; }
+        public abstract bool Display { get; }
+        public abstract string Description { get; }
+        public abstract Dictionary<string, string> Features { get; }
+        public abstract bool HideOnPoolList { get; }
+        public abstract Coin Coins { get; }
+        public abstract bool RequiresKeypair { get; }
+
+        public abstract event EventHandler<NewChallengeInfo> OnChallengeUpdate;
+        public abstract event EventHandler<string[]> OnMinerUpdate;
+        public abstract event EventHandler PauseMining;
+        public abstract event EventHandler ResumeMining;
+
+        public abstract void SetWalletInfo(Wallet wallet, string publicKey);
+        public abstract Task<(bool success, string errorMessage)> SetupAsync(CancellationToken token, bool initialSetup = false);
+
+        public abstract Task<bool> ConnectAsync(CancellationToken token);
+        public abstract Task<bool> DisconnectAsync();
+        public abstract Task<double> GetFeeAsync(CancellationToken token);
+        public abstract Task<(bool success, string errorMessage)> OptionsAsync(CancellationToken token);
+
+        public abstract string[] TableHeaders();
+        public abstract void DifficultyFound(DifficultyInfo info);
     }
 }

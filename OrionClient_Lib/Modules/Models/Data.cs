@@ -33,14 +33,14 @@ namespace OrionClientLib.Modules.Models
                 return null;
             }
 
-            return Pools.FirstOrDefault(x => x.PoolName == Settings.Pool);
+            return Pools.FirstOrDefault(x => x.Name == Settings.Pool);
         }
 
         public (IHasher? cpu, IHasher? gpu) GetChosenHasher()
         {
             return (
-                Hashers.FirstOrDefault(x => x.Name == Settings.CPUHasher && x.HardwareType == IHasher.Hardware.CPU), 
-                Hashers.FirstOrDefault(x => x.Name == Settings.GPUHasher && x.HardwareType == IHasher.Hardware.GPU)
+                Hashers.FirstOrDefault(x => x.Name == Settings.CPUSetting.CPUHasher && x.HardwareType == IHasher.Hardware.CPU), 
+                Hashers.FirstOrDefault(x => x.Name == Settings.GPUSetting.GPUHasher && x.HardwareType == IHasher.Hardware.GPU)
                 );
         }
 

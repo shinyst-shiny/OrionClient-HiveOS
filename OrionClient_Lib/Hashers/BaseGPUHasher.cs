@@ -34,7 +34,7 @@ using OrionClientLib.Hashers.GPU.RTX4090Opt;
 
 namespace OrionClientLib.Hashers
 {
-    public abstract class BaseGPUHasher : IHasher, IGPUHasher
+    public abstract class BaseGPUHasher : IHasher, IGPUHasher, ISettingInfo
     {
         protected static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -47,6 +47,7 @@ namespace OrionClientLib.Hashers
         public event EventHandler<HashrateInfo> OnHashrateUpdate;
         public abstract string Name { get; }
         public abstract string Description { get; }
+        public virtual bool Display => true;
 
         protected Stopwatch _sw = Stopwatch.StartNew();
         protected TimeSpan _challengeStartTime;
@@ -94,7 +95,7 @@ namespace OrionClientLib.Hashers
             _pool = pool;
             _running = true;
             //Use total CPU threads for now
-            _threads = settings.CPUSetting.CPUThreads; //TODO: Change to use remaining threads
+            _threads = Environment.ProcessorCount; //TODO: Change to use remaining threads
 
             if(settings.GPUSetting.ProgramGenerationThreads > 0)
             {

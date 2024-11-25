@@ -271,7 +271,7 @@ namespace OrionClient
             (IHasher cpuHasher, IHasher gpuHasher) = data.GetChosenHasher();
             IPool pool = data.GetChosenPool();
 
-            prompt.Title($"Wallet: {publicKey ?? "N/A"}\nHasher: CPU - {cpuHasher?.Name ?? "N/A"} ({_settings.CPUSetting.CPUThreads} threads), GPU - {gpuHasher?.Name ?? "N/A"}\nPool: {pool?.DisplayName ?? "N/A"}" +
+            prompt.Title($"Wallet: {publicKey ?? "N/A"}\nHasher: CPU - {cpuHasher?.Name ?? "N/A"} ({(_settings.CPUSetting.CPUThreads > 0 ? _settings.CPUSetting.CPUThreads : Environment.ProcessorCount)} threads), GPU - {gpuHasher?.Name ?? "N/A"}\nPool: {pool?.DisplayName ?? "N/A"}" +
                 $"{(!String.IsNullOrEmpty(_message) ? $"\n\n[red]Error: {_message}[/]\n" : String.Empty)}");
             _message = String.Empty;
 

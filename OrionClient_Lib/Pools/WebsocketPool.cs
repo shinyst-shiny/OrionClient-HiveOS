@@ -12,26 +12,14 @@ using System.Threading.Tasks;
 
 namespace OrionClientLib.Pools
 {
-    public abstract class WebsocketPool : IPool
+    public abstract class WebsocketPool : BasePool
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-        public abstract string PoolName { get; }
-        public abstract string DisplayName { get; }
-        public abstract string Description { get; }
-        public abstract Coin Coins { get; }
-        public abstract bool RequiresKeypair { get; }
 
-        public abstract Dictionary<string, string> Features { get; }
 
-        public abstract bool HideOnPoolList { get; }
         public abstract string HostName { get; protected set; }
         public abstract Uri WebsocketUrl { get; }
-
-        public abstract event EventHandler<NewChallengeInfo> OnChallengeUpdate;
-        public abstract event EventHandler<string[]> OnMinerUpdate;
-        public abstract event EventHandler PauseMining;
-        public abstract event EventHandler ResumeMining;
 
         protected ClientWebSocket _webSocket;
         protected Wallet _wallet;
@@ -41,7 +29,7 @@ namespace OrionClientLib.Pools
         private CancellationTokenSource _cts = new CancellationTokenSource();
         private Task _receiveThread;
 
-        public virtual async Task<bool> ConnectAsync(CancellationToken token)
+        public override async Task<bool> ConnectAsync(CancellationToken token)
         {
             _webSocket = new ClientWebSocket();
             _cts = new CancellationTokenSource();
@@ -70,7 +58,7 @@ namespace OrionClientLib.Pools
             return false;
         }
 
-        public virtual async Task<bool> DisconnectAsync()
+        public override async Task<bool> DisconnectAsync()
         {
             try
             {
@@ -116,7 +104,7 @@ namespace OrionClientLib.Pools
             }
         }
 
-        public virtual void SetWalletInfo(Wallet wallet, string publicKey)
+        public override void SetWalletInfo(Wallet wallet, string publicKey)
         {
             if (publicKey != null)
             {
@@ -181,13 +169,6 @@ namespace OrionClientLib.Pools
             }
         }
 
-        public abstract void DifficultyFound(DifficultyInfo info);
-        public abstract Task<double> GetFeeAsync(CancellationToken token);
-
-        public abstract Task<(bool, string)> SetupAsync(CancellationToken token, bool initialSetup = false);
-
-        public abstract Task<(bool, string)> OptionsAsync(CancellationToken token);
-        public abstract string[] TableHeaders();
         public abstract void OnMessage(ArraySegment<byte> buffer, WebSocketMessageType type);
     }
 }
