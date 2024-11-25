@@ -42,10 +42,13 @@ namespace OrionClientLib
         [Obsolete]
         public int MaxGPUBlockSize { get; set; } = 2048;
         [Obsolete]
-        public int ProgramGenerationThreads { get; set; } = -1;
+        public int ProgramGenerationThreads { get; set; } = 0;
 
         //public bool EnableDebugging { get; set; }
         public bool MigratedSettings { get; set; } = false;
+
+        [JsonIgnore]
+        public bool NeedsSetup => String.IsNullOrEmpty(CPUHasher) || String.IsNullOrEmpty(GPUHasher) || String.IsNullOrEmpty(Pool) || (String.IsNullOrEmpty(PublicKey) && String.IsNullOrEmpty(KeyFile));
 
 
         [SettingDetails("View CPU Settings", "Configure CPU settings")]
@@ -159,12 +162,12 @@ namespace OrionClientLib
                         {
                             CheckChanges(newValue, oldValue, path == null ? details.Name : $"{path} > {details.Name}");
                         }
-                        else if (!oldValue.Equals(newValue))
+                        else if ((oldValue == null && newValue != null) || oldValue?.Equals(newValue) == false)
                         {
                             changes.Add(new SettingChange
                             {
-                                OldValue = oldValue,
-                                NewValue = newValue,
+                                OldValue = oldValue ?? "Unknown",
+                                NewValue = newValue ?? "Unknown",
                                 Path = path == null ? details.Name : $"{path} > {details.Name}",
                                 Setting = details.Name
                             });

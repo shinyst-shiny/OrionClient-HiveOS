@@ -388,13 +388,11 @@ namespace OrionClientLib.Modules
 
             if(chosenPool == null)
             {
-                selectionPrompt.AddChoice(null);
                 selectionPrompt.AddChoices(_data.Pools);
             }
             else
             {
                 selectionPrompt.AddChoices(_data.Pools.OrderByDescending(x => x == chosenPool));
-                selectionPrompt.AddChoice(null);
             }
 
             chosenPool = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);

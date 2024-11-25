@@ -128,7 +128,7 @@ namespace OrionClientLib.Modules
         {
             if(details.Validator is TypeValidator validator)
             {
-                string oldValue = details.Property.GetValue(details.Obj).ToString();
+                string oldValue = details.Property.GetValue(details.Obj)?.ToString() ?? String.Empty;
                 string newValue = await HandleType($"Choose '{details.Attribute.Name}'", oldValue, validator.Options.ToList());
 
                 details.Property.SetValue(details.Obj, newValue);

@@ -26,6 +26,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Windows.Input;
+using System.Diagnostics;
 
 namespace OrionClient
 {
@@ -45,11 +46,15 @@ namespace OrionClient
         private static Table _logTable;
 
         private static string _message = String.Empty;
+        private static string _version = "0.0.0.0";
 
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Settings))]
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Program))]
         static async Task Main(string[] args)
         {
+            FileVersionInfo fvi = FileVersionInfo.GetVersionInfo(Assembly.GetExecutingAssembly().Location);
+            _version = fvi?.FileVersion ?? "0.0.0.0";
+
             if (!IsSupported())
             {
                 Console.WriteLine($"Only x64 Windows/Linux is currently supported");
@@ -271,7 +276,7 @@ namespace OrionClient
             (IHasher cpuHasher, IHasher gpuHasher) = data.GetChosenHasher();
             IPool pool = data.GetChosenPool();
 
-            prompt.Title($"Wallet: {publicKey ?? "N/A"}\nHasher: CPU - {cpuHasher?.Name ?? "N/A"} ({(_settings.CPUSetting.CPUThreads > 0 ? _settings.CPUSetting.CPUThreads : Environment.ProcessorCount)} threads), GPU - {gpuHasher?.Name ?? "N/A"}\nPool: {pool?.DisplayName ?? "N/A"}" +
+            prompt.Title($"         [lime]Orion Client v{_version}[/]\n\nWallet: {publicKey ?? "N/A"}\nHasher: CPU - {cpuHasher?.Name ?? "N/A"} ({(_settings.CPUSetting.CPUThreads > 0 ? _settings.CPUSetting.CPUThreads : Environment.ProcessorCount)} threads), GPU - {gpuHasher?.Name ?? "N/A"}\nPool: {pool?.DisplayName ?? "N/A"}" +
                 $"{(!String.IsNullOrEmpty(_message) ? $"\n\n[red]Error: {_message}[/]\n" : String.Empty)}");
             _message = String.Empty;
 
@@ -282,6 +287,11 @@ namespace OrionClient
                     return pool.DisplayName;
                 }
 
+                if(module is SetupModule && data.Settings.NeedsSetup)
+                {
+                    return $"[green]{module.Name}[/]";
+                }
+
                 return module.Name;
             });
 
@@ -289,7 +299,7 @@ namespace OrionClient
             {
                 if(module is MinerModule)
                 {
-                    if(pool == null)
+                    if(data.Settings.NeedsSetup)
                     {
                         continue;
                     }
@@ -308,6 +318,11 @@ namespace OrionClient
                     }
 
                     pool.SetWalletInfo(wallet, publicKey);
+                }
+
+                if (module is SettingsModule && data.Settings.NeedsSetup)
+                {
+                    continue;
                 }
 
                 prompt.AddChoice(module);
