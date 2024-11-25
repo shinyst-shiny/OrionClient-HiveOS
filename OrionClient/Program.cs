@@ -46,15 +46,12 @@ namespace OrionClient
         private static Table _logTable;
 
         private static string _message = String.Empty;
-        private static string _version = "0.0.0.0";
+        private static string _version = "1.2.0.0";
 
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Settings))]
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Program))]
         static async Task Main(string[] args)
         {
-            FileVersionInfo fvi = FileVersionInfo.GetVersionInfo(Assembly.GetExecutingAssembly().Location);
-            _version = fvi?.FileVersion ?? "0.0.0.0";
-
             if (!IsSupported())
             {
                 Console.WriteLine($"Only x64 Windows/Linux is currently supported");
