@@ -27,6 +27,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Windows.Input;
 using System.Diagnostics;
+using OrionClientLib.Hashers.GPU.AMDBaseline;
 
 namespace OrionClient
 {
@@ -94,6 +95,7 @@ namespace OrionClient
             AddSupportedHasher(new NativeCPUHasherAVX2());
             AddSupportedHasher(new CudaBaselineGPUHasher());
             AddSupportedHasher(new Cuda4090OptGPUHasher());
+            //AddSupportedHasher(new OpenCLBaselineGPUHasher());
             AddSupportedHasher(new DisabledCPUHasher());
             AddSupportedHasher(new DisabledGPUHasher());
 

@@ -31,6 +31,7 @@ using OrionClientLib.Hashers.GPU.Baseline;
 using System.Diagnostics.CodeAnalysis;
 using Solnet.Rpc.Models;
 using OrionClientLib.Hashers.GPU.RTX4090Opt;
+using OrionClientLib.Hashers.GPU.AMDBaseline;
 
 namespace OrionClientLib.Hashers
 {
@@ -80,6 +81,7 @@ namespace OrionClientLib.Hashers
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Interlocked))] //Needed for GPU
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(CudaBaselineGPUHasher))] //Need to add for each GPU to run on linux
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Cuda4090OptGPUHasher))] //Need to add for each GPU to run on linux
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(OpenCLBaselineGPUHasher))] //Need to add for each GPU to run on linux
         public async Task<(bool success, string message)> InitializeAsync(IPool pool, Settings settings)
         {
             if (Initialized)
@@ -921,8 +923,6 @@ namespace OrionClientLib.Hashers
                                     program.InitCompiler(_solver.CompiledProgram);
 
                                     var result = _solver.Verify(program, solution[0]);
-
-                                    var asdfasdf = program.Emulate(0);
 
                                     program.DestroyCompiler();
 

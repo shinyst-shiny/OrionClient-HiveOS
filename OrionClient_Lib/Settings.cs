@@ -132,8 +132,11 @@ namespace OrionClientLib
 
             foreach(PropertyInfo property in properties)
             {
-                var oldValue = property.GetValue(oldSettings);
-                property.SetValue(this, oldValue);
+                if(property.SetMethod != null)
+                {
+                    var oldValue = property.GetValue(oldSettings);
+                    property.SetValue(this, oldValue);
+                }
             }
         }
 
