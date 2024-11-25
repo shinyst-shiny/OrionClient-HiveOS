@@ -202,9 +202,11 @@ namespace OrionClientLib.Modules
             {
                 _logger.Log(LogLevel.Debug, $"Initializing {cpuHasher.Name} {cpuHasher.HardwareType} hasher");
 
-                if(!await cpuHasher.InitializeAsync(pool, data.Settings))
+                var result = await cpuHasher.InitializeAsync(pool, data.Settings);
+
+                if (!result.success)
                 {
-                    _logger.Log(LogLevel.Warn, $"Failed to initialize CPU hasher");
+                    _logger.Log(LogLevel.Warn, $"Failed to initialize CPU hasher. Reason: {result.message}");
                 }
             }
 
@@ -212,9 +214,11 @@ namespace OrionClientLib.Modules
             {
                 _logger.Log(LogLevel.Debug, $"Initializing {gpuHasher.Name} {gpuHasher.HardwareType} hasher");
 
-                if(!await gpuHasher.InitializeAsync(pool, data.Settings))
+                var result = await gpuHasher.InitializeAsync(pool, data.Settings);
+
+                if (!result.success)
                 {
-                    _logger.Log(LogLevel.Warn, $"Failed to initialize GPU hasher");
+                    _logger.Log(LogLevel.Warn, $"Failed to initialize GPU hasher. Reason: {result.message}");
                 }
             }
 

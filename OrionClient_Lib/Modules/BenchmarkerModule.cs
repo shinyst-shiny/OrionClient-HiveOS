@@ -148,8 +148,10 @@ namespace OrionClientLib.Modules
                 _logger.Log(LogLevel.Debug, $"Running hasher: {currentHasher.Name} for {_totalSeconds}s");
 
                 currentHasher.OnHashrateUpdate += CurrentHasher_OnHashrateUpdate;
-                
-                if(await currentHasher.InitializeAsync(null, data.Settings))
+
+                var result = await currentHasher.InitializeAsync(null, data.Settings);
+
+                if (result.success)
                 {
                     byte[] challenge = new byte[32];
                     challenge.AsSpan().Fill(0xFF);
@@ -159,7 +161,7 @@ namespace OrionClientLib.Modules
                 }
                 else
                 {
-                    _logger.Log(LogLevel.Warn, $"Failed to initialize hasher {currentHasher.Name}");
+                    _logger.Log(LogLevel.Warn, $"Failed to initialize hasher {currentHasher.Name}. Reason: {result.message}");
                     ++_hasherIndex;
 
                     if (_hasherIndex >= _chosenHashers.Count)

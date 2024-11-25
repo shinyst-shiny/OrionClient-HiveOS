@@ -80,16 +80,16 @@ namespace OrionClientLib.Hashers
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Interlocked))] //Needed for GPU
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(CudaBaselineGPUHasher))] //Need to add for each GPU to run on linux
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Cuda4090OptGPUHasher))] //Need to add for each GPU to run on linux
-        public async Task<bool> InitializeAsync(IPool pool, Settings settings)
+        public async Task<(bool success, string message)> InitializeAsync(IPool pool, Settings settings)
         {
             if (Initialized)
             {
-                return false;
+                return (false, "Already initialized");
             }
 
             if (settings.GPUDevices == null || settings.GPUDevices.Count == 0)
             {
-                return false;
+                return (false, "No GPU devices selected. 'Run Setup' to select devices");
             }
 
             _pool = pool;
@@ -135,7 +135,7 @@ namespace OrionClientLib.Hashers
             {
                 _logger.Log(LogLevel.Warn, $"No supported GPU devices selected");
 
-                return false;
+                return (false, $"No supported GPU devices selected");
             }
 
             //TODO: Allow additional buffer room
@@ -186,7 +186,7 @@ namespace OrionClientLib.Hashers
             _taskRunner = new Task(RunProgramGeneration, TaskCreationOptions.LongRunning);
             _taskRunner.Start();
 
-            return true;
+            return (true, String.Empty);
         }
 
         private void DHasher_OnHashrateUpdate(object? sender, HashrateInfo e)

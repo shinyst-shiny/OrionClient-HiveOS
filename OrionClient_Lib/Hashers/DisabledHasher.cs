@@ -25,9 +25,9 @@ namespace OrionClientLib.Hashers
         public event EventHandler<HashrateInfo> OnHashrateUpdate;
 
 
-        public async Task<bool> InitializeAsync(IPool pool, Settings settings)
+        public async Task<(bool success, string message)> InitializeAsync(IPool pool, Settings settings)
         {
-            return true;
+            return (true, String.Empty);
         }
 
         public bool IsSupported()

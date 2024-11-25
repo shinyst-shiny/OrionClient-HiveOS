@@ -23,7 +23,7 @@ namespace OrionClientLib.Hashers
 
         public bool IsSupported();
         public bool NewChallenge(int challengeId, Span<byte> challenge, ulong startNonce, ulong endNonce);
-        public Task<bool> InitializeAsync(IPool pool, Settings settings);
+        public Task<(bool success, string message)> InitializeAsync(IPool pool, Settings settings);
         public Task StopAsync();
         public void SetThreads(int totalThreads);
         public void PauseMining();

@@ -51,11 +51,11 @@ namespace OrionClientLib.Hashers
         private int _threads = Environment.ProcessorCount;
         private Task _taskRunner;
 
-        public async Task<bool> InitializeAsync(IPool pool, Settings settings)
+        public async Task<(bool success, string message)> InitializeAsync(IPool pool, Settings settings)
         {
             if (Initialized)
             {
-                return false;
+                return (false, "Already initialized");
             }
 
             _pool = pool;
@@ -133,7 +133,7 @@ namespace OrionClientLib.Hashers
             //    }
             //}
 
-            return true;
+            return (true, String.Empty);
         }
 
         private void _pool_OnChallengeUpdate(object? sender, NewChallengeInfo e)

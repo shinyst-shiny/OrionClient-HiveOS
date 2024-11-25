@@ -59,6 +59,8 @@ namespace OrionClient
                 return;
             }
 
+            AnsiConsole.Clear();
+
             _settings = await Settings.LoadAsync();
             await _settings.SaveAsync();
 
