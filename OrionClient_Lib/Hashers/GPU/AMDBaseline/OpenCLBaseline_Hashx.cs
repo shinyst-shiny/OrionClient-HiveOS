@@ -18,7 +18,8 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
 {
     public partial class OpenCLBaselineGPUHasher
     {
-        private static int _offsetCounter = 0;
+        private static int _targetId = 0;
+        public static int _offsetCounter = 0;
 
         private static void Hashx(ArrayView<Instruction> program, ArrayView<SipState> key, ArrayView<ulong> results)
         {
@@ -28,7 +29,7 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
             int index = (grid.X * group.Y + grid.Y);// % (ushort.MaxValue + 1);
 
             //var sMemory = SharedMemory.Allocate<Instruction>(512);
-            var registers = LocalMemory.Allocate<ulong>(8);
+            var registers = new Registers();
             var idx = Group.IdxX;
 
             //Interop.WriteLine("{0}", idx);
@@ -53,39 +54,39 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
 
             Group.Barrier();
 
-            results[index] = Emulate(sharedProgram.Cast<int>(), key.SubView(index / (ushort.MaxValue + 1)), (ulong)(index % (ushort.MaxValue + 1)), registers);
+            results[index] = Emulate(sharedProgram.Cast<int>(), key.SubView(index / (ushort.MaxValue + 1)), (ulong)(index % (ushort.MaxValue + 1)), ref registers);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ulong Emulate(ArrayView<int> program, ArrayView<SipState> key, ulong input, ArrayView<ulong> sRegs)
+        private static ulong Emulate(ArrayView<int> program, ArrayView<SipState> key, ulong input, ref Registers sRegs)
         {
             //return InterpretFull(ref program[0], ref key[0], input);
 
-            return Interpret(program, key[0], input, sRegs);
+            return Interpret(program, key[0], input, ref sRegs);
             //return InterpetCompiled(key.V0, key.V1, key.V2, key.V3, input); 
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ulong Digest(ArrayView<ulong> registers, SipState key)
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static ulong Digest(Registers registers, SipState key)
         {
             unchecked
             {
                 SipState x = new SipState
                 {
-                    V0 = registers[0] + key.V0,
-                    V1 = registers[1] + key.V1,
-                    V2 = registers[2],
-                    V3 = registers[3]
+                    V0 = registers.V0 + key.V0,
+                    V1 = registers.V1 + key.V1,
+                    V2 = registers.V2,
+                    V3 = registers.V3
                 };
 
                 x.SipRound();
 
                 SipState y = new SipState
                 {
-                    V0 = registers[4],
-                    V1 = registers[5],
-                    V2 = registers[6] + key.V2,
-                    V3 = registers[7] + key.V3
+                    V0 = registers.V4,
+                    V1 = registers.V5,
+                    V2 = registers.V6 + key.V2,
+                    V3 = registers.V7 + key.V3
                 };
 
                 y.SipRound();
@@ -95,10 +96,11 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ulong Interpret(ArrayView<int> program, SipState key, ulong input, ArrayView<ulong> registers)
+        private static ulong Interpret(ArrayView<int> program, SipState key, ulong input, ref Registers registers)
         {
-            registers = SipHash24Ctr(key, input, registers);
+            registers = SipHash24Ctr(key, input);
             bool allowBranch = true;
+            //CudaAsm.Emit(".reg .pred isBranched;");
 
             for (int i = 0; i < 16; i++)
             {
@@ -111,46 +113,45 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
                 LoadTargetInstruction();
                 var futureInstruction = LoadMultInstruction(ref startInstruction, 2 * 4);
 
-                Store(registers, instruction.Dst, LoadRegister(registers, instruction.Src) * LoadRegister(registers, instruction.Dst));
-
+                Store(ref registers, instruction.Dst, LoadRegister(ref registers, instruction.Src) * LoadRegister(ref registers, instruction.Dst));
 
             target:
 
                 //Multiply
-                Store(registers, futureInstruction.Dst, LoadRegister(registers, futureInstruction.Src) * LoadRegister(registers, futureInstruction.Dst));
+                Store(ref registers, futureInstruction.Dst, LoadRegister(ref registers, futureInstruction.Src) * LoadRegister(ref registers, futureInstruction.Dst));
 
                 //Basic Opt
                 var basicInstruction = LoadBasicInstruction(ref startInstruction, 3 * 4);
-                Store(registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, registers));
+                Store(ref registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, ref registers));
 
                 //Basic Opt
                 basicInstruction = LoadBasicInstruction(ref startInstruction, 4 * 4);
                 instruction = LoadMultInstruction(ref startInstruction, 5 * 4);
-                Store(registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, registers));
+                Store(ref registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, ref registers));
 
                 //Multiply
-                Store(registers, instruction.Dst, LoadRegister(registers, instruction.Src) * LoadRegister(registers, instruction.Dst));
+                Store(ref registers, instruction.Dst, LoadRegister(ref registers, instruction.Src) * LoadRegister(ref registers, instruction.Dst));
 
                 //Basic Opt
                 basicInstruction = LoadBasicInstruction(ref startInstruction, 6 * 4);
-                Store(registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, registers));
+                Store(ref registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, ref registers));
 
                 //Basic Opt
                 basicInstruction = LoadBasicInstruction(ref startInstruction, 7 * 4);
                 instruction = LoadMultInstruction(ref startInstruction, 8 * 4);
-                Store(registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, registers));
+                Store(ref registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, ref registers));
 
                 //Multiply
-                Store(registers, instruction.Dst, LoadRegister(registers, instruction.Src) * LoadRegister(registers, instruction.Dst));
+                Store(ref registers, instruction.Dst, LoadRegister(ref registers, instruction.Src) * LoadRegister(ref registers, instruction.Dst));
 
                 //Basic Opt
                 basicInstruction = LoadBasicInstruction(ref startInstruction, 9 * 4);
-                Store(registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, registers));
+                Store(ref registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, ref registers));
 
                 //Basic Opt
                 basicInstruction = LoadBasicInstruction(ref startInstruction, 10 * 4);
                 var highMulInstruction = LoadBasicInstruction(ref startInstruction, 11 * 4);
-                Store(registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, registers));
+                Store(ref registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, ref registers));
 
                 #region High Multiply
 
@@ -158,14 +159,14 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
 
                 if (highMulInstruction.Type == (int)OpCode.UMulH)
                 {
-                    var hi = Mul64hi(LoadRegister(registers, highMulInstruction.Dst), LoadRegister(registers, highMulInstruction.Src));
-                    Store(registers, highMulInstruction.Dst, hi);
+                    var hi = Mul64hi(LoadRegister(ref registers, highMulInstruction.Dst), LoadRegister(ref registers, highMulInstruction.Src));
+                    Store(ref registers, highMulInstruction.Dst, hi);
                     mulhResult = (uint)hi;
                 }
                 else
                 {
-                    var hi = Mul64hi((long)LoadRegister(registers, highMulInstruction.Dst), (long)LoadRegister(registers, highMulInstruction.Src));
-                    Store(registers, highMulInstruction.Dst, hi);
+                    var hi = Mul64hi((long)LoadRegister(ref registers, highMulInstruction.Dst), (long)LoadRegister(ref registers, highMulInstruction.Src));
+                    Store(ref registers, highMulInstruction.Dst, hi);
                     mulhResult = (uint)hi;
                 }
 
@@ -174,28 +175,28 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
                 //Basic opt
                 basicInstruction = LoadBasicInstruction(ref startInstruction, 12 * 4);
                 instruction = LoadMultInstruction(ref startInstruction, 13 * 4);
-                Store(registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, registers));
+                Store(ref registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, ref registers));
 
                 //if (i == 15)
                 //{
-                //    Interop.WriteLine("{8}, {9}, {10}, {11}\n{0}\n{1}\n{2}\n{3}\n{4}\n{5}\n{6}\n{7}\n", registers.V0, registers.V1, registers.V2, registers.V3, registers.V4, registers.V5, registers.V6, registers.V7, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Type, basicInstruction.Operand);
+                //    Interop.WriteLine("{8}, {9}, {10}, {11}\n{0}\n{1}\n{2}\n{3}\n{4}\n{5}\n{6}\n{7}\n", ref registers.V0, ref registers.V1, ref registers.V2, ref registers.V3, ref registers.V4, ref registers.V5, ref registers.V6, ref registers.V7, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Type, basicInstruction.Operand);
                 //}
 
                 //Multiply
-                Store(registers, instruction.Dst, LoadRegister(registers, instruction.Src) * LoadRegister(registers, instruction.Dst));
+                Store(ref registers, instruction.Dst, LoadRegister(ref registers, instruction.Src) * LoadRegister(ref registers, instruction.Dst));
 
                 //Basic Opt
                 basicInstruction = LoadBasicInstruction(ref startInstruction, 14 * 4);
-                Store(registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, registers));
+                Store(ref registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, ref registers));
 
                 //Basic Opt
                 basicInstruction = LoadBasicInstruction(ref startInstruction, 15 * 4);
                 instruction = LoadMultInstruction(ref startInstruction, 16 * 4);
-                Store(registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, registers));
+                Store(ref registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, ref registers));
 
                 //Multiply
                 int branchOp = LoadBranchInstruction(ref startInstruction, 17 * 4).Mask;
-                Store(registers, instruction.Dst, LoadRegister(registers, instruction.Src) * LoadRegister(registers, instruction.Dst));
+                Store(ref registers, instruction.Dst, LoadRegister(ref registers, instruction.Src) * LoadRegister(ref registers, instruction.Dst));
 
                 //Branch
 
@@ -210,28 +211,28 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
 
                 //Multiply
                 instruction = LoadMultInstruction(ref startInstruction, 18 * 4);
-                Store(registers, instruction.Dst, LoadRegister(registers, instruction.Src) * LoadRegister(registers, instruction.Dst));
+                Store(ref registers, instruction.Dst, LoadRegister(ref registers, instruction.Src) * LoadRegister(ref registers, instruction.Dst));
 
                 //Basic Opt
                 basicInstruction = LoadBasicInstruction(ref startInstruction, 19 * 4);
-                Store(registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, registers));
+                Store(ref registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, ref registers));
 
                 //Basic Opt
                 basicInstruction = LoadBasicInstruction(ref startInstruction, 20 * 4);
                 highMulInstruction = LoadBasicInstruction(ref startInstruction, 21 * 4);
-                Store(registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, registers));
+                Store(ref registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, ref registers));
 
                 #region High Multiply
 
                 if (highMulInstruction.Type == (int)OpCode.UMulH)
                 {
-                    var hi = Mul64hi(LoadRegister(registers, highMulInstruction.Dst), LoadRegister(registers, highMulInstruction.Src));
-                    Store(registers, highMulInstruction.Dst, hi);
+                    var hi = Mul64hi(LoadRegister(ref registers, highMulInstruction.Dst), LoadRegister(ref registers, highMulInstruction.Src));
+                    Store(ref registers, highMulInstruction.Dst, hi);
                 }
                 else
                 {
-                    var hi = Mul64hi((long)LoadRegister(registers, highMulInstruction.Dst), (long)LoadRegister(registers, highMulInstruction.Src));
-                    Store(registers, highMulInstruction.Dst, hi);
+                    var hi = Mul64hi((long)LoadRegister(ref registers, highMulInstruction.Dst), (long)LoadRegister(ref registers, highMulInstruction.Src));
+                    Store(ref registers, highMulInstruction.Dst, hi);
                 }
 
                 #endregion
@@ -239,42 +240,42 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
                 //Basic opt
                 basicInstruction = LoadBasicInstruction(ref startInstruction, 22 * 4);
                 instruction = LoadMultInstruction(ref startInstruction, 23 * 4);
-                Store(registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, registers));
+                Store(ref registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, ref registers));
 
                 //Multiply
-                Store(registers, instruction.Dst, LoadRegister(registers, instruction.Src) * LoadRegister(registers, instruction.Dst));
+                Store(ref registers, instruction.Dst, LoadRegister(ref registers, instruction.Src) * LoadRegister(ref registers, instruction.Dst));
 
                 //Basic Opt
                 basicInstruction = LoadBasicInstruction(ref startInstruction, 24 * 4);
-                Store(registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, registers));
+                Store(ref registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, ref registers));
 
                 //Basic Opt
                 basicInstruction = LoadBasicInstruction(ref startInstruction, 25 * 4);
                 instruction = LoadMultInstruction(ref startInstruction, 26 * 4);
-                Store(registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, registers));
+                Store(ref registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, ref registers));
 
                 //Multiply
-                Store(registers, instruction.Dst, LoadRegister(registers, instruction.Src) * LoadRegister(registers, instruction.Dst));
+                Store(ref registers, instruction.Dst, LoadRegister(ref registers, instruction.Src) * LoadRegister(ref registers, instruction.Dst));
 
                 //Basic Opt
                 basicInstruction = LoadBasicInstruction(ref startInstruction, 27 * 4);
-                Store(registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, registers));
+                Store(ref registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, ref registers));
 
                 //Basic Opt
                 basicInstruction = LoadBasicInstruction(ref startInstruction, 28 * 4);
                 instruction = LoadMultInstruction(ref startInstruction, 29 * 4);
-                Store(registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, registers));
+                Store(ref registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, ref registers));
 
                 //Multiply
-                Store(registers, instruction.Dst, LoadRegister(registers, instruction.Src) * LoadRegister(registers, instruction.Dst));
+                Store(ref registers, instruction.Dst, LoadRegister(ref registers, instruction.Src) * LoadRegister(ref registers, instruction.Dst));
 
                 //Basic Opt
                 basicInstruction = LoadBasicInstruction(ref startInstruction, 30 * 4);
-                Store(registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, registers));
+                Store(ref registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, ref registers));
 
                 //Basic Opt
                 basicInstruction = LoadBasicInstruction(ref startInstruction, 31 * 4);
-                Store(registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, registers));
+                Store(ref registers, basicInstruction.Dst, BasicOperation(basicInstruction.Type, basicInstruction.Dst, basicInstruction.Src, basicInstruction.Operand, ref registers));
 
             }
 
@@ -284,15 +285,15 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
         #region Basic Operation
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ulong BasicOperation(int type, int dstId, int srcId, int operand, ArrayView<ulong> registers)
+        private static ulong BasicOperation(int type, int dstId, int srcId, int operand, ref Registers registers)
         {
-            ulong dst = LoadRegister(registers, dstId);
+            ulong dst = BasicLoadRegister(registers.V0, registers.V1, registers.V2, registers.V3, registers.V4, registers.V5, registers.V6, registers.V7, dstId);
 
             if (type != (int)OpCode.Rotate)
             {
                 ulong src = 0;
 
-                LoadDualRegister(registers, srcId, ref src);
+                LoadDualRegister(ref registers, srcId, ref src);
 
                 if (type == (int)OpCode.AddShift)
                 {
@@ -302,7 +303,8 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
                 return dst ^ src;
             }
 
-            return dst.Ror(operand);
+            var a = dst;
+            return a.Ror(operand);
         }
 
         #endregion
@@ -343,6 +345,7 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe BranchInstruction LoadBranchInstruction(ref int startInstruction, int index)
         {
+            //CudaAsm.Emit(".pragma \"used_bytes_mask 0x0\";");
             fixed (int* ptr = &startInstruction)
             {
                 return ((BranchInstruction*)(ptr + index))[0];
@@ -385,6 +388,8 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
 
             _offsetCounter += 16;
         }
+
+
 
         [IntrinsicMethod(nameof(LoadTargetInstruction_Generate))]
         //[IntrinsicImplementation]
@@ -509,9 +514,13 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
 
         #region SipHash
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ArrayView<ulong> SipHash24Ctr(SipState s, ulong input, ArrayView<ulong> ret)
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static Registers SipHash24Ctr(SipState s, ulong input)
         {
+            Registers ret = new Registers();
+
+            //Modify how it stores data
+
             s.V1 ^= 0xee;
             s.V3 ^= input;
 
@@ -526,10 +535,12 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
             s.SipRound();
             s.SipRound();
 
-            ret[0] = s.V0;
-            ret[1] = s.V1;
-            ret[2] = s.V2;
-            ret[3] = s.V3;
+            ret.V0 = s.V0;
+            ret.V1 = s.V1;
+            ret.V2 = s.V2;
+            ret.V3 = s.V3;
+
+            //StoreValues(ref ret[0], s.V0, s.V1, s.V2, s.V3);
 
             s.V1 ^= 0xdd;
 
@@ -538,12 +549,81 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
             s.SipRound();
             s.SipRound();
 
-            ret[4] = s.V0;
-            ret[5] = s.V1;
-            ret[6] = s.V2;
-            ret[7] = s.V3;
+            //StoreValues(ref ret[4], s.V0, s.V1, s.V2, s.V3);
+
+            ret.V4 = s.V0;
+            ret.V5 = s.V1;
+            ret.V6 = s.V2;
+            ret.V7 = s.V3;
 
             return ret;
+        }
+
+        private static void SipRound_Generate(PTXCodeGenerator codeGenerator, List<RegisterAllocator<PTXRegisterKind>.HardwareRegister> registers, RegisterAllocator<PTXRegisterKind>.HardwareRegister temp = null)
+        {
+            codeGenerator.Addu64(registers[0], registers[0], registers[1]);//V0 = V0 + V1;
+            codeGenerator.Addu64(registers[2], registers[2], registers[3]);//V2 = V2 + V3;
+            codeGenerator.Rol(registers[1], 13, temp); // V1 = V1.Rol(13);
+            codeGenerator.Rol(registers[3], 16, temp);//V3.Rol(16);
+            codeGenerator.Xorb64(registers[1], registers[1], registers[0]);//V1 ^= V0;
+            codeGenerator.Xorb64(registers[3], registers[3], registers[2]);//V3 ^= V2;
+            codeGenerator.Rol(registers[0], 32, temp);//V0 = V0.Rol(32);
+            codeGenerator.Addu64(registers[2], registers[2], registers[1]);//V2 = V2 + V1;
+            codeGenerator.Addu64(registers[0], registers[0], registers[3]);//V0 = V0 + V3;
+            codeGenerator.Rol(registers[1], 17, temp);//V1 = V1.Rol(17);
+            codeGenerator.Rol(registers[3], 21, temp);//V3 = V3.Rol(21);
+            codeGenerator.Xorb64(registers[1], registers[1], registers[2]);//V1 ^= V2;
+            codeGenerator.Xorb64(registers[3], registers[3], registers[0]);//V3 ^= V0;
+            codeGenerator.Rol(registers[2], 32, temp);//V2 = V2.Rol(32);
+        }
+
+        private static void Digest_Generate(PTXCodeGenerator codeGenerator, RegisterAllocator<PTXRegisterKind>.HardwareRegister ret, List<RegisterAllocator<PTXRegisterKind>.HardwareRegister> registers, List<RegisterAllocator<PTXRegisterKind>.HardwareRegister> keys)
+        {
+            codeGenerator.Addu64(registers[0], registers[0], keys[0]);
+            codeGenerator.Addu64(registers[1], registers[1], keys[1]);
+            codeGenerator.Addu64(registers[6], registers[6], keys[2]);
+            codeGenerator.Addu64(registers[7], registers[7], keys[3]);
+
+            SipRound_Generate(codeGenerator, registers.Take(4).ToList());
+            SipRound_Generate(codeGenerator, registers.Skip(4).Take(4).ToList());
+
+            codeGenerator.Xorb64(ret, registers[0], registers[4]);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static void SipHash24Ctr_Generate(PTXCodeGenerator codeGenerator, List<RegisterAllocator<PTXRegisterKind>.HardwareRegister> registers, List<RegisterAllocator<PTXRegisterKind>.HardwareRegister> keys, RegisterAllocator<PTXRegisterKind>.HardwareRegister input)
+        {
+            var sRegisters = registers.Take(4).ToList();
+            var tRegisters = registers.Skip(4).Take(4).ToList();
+            var tempOperand = codeGenerator.AllocateRegister(BasicValueType.Int64, PTXRegisterKind.Int64);
+
+            codeGenerator.Movb64(sRegisters[0], keys[0]);
+            codeGenerator.Xorb64(sRegisters[1], keys[1], 0xee);  //s.V1 ^= 0xee;
+            codeGenerator.Movb64(sRegisters[2], keys[2]);
+            codeGenerator.Xorb64(sRegisters[3], keys[3], input); //s.V3 ^= input;
+
+            SipRound_Generate(codeGenerator, sRegisters, tempOperand);
+            SipRound_Generate(codeGenerator, sRegisters, tempOperand);
+
+            codeGenerator.Xorb64(sRegisters[0], sRegisters[0], input); //s.V0 ^= input;
+            codeGenerator.Xorb64(sRegisters[2], sRegisters[2], 0xee); //s.V2 ^= 0xee;
+
+            SipRound_Generate(codeGenerator, sRegisters, tempOperand);
+            SipRound_Generate(codeGenerator, sRegisters, tempOperand);
+            SipRound_Generate(codeGenerator, sRegisters, tempOperand);
+            SipRound_Generate(codeGenerator, sRegisters, tempOperand);
+
+            //var t = s;
+
+            codeGenerator.Movb64(tRegisters[0], sRegisters[0]);
+            codeGenerator.Xorb64(tRegisters[1], sRegisters[1], 0xdd); //t.V1 ^= 0xdd;
+            codeGenerator.Movb64(tRegisters[2], sRegisters[2]);
+            codeGenerator.Movb64(tRegisters[3], sRegisters[3]);
+
+            SipRound_Generate(codeGenerator, tRegisters, tempOperand);
+            SipRound_Generate(codeGenerator, tRegisters, tempOperand);
+            SipRound_Generate(codeGenerator, tRegisters, tempOperand);
+            SipRound_Generate(codeGenerator, tRegisters, tempOperand);
         }
 
         #endregion
@@ -551,13 +631,124 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
         #region Load Register
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ulong LoadRegister(ArrayView<ulong> registers, int id)
+        private static ulong LoadRegister(ref Registers registers, int id)
         {
-            return registers[id];
+            switch (id)
+            {
+                case 0:
+                    return registers.V0;
+                case 1:
+                    return registers.V1;
+                case 2:
+                    return registers.V2;
+                case 3:
+                    return registers.V3;
+                case 4:
+                    return registers.V4;
+            }
+
+            if (id == 5)
+            {
+                return registers.V5;
+            }
+
+            if (id == 6)
+            {
+                return registers.V6;
+            }
+
+            return registers.V7;
         }
 
+        [IntrinsicMethod(nameof(BasicLoadRegister_Generate))]
+        ////[IntrinsicImplementation]
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.NoOptimization)]
+        private static ulong BasicLoadRegister(ulong v0, ulong v1, ulong v2, ulong v3, ulong v4, ulong v5, ulong v6, ulong v7, int id)
+        {
+            switch (id)
+            {
+                case 0:
+                    return v0;
+
+                case 1:
+                    return v1;
+                case 2:
+                    return v2;
+                case 3:
+                    return v3;
+                case 4:
+                    return v4;
+
+
+            }
+
+            if (id == 5)
+            {
+                return v5;
+            }
+
+            if (id == 6)
+            {
+                return v6;
+            }
+
+            return v7;
+        }
+
+        private static void BasicLoadRegister_Generate(PTXBackend backend, PTXCodeGenerator codeGenerator, Value value)
+        {
+            List<RegisterAllocator<PTXRegisterKind>.PrimitiveRegister> registers = new List<RegisterAllocator<PTXRegisterKind>.PrimitiveRegister>();
+            var test = codeGenerator.AllocateInt32Register();
+
+            for (int i = 0; i < 8; i++)
+            {
+                registers.Add(codeGenerator.LoadPrimitive(value[i]));
+            }
+
+            var id = codeGenerator.LoadPrimitive(value[8]);
+            var returnValue = codeGenerator.AllocateHardware(value);
+
+            codeGenerator.Builder.AppendLine("{");
+
+            for (int i = 0; i < 8; i++)
+            {
+                var command = codeGenerator.BeginCommand($"set.eq.u32.s32 ");
+                command.AppendArgument(test);
+                command.AppendArgument(id);
+                command.AppendConstant(i);
+                command.Dispose();
+
+                command = codeGenerator.BeginCommand($"slct.u64.s32 ");
+                command.AppendArgument(returnValue);
+                command.AppendArgument(returnValue);
+                command.AppendArgument(registers[i]);
+                command.AppendArgument(test);
+                command.Dispose();
+            }
+
+            //CudaAsm.Emit("{");
+            //CudaAsm.Emit("\t.reg .b32 temp;");
+            //CudaAsm.Emit("\tset.eq.u32.s32 temp, %0, 1;", id);
+            //CudaAsm.Emit("\tslct.u64.s32 %0, %1, %2, temp;", registers.V0, registers.V0, registers.V1);
+            //CudaAsm.Emit("\tset.eq.u32.s32 temp, %0, 2;", id);
+            //CudaAsm.Emit("\tslct.u64.s32 %0, %1, %2, temp;", registers.V0, registers.V0, registers.V2);
+            //CudaAsm.Emit("\tset.eq.u32.s32 temp, %0, 3;", id);
+            //CudaAsm.Emit("\tslct.u64.s32 %0, %1, %2, temp;", registers.V0, registers.V0, registers.V3);
+            //CudaAsm.Emit("\tset.eq.u32.s32 temp, %0, 4;", id);
+            //CudaAsm.Emit("\tslct.u64.s32 %0, %1, %2, temp;", registers.V0, registers.V0, registers.V4);
+            //CudaAsm.Emit("\tset.eq.u32.s32 temp, %0, 5;", id);
+            //CudaAsm.Emit("\tslct.u64.s32 %0, %1, %2, temp;", registers.V0, registers.V0, registers.V5);
+            //CudaAsm.Emit("\tset.eq.u32.s32 temp, %0, 6;", id);
+            //CudaAsm.Emit("\tslct.u64.s32 %0, %1, %2, temp;", registers.V0, registers.V0, registers.V6);
+            //CudaAsm.Emit("\tset.eq.u32.s32 temp, %0, 7;", id);
+            //CudaAsm.Emit("\tslct.u64.s32 %0, %1, %2, temp;", registers.V0, registers.V0, registers.V7);
+            //CudaAsm.Emit("}");
+            codeGenerator.Builder.AppendLine("}");
+        }
+
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void LoadDualRegister(ArrayView<ulong> registers, int id, ref ulong ret)
+        private static void LoadDualRegister(ref Registers registers, int id, ref ulong ret)
         {
             if ((uint)id >= 8)
             {
@@ -565,26 +756,145 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
                 return;
             }
 
-            ret = registers[id];
+            switch (id)
+            {
+                case 0:
+                    ret = registers.V0;
+                    return;
+
+                case 1:
+                    ret = registers.V1;
+                    return;
+            }
+
+            if (id == 2)
+            {
+                ret = registers.V2;
+                return;
+            }
+            if (id == 3)
+            {
+                ret = registers.V3;
+                return;
+            }
+
+            if (id == 4)
+            {
+                ret = registers.V4;
+                return;
+            }
+
+            if (id == 5)
+            {
+                ret = registers.V5;
+                return;
+            }
+
+            if (id == 6)
+            {
+                ret = registers.V6;
+                return;
+            }
+
+            ret = registers.V7;
         }
 
         #endregion
 
         #region Store Register
 
-        private static unsafe void Store(ArrayView<ulong> registers, int id, long value)
+        private static unsafe void Store(ref Registers reg, int id, long value)
         {
-            registers[id] = (ulong)value;
+            switch (id)
+            {
+                case 0:
+                    //CudaAsm.Emit("mov.b64 %0, %1;", reg.V0, value);
+                    reg.V0 = (ulong)value;
+                    return;
+                case 1:
+                    //CudaAsm.Emit("mov.b64 %0, %1;", reg.V1, value);
+                    reg.V1 = (ulong)value;
+                    return;
+                case 2:
+                    //CudaAsm.Emit("mov.b64 %0, %1;", reg.V2, value);
+                    reg.V2 = (ulong)value;
+                    return;
+                case 3:
+                    //CudaAsm.Emit("mov.b64 %0, %1;", reg.V3, value);
+                    reg.V3 = (ulong)value;
+                    return;
+                case 4:
+                    //CudaAsm.Emit("mov.b64 %0, %1;", reg.V4, value);
+                    reg.V4 = (ulong)value;
+                    return;
+            }
+
+            if (id == 5)
+            {
+                //CudaAsm.Emit("mov.b64 %0, %1;", reg.V5, value);
+                reg.V5 = (ulong)value;
+            }
+
+            if (id == 6)
+            {
+                //CudaAsm.Emit("mov.b64 %0, %1;", reg.V6, value);
+                reg.V6 = (ulong)value;
+            }
+
+            if (id == 7)
+            {
+                //CudaAsm.Emit("mov.b64 %0, %1;", reg.V7, value);
+                reg.V7 = (ulong)value;
+            }
         }
 
-        private static unsafe void Store(ArrayView<ulong> registers, int id, ulong value)
+        private static unsafe void Store(ref Registers reg, int id, ulong value)
         {
-            registers[id] = value;
+            switch (id)
+            {
+                case 0:
+                    reg.V0 = (ulong)value;
+                    //CudaAsm.Emit("mov.b64 %0, %1;", reg.V0, value);
+                    return;
+                case 1:
+                    reg.V1 = (ulong)value;
+                    //CudaAsm.Emit("mov.b64 %0, %1;", reg.V1, value);
+                    return;
+                case 2:
+                    reg.V2 = (ulong)value;
+                    //CudaAsm.Emit("mov.b64 %0, %1;", reg.V2, value);
+                    return;
+                case 3:
+                    reg.V3 = (ulong)value;
+                    //CudaAsm.Emit("mov.b64 %0, %1;", reg.V3, value);
+                    return;
+                case 4:
+                    reg.V4 = (ulong)value;
+                    //CudaAsm.Emit("mov.b64 %0, %1;", reg.V4, value);
+                    return;
+            }
+
+            if (id == 5)
+            {
+                reg.V5 = (ulong)value;
+                //CudaAsm.Emit("mov.b64 %0, %1;", reg.V5, value);
+            }
+            if (id == 6)
+            {
+                reg.V6 = (ulong)value;
+                //CudaAsm.Emit("mov.b64 %0, %1;", reg.V6, value);
+            }
+
+            if (id == 7)
+            {
+                reg.V7 = (ulong)value;
+                //CudaAsm.Emit("mov.b64 %0, %1;", reg.V7, value);
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        //[IntrinsicMethod(nameof(Store_Generate))]
-        [IntrinsicImplementation]
+        [IntrinsicMethod(nameof(Store_Generate))]
+        //[IntrinsicImplementation]
         private static unsafe void Store_Test(Registers* reg, int id, ulong value)
         {
 
@@ -617,6 +927,8 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
 
         #region Store Key
 
+        [IntrinsicMethod(nameof(StoreValues_Generate))]
+        ////[IntrinsicImplementation]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private unsafe static void StoreValues(ref ulong arr, ulong a, ulong b, ulong c, ulong d)
         {
@@ -630,6 +942,22 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
                     v[3] = d;
                 }
             }
+        }
+
+        private static void StoreValues_Generate(PTXBackend backend, PTXCodeGenerator codeGenerator, Value value)
+        {
+            var arrayRef = (RegisterAllocator<PTXRegisterKind>.HardwareRegister)codeGenerator.LoadPrimitive(value[0]);
+            var a = (RegisterAllocator<PTXRegisterKind>.HardwareRegister)codeGenerator.LoadPrimitive(value[1]);
+            var b = (RegisterAllocator<PTXRegisterKind>.HardwareRegister)codeGenerator.LoadPrimitive(value[2]);
+            var c = (RegisterAllocator<PTXRegisterKind>.HardwareRegister)codeGenerator.LoadPrimitive(value[3]);
+            var d = (RegisterAllocator<PTXRegisterKind>.HardwareRegister)codeGenerator.LoadPrimitive(value[4]);
+
+            var command = codeGenerator.BeginCommand($"st.local.v2.u64 [%{PTXRegisterAllocator.GetStringRepresentation(arrayRef)}], {{%{PTXRegisterAllocator.GetStringRepresentation(a)},%{PTXRegisterAllocator.GetStringRepresentation(b)}}}");
+            command.Dispose();
+            command = codeGenerator.BeginCommand($"st.local.v2.u64 [%{PTXRegisterAllocator.GetStringRepresentation(arrayRef)} + 16], {{%{PTXRegisterAllocator.GetStringRepresentation(c)},%{PTXRegisterAllocator.GetStringRepresentation(d)}}}");
+            command.Dispose();
+
+            var ab = codeGenerator.Builder.ToString();
         }
 
         #endregion
