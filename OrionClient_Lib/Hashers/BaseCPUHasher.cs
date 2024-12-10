@@ -61,6 +61,12 @@ namespace OrionClientLib.Hashers
             _pool = pool;
             _running = true;
             _threads = settings.CPUSetting.CPUThreads;
+
+            if(_threads == 0)
+            {
+                _threads = Environment.ProcessorCount;
+            }
+
             _info = new HasherInfo();
 
             if (_pool != null)
