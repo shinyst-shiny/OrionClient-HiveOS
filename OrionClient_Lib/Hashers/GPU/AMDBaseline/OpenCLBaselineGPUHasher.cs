@@ -18,7 +18,8 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
     public partial class OpenCLBaselineGPUHasher : BaseGPUHasher
     {
         public override string Name => "OpenCL Baseline";
-        public override string Description => "Baseline GPU hashing for AMD GPUs [red][[Experimental]][/]";
+        public override string Description => "Baseline GPU hashing for AMD GPU";
+        public override bool Experimental => true;
 
         public override Action<ArrayView<Instruction>, ArrayView<SipState>, ArrayView<ulong>> HashxKernel()
         {

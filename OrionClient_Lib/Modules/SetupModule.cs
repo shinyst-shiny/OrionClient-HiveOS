@@ -5,6 +5,7 @@ using ILGPU.Runtime;
 using ILGPU.Runtime.Cuda;
 using ILGPU.Runtime.OpenCL;
 using Newtonsoft.Json;
+using Org.BouncyCastle.Ocsp;
 using OrionClientLib.Hashers;
 using OrionClientLib.Modules.Models;
 using OrionClientLib.Pools;
@@ -148,10 +149,10 @@ namespace OrionClientLib.Modules
                     chosenText = "[b][[Current]][/] ";
                 }
 
-                return $"{chosenText}{hasher.Name} - {hasher.Description}";
+                return $"{chosenText}{hasher.Name} - {hasher.Description} {(hasher.Experimental ? "[red][[Experimental]][/]" : String.Empty)}";
             });
 
-            selectionPrompt.AddChoices(_data.Hashers.Where(x => x.HardwareType == IHasher.Hardware.CPU).OrderByDescending(x =>x == cpuHasher));
+            selectionPrompt.AddChoices(_data.Hashers.Where(x => x.HardwareType == IHasher.Hardware.CPU && (_settings.GPUSetting.EnableExperimentalHashers || !x.Experimental)).OrderByDescending(x =>x == cpuHasher));
             selectionPrompt.AddChoice(null);
 
             cpuHasher = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
@@ -187,10 +188,10 @@ namespace OrionClientLib.Modules
                     chosenText = "[b][[Current]][/] ";
                 }
 
-                return $"{chosenText}{hasher.Name} - {hasher.Description}";
+                return $"{chosenText}{hasher.Name} - {hasher.Description} {(hasher.Experimental ? "[red][[Experimental]][/]" : String.Empty)}";
             });
 
-            selectionPrompt.AddChoices(_data.Hashers.Where(x => x.HardwareType == IHasher.Hardware.GPU).OrderByDescending(x => x == gpuHasher));
+            selectionPrompt.AddChoices(_data.Hashers.Where(x => x.HardwareType == IHasher.Hardware.GPU && (_settings.GPUSetting.EnableExperimentalHashers || !x.Experimental)).OrderByDescending(x => x == gpuHasher));
             selectionPrompt.AddChoice(null);
 
             gpuHasher = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
@@ -329,29 +330,21 @@ namespace OrionClientLib.Modules
             selectionPrompt.AddChoices(choices.OrderByDescending(x => x.Item1 == _settings.CPUSetting.CPUThreads).ThenByDescending(x => x.Item1));
 
             (int, string) choice = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
-            
-            if(choice.Item1 == -1)
+
+            if (choice.Item1 == -1)
             {
                 //We're going back to the start of this step
                 return _currentStep;
             }
-            else if(choice.Item1 == 0)
+            else if (choice.Item1 == 0)
             {
-                while (true)
-                {
-                    TextPrompt<int> textPrompt = new TextPrompt<int>($"Total threads (min: 1, max: {totalThreads}):");
-                    textPrompt.DefaultValue(_settings.CPUSetting.CPUThreads);
+                TextPrompt<int> textPrompt = new TextPrompt<int>($"Total threads (min: 0, max: {totalThreads}):");
+                textPrompt.DefaultValue(_settings.CPUSetting.CPUThreads);
+                textPrompt.Validate((x) => { return x >= 0 && x <= totalThreads; });
 
-                    int result = await textPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
+                int result = await textPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
 
-                    AnsiConsole.Clear();
-
-                    if (result > 0 && result <= totalThreads)
-                    {
-                        _settings.CPUSetting.CPUThreads = result;
-                        break;
-                    }
-                }
+                AnsiConsole.Clear();
             }
             else
             {

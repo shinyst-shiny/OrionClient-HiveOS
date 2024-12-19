@@ -18,6 +18,7 @@ namespace OrionClientLib.Hashers
         public bool Initialized { get; }
         public TimeSpan CurrentChallengeTime { get; }
         public bool IsMiningPaused { get; }
+        public bool Experimental { get; }
 
         public event EventHandler<HashrateInfo> OnHashrateUpdate;
 

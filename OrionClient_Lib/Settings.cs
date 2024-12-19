@@ -87,6 +87,9 @@ namespace OrionClientLib
             [SettingDetails("Program Generation Threads", "Total CPU threads to use to generation program instructions (0 = all threads)")]
             [ThreadValidator]
             public int ProgramGenerationThreads { get; set; } = 0;
+
+            [SettingDetails("Enable Experimental Hashers", "Enables/Disables displaying experimental hashers")]
+            public bool EnableExperimentalHashers { get; set; } = false;
         }
 
         public static async Task<Settings> LoadAsync()
@@ -250,6 +253,6 @@ namespace OrionClientLib
     {
         public string Name { get; }
         public string Description { get; }
-        public bool Display { get; }
+        public bool DisplaySetting { get; }
     }
 }

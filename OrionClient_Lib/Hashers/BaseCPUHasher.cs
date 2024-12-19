@@ -31,7 +31,8 @@ namespace OrionClientLib.Hashers
         public event EventHandler<HashrateInfo> OnHashrateUpdate;
         public abstract string Name { get; }
         public abstract string Description { get; }
-        public virtual bool Display => true;
+        public virtual bool DisplaySetting => true;
+        public virtual bool Experimental => false;
 
         protected Stopwatch _sw = Stopwatch.StartNew();
         protected TimeSpan _challengeStartTime;

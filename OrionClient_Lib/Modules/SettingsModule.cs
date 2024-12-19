@@ -159,12 +159,19 @@ namespace OrionClientLib.Modules
                         return "Disabled";
                     }
 
-                    if(opt.Name == defaultOption)
+                    string experimentalText = String.Empty;
+
+                    if(opt is IHasher hasher && hasher.Experimental)
                     {
-                        return $"[[Current]] {opt.Name} - {opt.Description}";
+                        experimentalText = "[red][[Experimental]][/]";
                     }
 
-                    return $"{opt.Name} - {opt.Description}";
+                    if(opt.Name == defaultOption)
+                    {
+                        return $"[[Current]] {opt.Name} - {opt.Description} {experimentalText}";
+                    }
+
+                    return $"{opt.Name} - {opt.Description} {experimentalText}";
                 });
 
                 //Special case for hashers as the disabled ones don't inheret a base class
@@ -177,7 +184,7 @@ namespace OrionClientLib.Modules
                 {
                     if(option is IHasher hasher)
                     {
-                        if(!hasher.IsSupported())
+                        if(!hasher.IsSupported() || (hasher.Experimental && !_settings.GPUSetting.EnableExperimentalHashers))
                         {
                             continue;
                         }
@@ -186,8 +193,7 @@ namespace OrionClientLib.Modules
                     selectionPrompt.AddChoice(option);
                 }
 
-
-                    var result = await selectionPrompt.ShowAsync(AnsiConsole.Console, token);
+                var result = await selectionPrompt.ShowAsync(AnsiConsole.Console, token);
 
                 return result?.Name ?? "Disabled";
             }

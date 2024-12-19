@@ -56,7 +56,7 @@ namespace OrionClientLib.Modules.SettingsData
     {
         public TypeValidator()
         {
-            Options = GetExtendedClasses<T>().Where(x => x.Display).Cast<ISettingInfo>().ToList();
+            Options = GetExtendedClasses<T>().Where(x => x.DisplaySetting).Cast<ISettingInfo>().ToList();
         }
 
         public override bool Validate(object data)

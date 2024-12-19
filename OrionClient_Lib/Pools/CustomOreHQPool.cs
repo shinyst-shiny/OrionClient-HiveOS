@@ -13,7 +13,7 @@ namespace OrionClientLib.Pools
         public override string Name { get; } = "Custom Ore-HQ Pool";
         public override string DisplayName => $"{Name} ({WebsocketUrl?.Host ?? "Unknown"})";
         public override string Description => $"Custom pool using Ore-HQ pool implementation";
-        public override bool Display => true;
+        public override bool DisplaySetting => true;
         public override Coin Coins { get; } = Coin.Ore;
 
         public override Dictionary<string, string> Features { get; } = new Dictionary<string, string>();

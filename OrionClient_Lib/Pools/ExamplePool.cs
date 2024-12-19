@@ -26,7 +26,7 @@ namespace OrionClientLib.Pools
 
         //Name displayed
         public override string DisplayName => $"[b]{Name}[/]";
-        public override bool Display => false;
+        public override bool DisplaySetting => false;
 
         public override string Description => "Example pool sample";
 

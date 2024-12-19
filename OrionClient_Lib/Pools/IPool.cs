@@ -43,7 +43,7 @@ namespace OrionClientLib.Pools
     {
         public abstract string Name { get; }
         public abstract string DisplayName { get; }
-        public abstract bool Display { get; }
+        public abstract bool DisplaySetting { get; }
         public abstract string Description { get; }
         public abstract Dictionary<string, string> Features { get; }
         public abstract bool HideOnPoolList { get; }

@@ -15,7 +15,8 @@ namespace OrionClientLib.Hashers
 
         public string Name => $"Disabled";
         public string Description => $"Disables {HardwareType} hasher";
-        public bool Display => true;
+        public bool DisplaySetting => true;
+        public bool Experimental => false;
 
         public bool Initialized => true;
         public bool IsMiningPaused => true;
