@@ -55,6 +55,8 @@ namespace OrionClientLib
         public CPUSettings CPUSetting { get; set; } = new CPUSettings();
         [SettingDetails("View GPU Settings", "Configure GPU settings")]
         public GPUSettings GPUSetting { get; set; } = new GPUSettings();
+        [SettingDetails("View Vanity Settings", "Configure Vanity settings")]
+        public VanitySettings VanitySetting { get; set; } = new VanitySettings();
 
         public class CPUSettings
         {
@@ -68,6 +70,7 @@ namespace OrionClientLib
 
             [SettingDetails("Auto Set CPU Affinity", "Automatically sets CPU affinity when only CPU mining is enabled and only using physical thread count (windows only)")]
             public bool AutoSetCPUAffinity { get; set; } = true;
+
         }
 
         public class GPUSettings
@@ -90,6 +93,32 @@ namespace OrionClientLib
 
             [SettingDetails("Enable Experimental Hashers", "Enables/Disables displaying experimental hashers")]
             public bool EnableExperimentalHashers { get; set; } = false;
+        }
+
+        public class VanitySettings
+        {
+            public const string Directory = "vanity_data";
+
+            public List<int> GPUDevices { get; set; } = new List<int>();
+
+            [SettingDetails("Max GPU RAM Usage (MB)", "Maximum GPU RAM that will be used per device. CPU will a similar amount to the total of all GPUs")]
+            [OptionSettingValidation<int>(8192, 4096 + 2048, 4096, 2048 + 1024, 2048, 1024 + 512, 1024, 512)]
+            public int MaxRAMUsageMB { get; set; } = 1024;
+
+            public string VanitySearchFile { get; set; } = "search.txt";
+            public string VanityOutputFile { get; set; } = "foundWallets.txt";
+
+            [SettingDetails("Block Size", "Default should provide best performance")]
+            [OptionSettingValidation<int>(512, 256, 128, 64, 32, 16)]
+            public int GPUBlockSize { get; set; } = 256;
+
+
+            [SettingDetails("Minimum Character Length", "Minimum character length to search. Useful to filter when importing a dictionary list")]
+            public int MinimumCharacterLength { get; set; } = 0;
+
+            [SettingDetails("Vanity Threads", "Total CPU threads to use to validate found vanities (0 = all threads)")]
+            [ThreadValidator]
+            public int VanityThreads { get; set; } = 0;
         }
 
         public static async Task<Settings> LoadAsync()

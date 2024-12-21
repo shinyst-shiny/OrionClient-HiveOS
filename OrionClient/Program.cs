@@ -91,6 +91,7 @@ namespace OrionClient
                 new BenchmarkerModule(),
                 new SetupModule(),
                 new SettingsModule(),
+                new VanityModule(),
                 new ExitModule(),
             };
 
