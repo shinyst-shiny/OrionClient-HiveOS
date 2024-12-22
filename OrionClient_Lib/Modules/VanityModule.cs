@@ -1,12 +1,17 @@
 ﻿using Blake2Sharp;
+using Chaos.NaCl;
 using Equix;
 using ILGPU.Runtime;
+using Newtonsoft.Json;
 using NLog;
 using OrionClientLib.Hashers;
 using OrionClientLib.Modules.Models;
+using OrionClientLib.Modules.Vanity;
 using OrionClientLib.Pools;
 using OrionClientLib.Pools.Models;
+using OrionClientLib.Utilities;
 using Solnet.Wallet;
+using Solnet.Wallet.Utilities;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using System;
@@ -130,6 +135,7 @@ namespace OrionClientLib.Modules
                     case run:
                         return true;
                     case view:
+                        await ViewWallets();
                         break;
                     case setup:
                         await SelectGPUs();
@@ -189,6 +195,150 @@ namespace OrionClientLib.Modules
             vanitySettings.GPUDevices = chosenGPUs;
 
             await _currentData.Settings.SaveAsync();
+        }
+
+        private async Task ViewWallets()
+        {
+            SelectionPrompt<VanityTracker> selectionPrompt = new SelectionPrompt<VanityTracker>();
+            selectionPrompt.Title($"View Vanities By Length");
+            selectionPrompt.UseConverter((tracker) =>
+            {
+                if (tracker.VanityLength == 0)
+                {
+                    return $"View All - {_vanity.FoundWallets} Found";
+                }
+
+                return $"{tracker.VanityLength} - {tracker.Total} Found";
+            });
+
+            selectionPrompt.AddChoice(new VanityTracker { VanityLength = 0 });
+
+            foreach (var kvp in _vanity.VanitiesByLength.OrderByDescending(x => x.Key))
+            {
+                if (kvp.Value.Total > 0)
+                {
+                    selectionPrompt.AddChoice(kvp.Value);
+                }
+            }
+
+            VanityTracker wallets = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
+            List<FoundVanity> vanities = wallets.Vanities;
+
+            if (wallets.VanityLength == 0)
+            {
+                vanities = new List<FoundVanity>();
+
+                foreach (var kvp in _vanity.VanitiesByLength)
+                {
+                    vanities.AddRange(kvp.Value.Vanities);
+                }
+            }
+
+            while (true)
+            {
+                SelectionPrompt<FoundVanity> vanitySelectionPrompt = new SelectionPrompt<FoundVanity>();
+                vanitySelectionPrompt.Title($"Select vanity to view private key.");
+                vanitySelectionPrompt.EnableSearch();
+                vanitySelectionPrompt.PageSize = 20;
+                vanitySelectionPrompt.UseConverter((vanity) =>
+                {
+                    if(vanity.Exported)
+                    {
+                        return $"[green]{vanity.VanityText} - {vanity.PublicKey}[/]";
+                    }
+
+                    return $"[red]{vanity.VanityText} - {vanity.PublicKey}[/]";
+                });
+
+                vanitySelectionPrompt.AddChoices(vanities.OrderBy(x => x.PublicKey));
+
+                FoundVanity vanity = await vanitySelectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
+
+                SelectionPrompt<string> optionSelectionPrompt = new SelectionPrompt<string>();
+
+                Base58Encoder encoder = new Base58Encoder();
+
+                byte[] privateKey = encoder.DecodeData(vanity.PrivateKey);
+                byte[] publicKey = encoder.DecodeData(vanity.PublicKey);
+
+                List<byte> fullKey = [.. privateKey, .. publicKey];
+
+                if (!ValidateVanity(vanity))
+                {
+                    optionSelectionPrompt.Title($"[red]Vanity {vanity.PublicKey} is invalid. Private key can't produce correct public key[/]");
+                }
+                else
+                {
+                    optionSelectionPrompt.Title($"Wallet Import: {encoder.EncodeData(fullKey.ToArray())}\n\nExporting will create a keypair file that can be 'searched' in the main setup");
+                }
+
+                const string export = "Export";
+                const string returnToList = "Return To List";
+                const string exit = "Exit to Vanity Menu";
+
+                if (!IsExported(vanity.PublicKey))
+                {
+                    optionSelectionPrompt.AddChoice(export);
+                }
+
+                optionSelectionPrompt.AddChoice(returnToList);
+                optionSelectionPrompt.AddChoice(exit);
+
+                string choice = await optionSelectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
+
+                switch (choice)
+                {
+                    case export:
+                        await ExportWallet(vanity.PublicKey, fullKey);
+                        vanity.Exported = true;
+                        continue;
+                    case returnToList:
+                        continue;
+                    case exit:
+                        break;
+                }
+
+                break;
+            }
+        }
+
+        private bool ValidateVanity(FoundVanity vanity)
+        {
+            Base58Encoder encoder = new Base58Encoder();
+
+            byte[] privateKey = encoder.DecodeData(vanity.PrivateKey);
+            byte[] publicKey = encoder.DecodeData(vanity.PublicKey);
+
+            byte[] expectedPublicKey = Ed25519.ExpandedPrivateKeyFromSeed(privateKey)[32..64];
+
+            //Accurate public key
+            if (expectedPublicKey.SequenceEqual(publicKey))
+            {
+                //Valid base58
+                string vanityStr = encoder.EncodeData(expectedPublicKey);
+
+                return vanity.PublicKey == vanityStr;
+            }
+
+            return false;
+        }
+
+        private bool IsExported(string vanity)
+        {
+            string directory = Path.Combine(Utils.GetExecutableDirectory(), Settings.VanitySettings.Directory, "wallets");
+
+            Directory.CreateDirectory(directory);
+
+            return File.Exists(Path.Combine(directory, $"{vanity}.json"));
+        }
+
+        private async Task ExportWallet(string vanity, List<byte> key)
+        {
+            string directory = Path.Combine(Utils.GetExecutableDirectory(), Settings.VanitySettings.Directory, "wallets");
+
+            Directory.CreateDirectory(directory);
+
+            await File.WriteAllTextAsync(Path.Combine(directory, $"{vanity}.json"), JsonConvert.SerializeObject(key));
         }
 
         private void _vanity_OnHashrateUpdate(object? sender, Vanity.VanityHashingInfo e)

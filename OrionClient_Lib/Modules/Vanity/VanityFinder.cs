@@ -131,7 +131,7 @@ namespace OrionClientLib.Modules.Vanity
                         };
 
 
-                        var r = VanitiesByLength.AddOrUpdate(foundVanity.VanityText.Length, (k) => new VanityTracker(), (k, v) => v);
+                        var r = VanitiesByLength.AddOrUpdate(foundVanity.VanityText.Length, (k) => new VanityTracker { VanityLength = foundVanity.VanityText.Length }, (k, v) => v);
                         r.Add(foundVanity);
 
                         _foundVanities.Enqueue(foundVanity);
@@ -162,7 +162,7 @@ namespace OrionClientLib.Modules.Vanity
             });
         }
 
-        public async Task<(bool success, string message)> Load(string inputFile, string outputFile, int minimumCharacterLength)
+        public async Task<(bool success, string message)> Load(string inputFile, string outputFile, string walletDirectory, int minimumCharacterLength)
         {
             VanitiesByLength.Clear();
             _vanityTree.Clear();
@@ -176,7 +176,9 @@ namespace OrionClientLib.Modules.Vanity
             {
                 string[] lines = await File.ReadAllLinesAsync(outputFile);
 
-                foreach(string line in lines)
+                HashSet<string> exportedWallets = new HashSet<string>(Directory.GetFiles(walletDirectory, "*.json").Select(x => x.Split('\\', StringSplitOptions.RemoveEmptyEntries).Last().Split('.').First()));
+
+                foreach (string line in lines)
                 {
                     string[] parts = line.Split(":", StringSplitOptions.RemoveEmptyEntries);
 
@@ -185,12 +187,13 @@ namespace OrionClientLib.Modules.Vanity
                         continue;
                     }
 
-                    var r = VanitiesByLength.AddOrUpdate(parts[1].Length, (k) => new VanityTracker(), (k, v) => v);
+                    var r = VanitiesByLength.AddOrUpdate(parts[1].Length, (k) => new VanityTracker { VanityLength = parts[1].Length }, (k, v) => v);
                     r.Add(new FoundVanity
                     {
                         VanityText = parts[1],
                         PublicKey = parts[2],
-                        PrivateKey = parts[3]
+                        PrivateKey = parts[3],
+                        Exported = exportedWallets.Contains(parts[2])
                     });
                 }
             }

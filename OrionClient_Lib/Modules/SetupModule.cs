@@ -503,8 +503,16 @@ namespace OrionClientLib.Modules
             await AddWallet(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "solana", "id.json"));
             await AddWallet(Path.Combine(Utils.GetExecutableDirectory(), "id.json"));
 
+            string walletDirectory = Path.Combine(Path.Combine(Utils.GetExecutableDirectory(), Settings.VanitySettings.Directory), "wallets");
+
+            foreach(string exportedWallet in Directory.GetFiles(walletDirectory, "*.json"))
+            {
+                await AddWallet(exportedWallet);
+            }
+
             SelectionPrompt<int> selectionPrompt = new SelectionPrompt<int>();
             selectionPrompt.Title(potentialWallets.Count == 0 ? "Found no wallet keys in default location for solana-cli or client" : $"Found {potentialWallets.Count} potential wallets");
+            selectionPrompt.WrapAround(false);
             selectionPrompt.EnableSearch();
             selectionPrompt.UseConverter((i) =>
             {
@@ -523,7 +531,7 @@ namespace OrionClientLib.Modules
                         return $"Wallet: {potentialWallets[i].wallet.Account.PublicKey}. Path: {potentialWallets[i].path}";
                 }
             });
-            
+
             for(int i = 0; i < potentialWallets.Count; i++)
             {
                 selectionPrompt.AddChoice(i);

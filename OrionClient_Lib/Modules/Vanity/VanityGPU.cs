@@ -11,6 +11,7 @@ using System.Security.Cryptography;
 using NLog;
 using OrionClientLib.Utilities;
 using Chaos.NaCl;
+using System.IO;
 
 namespace OrionClientLib.Hashers
 {
@@ -151,8 +152,9 @@ namespace OrionClientLib.Hashers
             string vanityDirectory = Path.Combine(Utils.GetExecutableDirectory(), Settings.VanitySettings.Directory);
             string inputFile = Path.Combine(vanityDirectory, settings.VanitySetting.VanitySearchFile);
             string outputFile = Path.Combine(vanityDirectory, settings.VanitySetting.VanityOutputFile);
+            string walletDirectory = Path.Combine(vanityDirectory, "wallets");
 
-            await _vanityFinder.Load(inputFile, outputFile, settings.VanitySetting.MinimumCharacterLength);
+            await _vanityFinder.Load(inputFile, outputFile, walletDirectory, settings.VanitySetting.MinimumCharacterLength);
         }
 
         private void DHasher_OnHashrateUpdate(object? sender, VanityHashingInfo e)

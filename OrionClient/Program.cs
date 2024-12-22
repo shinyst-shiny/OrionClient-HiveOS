@@ -107,7 +107,6 @@ namespace OrionClient
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Program))]
         static async Task Main(string[] args)
         {
-            ///usr/lib/wsl/lib/libcuda.so
             if (!IsSupported())
             {
                 Console.WriteLine($"Only x64 Windows/Linux is currently supported");
@@ -116,7 +115,6 @@ namespace OrionClient
             }
 
             NativeLibrary.SetDllImportResolver(Assembly.GetAssembly(typeof(CudaAccelerator)), DllImportResolver);
-
 
             AnsiConsole.Clear();
 

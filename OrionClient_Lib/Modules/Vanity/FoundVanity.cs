@@ -8,6 +8,7 @@ namespace OrionClientLib.Modules.Vanity
 {
     public class VanityTracker
     {
+        public int VanityLength { get; set; }
         public List<FoundVanity> Vanities { get; private set; } = new List<FoundVanity>();
         private HashSet<string> _uniqueVanities = new HashSet<string>();
 
@@ -31,6 +32,7 @@ namespace OrionClientLib.Modules.Vanity
         public string PublicKey { get; set; }
         public string PrivateKey { get; set; }
         public string VanityText { get; set; }
+        public bool Exported { get; set; }
 
         public override int GetHashCode()
         {
