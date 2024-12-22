@@ -269,7 +269,7 @@ namespace OrionClientLib.Modules
                 }
                 else
                 {
-                    optionSelectionPrompt.Title($"Wallet Import: {encoder.EncodeData(fullKey.ToArray())}\n\nExporting will create a keypair file that can be 'searched' in the main setup");
+                    optionSelectionPrompt.Title($"Exporting will create a keypair file that can be 'searched' in the main setup\n\nWallet Import (Solflare/Phantom): {encoder.EncodeData(fullKey.ToArray())}");
                 }
 
                 const string export = "Export";
