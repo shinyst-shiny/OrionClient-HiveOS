@@ -116,7 +116,12 @@ namespace OrionClientLib.Modules
                 const string reload = "Reload Vanity File";
                 const string exit = "Exit";
 
-                selectionPrompt.AddChoices(run, view, setup, reload, exit);
+                if(_currentData.Settings.VanitySetting.GPUDevices.Count > 0)
+                {
+                    selectionPrompt.AddChoice(run);
+                }
+
+                selectionPrompt.AddChoices(setup, view, reload, exit);
 
                 string choice = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
 
@@ -190,10 +195,20 @@ namespace OrionClientLib.Modules
         {
             int index = e.Index;
 
-            _hashrateTable.UpdateCell(index, 1, e.Speed.ToString());
-            _hashrateTable.UpdateCell(index, 2, $"{e.ExecutionTime.TotalMilliseconds:0.00}ms");
-            _hashrateTable.UpdateCell(index, 3, $"{e.VanitySearchTime.TotalMilliseconds:0.00}ms");
-            _hashrateTable.UpdateCell(index, 4, $"{PrettyFormatTime(e.Runtime)}");
+
+            _hashrateTable.UpdateCell(index, 2, e.Speed.ToString());
+            _hashrateTable.UpdateCell(index, 3, $"{e.ExecutionTime.TotalMilliseconds:0.00}ms");
+
+            if (e.ExecutionTime.TotalMilliseconds < e.VanitySearchTime.TotalMilliseconds)
+            {
+                _hashrateTable.UpdateCell(index, 4, $"[red]{e.VanitySearchTime.TotalMilliseconds:0.00}ms[/]");
+            }
+            else
+            {
+                _hashrateTable.UpdateCell(index, 4, $"{e.VanitySearchTime.TotalMilliseconds:0.00}ms");
+            }
+
+            _hashrateTable.UpdateCell(index, 5, $"{PrettyFormatTime(e.Runtime)}");
 
             //Update all rows for now
             foreach (var kvp in _vanity.VanitiesByLength.OrderByDescending(x => x.Key))
@@ -240,6 +255,7 @@ namespace OrionClientLib.Modules
             _hashrateTable = new Table();
             
             _hashrateTable.AddColumn(new TableColumn("Name").Centered());
+            _hashrateTable.AddColumn(new TableColumn("Threads").Centered());
             _hashrateTable.AddColumn(new TableColumn("Hashrate").Centered());
             _hashrateTable.AddColumn(new TableColumn("Execution Time").Centered());
             _hashrateTable.AddColumn(new TableColumn("Vanity Time").Centered());
@@ -276,7 +292,7 @@ namespace OrionClientLib.Modules
             {
                 string gpuName = device.Name.Replace("NVIDIA ", "").Replace("GeForce ", "");
 
-                _hashrateTable.AddRow(gpuName, "-", "-");
+                _hashrateTable.AddRow(gpuName, (_currentData.Settings.VanitySetting.VanityThreads == 0 ? Environment.ProcessorCount : _currentData.Settings.VanitySetting.VanityThreads).ToString(), "-", "-", "-", "-");
             }
         }
 

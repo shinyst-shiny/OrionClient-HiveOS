@@ -26,7 +26,7 @@ namespace OrionClientLib.Hashers.GPU
 
                     if (!String.IsNullOrEmpty(att.OpenCLMethod))
                     {
-                        context.GetIntrinsicManager().RegisterMethod(method, new CLIntrinsic(t, att.GenerateMethod, att.IsOpenCLRedirect ? IntrinsicImplementationMode.Redirect : IntrinsicImplementationMode.GenerateCode));
+                        context.GetIntrinsicManager().RegisterMethod(method, new CLIntrinsic(t, att.OpenCLMethod, att.IsOpenCLRedirect ? IntrinsicImplementationMode.Redirect : IntrinsicImplementationMode.GenerateCode));
                     }
                 }
             }

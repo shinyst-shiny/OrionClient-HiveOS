@@ -117,7 +117,7 @@ namespace OrionClientLib.Hashers
                 var device = devicesToUse[i];
 
                 GPUDeviceHasher dHasher = new GPUDeviceHasher(GetVanityKernel(), device.CreateAccelerator(_context),
-                                                              device, i, _setupCPUData, _availableCPUData, settings.VanitySetting.GPUBlockSize);
+                                                              device, i, _setupCPUData, _availableCPUData, settings.VanitySetting.GPUBlockSize, settings.VanitySetting.VanityThreads);
                 try
                 {
                     dHasher.Initialize((int)maxBatchSize);
@@ -340,6 +340,7 @@ namespace OrionClientLib.Hashers
             private const int _minBatchSize = 0;
             private int _currentBatchSize = 0;
             private int _blockSize = 128;
+            private int _threads = 1;
 
             private Task _runningTask = null;
             private CancellationTokenSource _runToken;
@@ -354,7 +355,8 @@ namespace OrionClientLib.Hashers
                          Accelerator accelerator, Device device, int deviceId,
                          BlockingCollection<CPUData> readyCPUData, 
                          BlockingCollection<CPUData> availableCPUData,
-                         int blockSize
+                         int blockSize,
+                         int threads
                          )
             {
                 _vanityMethod = vanityKernel;
@@ -363,6 +365,7 @@ namespace OrionClientLib.Hashers
                 _deviceId = deviceId;
                 _device = device;
                 _accelerator = accelerator;
+                _threads = threads;
 
                 _blockSize = blockSize;
             }
@@ -608,7 +611,7 @@ namespace OrionClientLib.Hashers
 
                         //    }
                         //}
-                        _vanityFinder.Find(deviceData.CurrentCPUData.PrivateKeys, publicKeys, vanityKeys, deviceData.CurrentBatchSize);
+                        _vanityFinder.Find(deviceData.CurrentCPUData.PrivateKeys, publicKeys, vanityKeys, deviceData.CurrentBatchSize, _threads);
 
                         #endregion
 

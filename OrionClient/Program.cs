@@ -88,10 +88,10 @@ namespace OrionClient
             {
                 new MinerModule(),
                 new PoolModule(),
+                new VanityModule(),
                 new BenchmarkerModule(),
                 new SetupModule(),
                 new SettingsModule(),
-                new VanityModule(),
                 new ExitModule(),
             };
 

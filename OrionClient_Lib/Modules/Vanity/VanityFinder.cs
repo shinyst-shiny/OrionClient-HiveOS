@@ -1,4 +1,6 @@
 ﻿using Chaos.NaCl;
+using DrillX.Compiler;
+using DrillX;
 using NLog;
 using Solnet.Wallet;
 using System;
@@ -7,6 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace OrionClientLib.Modules.Vanity
@@ -61,80 +64,102 @@ namespace OrionClientLib.Modules.Vanity
             }
         }
 
-        public void Find(byte[] privateKey, byte[] publicKey, byte[] vanityKey, int batchSize)
+        public void Find(byte[] privateKey, byte[] publicKey, byte[] vanityKey, int batchSize, int threads)
         {
-            Span<byte> privKey = new Span<byte>(privateKey);
-            Span<byte> pubKey = new Span<byte>(publicKey);
-            Span<byte> vanKey = new Span<byte>(vanityKey);
-
-            List<string> potentialVanities = new List<string>();
-            byte[] output = new byte[64];
-
-            for(int i = 0; i < batchSize; i++)
+            if(threads <= 0)
             {
-                potentialVanities.Clear();
-                int index = i * 32;
-
-                Span<byte> currentVanity = vanKey.Slice(index, 32);
-
-                Node currentNode = _vanityTree.GetNode(currentVanity[0]);
-
-                if (currentNode != null)
-                {
-                    for (int z = 1; z < currentVanity.Length; z++)
-                    {
-                        currentNode = currentNode.GetNode(currentVanity[z]);
-
-                        if (currentNode == null)
-                        {
-                            break;
-                        }
-
-                        potentialVanities.AddRange(currentNode.PotentialVanities);
-                    }
-                }
-
-                if (potentialVanities.Count > 0)
-                {
-                    string longestVanity = potentialVanities.Last();
-
-
-                    FoundVanity foundVanity = new FoundVanity
-                    {
-                        PrivateKey = EncodeBytes(privKey.Slice(index, 32), output),
-                        PublicKey = EncodeBytes(pubKey.Slice(index, 32), output),
-                        VanityText = longestVanity,
-                    };
-
-
-                    var r = VanitiesByLength.AddOrUpdate(foundVanity.VanityText.Length, (k) => new VanityTracker(), (k, v) => v);
-                    r.Add(foundVanity);
-
-                    _foundVanities.Enqueue(foundVanity);
-
-                    //byte[] pubKeyActual = Ed25519.ExpandedPrivateKeyFromSeed(privKey.Slice(i * 32, 32).ToArray())[32..64];
-                    //Span<byte> pubKeyFound = pubKey.Slice(i * 32, 32);
-
-                    //byte[] output = new byte[64];
-
-                    //Base58EncoderPerf.Encode(pubKeyActual, 0, output, out int s, out int end);
-
-                    //if(!pubKeyFound.SequenceEqual(pubKeyActual))
-                    //{
-
-                    //}
-
-                    //string test = Encoding.UTF8.GetString(output, s, end);
-
-                    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                    string EncodeBytes(Span<byte> bytes, byte[] buffer)
-                    {
-                        Base58EncoderPerf.Encode(bytes, 0, buffer, out int s, out int end);
-
-                        return Encoding.UTF8.GetString(buffer, s, end);
-                    }
-                }
+                threads = Environment.ProcessorCount;
             }
+
+            threads = Math.Min(threads, Environment.ProcessorCount);
+
+            int rangeSize = batchSize / threads;
+
+            if (rangeSize == 0)
+            {
+                rangeSize++;
+            }
+
+            var rangePartitioner = Partitioner.Create(0, batchSize, rangeSize);
+
+            Parallel.ForEach(rangePartitioner, new ParallelOptions { MaxDegreeOfParallelism = threads }, (range, loopState) =>
+            {
+                Span<byte> privKey = new Span<byte>(privateKey);
+                Span<byte> pubKey = new Span<byte>(publicKey);
+                Span<byte> vanKey = new Span<byte>(vanityKey);
+
+                string potentialVanity = String.Empty;
+
+                byte[] output = new byte[64];
+
+                // Loop over each range element without a delegate invocation.
+                for (int i = range.Item1; i < range.Item2; i++)
+                {
+                    potentialVanity = String.Empty;
+
+                    int index = i * 32;
+
+                    Span<byte> currentVanity = vanKey.Slice(index, 32);
+
+                    Node currentNode = _vanityTree.GetNode(currentVanity[0]);
+
+                    if (currentNode != null)
+                    {
+                        for (int z = 1; z < currentVanity.Length; z++)
+                        {
+                            currentNode = currentNode.GetNode(currentVanity[z]);
+
+                            if (currentNode == null)
+                            {
+                                break;
+                            }
+
+                            if(!String.IsNullOrEmpty(currentNode.Vanity))
+                            {
+                                potentialVanity = currentNode.Vanity;
+                            }
+                        }
+                    }
+
+                    if (!String.IsNullOrEmpty(potentialVanity))
+                    {
+                        FoundVanity foundVanity = new FoundVanity
+                        {
+                            PrivateKey = EncodeBytes(privKey.Slice(index, 32), output),
+                            PublicKey = EncodeBytes(pubKey.Slice(index, 32), output),
+                            VanityText = potentialVanity,
+                        };
+
+
+                        var r = VanitiesByLength.AddOrUpdate(foundVanity.VanityText.Length, (k) => new VanityTracker(), (k, v) => v);
+                        r.Add(foundVanity);
+
+                        _foundVanities.Enqueue(foundVanity);
+
+                        //byte[] pubKeyActual = Ed25519.ExpandedPrivateKeyFromSeed(privKey.Slice(i * 32, 32).ToArray())[32..64];
+                        //Span<byte> pubKeyFound = pubKey.Slice(i * 32, 32);
+
+                        //byte[] output = new byte[64];
+
+                        //Base58EncoderPerf.Encode(pubKeyActual, 0, output, out int s, out int end);
+
+                        //if(!pubKeyFound.SequenceEqual(pubKeyActual))
+                        //{
+
+                        //}
+
+                        //string test = Encoding.UTF8.GetString(output, s, end);
+
+                        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                        string EncodeBytes(Span<byte> bytes, byte[] buffer)
+                        {
+                            Base58EncoderPerf.Encode(bytes, 0, buffer, out int s, out int end);
+
+                            return Encoding.UTF8.GetString(buffer, s, end);
+                        }
+                    }
+                }
+            });
         }
 
         public async Task<(bool success, string message)> Load(string inputFile, string outputFile, int minimumCharacterLength)
@@ -222,8 +247,10 @@ namespace OrionClientLib.Modules.Vanity
                             node = node.GetNode(_b58ToLoc[character - 49], true, character);
                         }
 
-                        if(node.PotentialVanities.Add(vanity))
+                        if(String.IsNullOrEmpty(node.Vanity))
                         {
+                            node.Vanity = vanity;
+
                             //Add to properly display the UI
                             var r = VanitiesByLength.AddOrUpdate(vanity.Length, (k) => new VanityTracker(), (k, v) => v);
                             r.Searching++;
@@ -270,7 +297,14 @@ namespace OrionClientLib.Modules.Vanity
         {
             public Node[] Nodes { get; private set; } = new Node[64];
 
-            public Node GetNode(byte c, bool add = false, char character = '\0')
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public Node GetNode(byte c)
+            {
+                return Nodes[c];
+
+            }
+
+            public Node GetNode(byte c, bool add, char character)
             {
                 Node node = Nodes[c];
 
@@ -292,7 +326,7 @@ namespace OrionClientLib.Modules.Vanity
         private class Node
         {
             public Node[] Nodes { get; private set; } = new Node[64];
-            public HashSet<string> PotentialVanities { get; private set; } = new HashSet<string>();
+            public string Vanity { get; set; } = String.Empty;
             public char Character { get; private set; }
 
             public Node(char character)
@@ -300,9 +334,16 @@ namespace OrionClientLib.Modules.Vanity
                 Character = character;
             }
 
-            public Node GetNode(byte c, bool add = false, char character = '\0')
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public Node GetNode(byte c)
             {
-                Node node = Nodes[c ];
+                return Nodes[c];
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public Node GetNode(byte c, bool add, char character)
+            {
+                Node node = Nodes[c];
 
                 if (node == null && add)
                 {

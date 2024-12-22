@@ -376,7 +376,7 @@ namespace OrionClientLib.Modules.Vanity
             return GetLeading0s(x.X0, x.X1, x.X2, x.X3, x.X4, x.X5, x.X6, x.X7, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF);
         }
 
-        [IntrinsicMethod(nameof(Mulu64hi_Generate))]
+        [IntrinsicMethod(nameof(Mulu64hi_Generate), nameof(Mul64hi_cl), true)]
         [IntrinsicImplementation]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static ulong Mul64hi(ulong a, ulong b)
@@ -389,6 +389,12 @@ namespace OrionClientLib.Modules.Vanity
             ulong num7 = (ulong)((long)num3 * (long)num4) + (num6 >> 32);
             ulong num8 = (ulong)((long)num2 * (long)num5 + (uint)num7);
             return (ulong)((long)num3 * (long)num5 + (long)(num7 >> 32)) + (num8 >> 32);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static ulong Mul64hi_cl(ulong a, ulong b)
+        {
+            return Mul64hi(a, b);
         }
 
         private static void Mulu64hi_Generate(PTXBackend backend, PTXCodeGenerator codeGenerator, Value value)
@@ -1237,7 +1243,7 @@ namespace OrionClientLib.Modules.Vanity
 
         //Set inlining
 
-        [IntrinsicMethod(nameof(MulReduce_Generate))]
+        [IntrinsicMethod(nameof(MulReduce_Generate), nameof(MulReduce_cl), true)]
         [IntrinsicImplementation]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static UInt256 MulReduce(UInt256 Z, UInt256 X, UInt256 Y)
@@ -1262,6 +1268,12 @@ namespace OrionClientLib.Modules.Vanity
             Z = MulAddReduce(c, Z, T.X0, 38, T.X1);
 
             return Z;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static UInt256 MulReduce_cl(UInt256 Z, UInt256 X, UInt256 Y)
+        {
+            return MulReduce(Z, X, Y);
         }
 
         private static void MulReduce_Generate(PTXBackend backend, PTXCodeGenerator codeGenerator, Value value)
@@ -1810,7 +1822,7 @@ namespace OrionClientLib.Modules.Vanity
             var test = codeGenerator.Builder.ToString();
         }
 
-        [IntrinsicMethod(nameof(AddReduce_Generate))]
+        [IntrinsicMethod(nameof(AddReduce_Generate), nameof(AddReduce_cl), true)]
         [IntrinsicImplementation]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static UInt256 AddReduce(UInt256 Z, UInt256 X, UInt256 Y)
@@ -1841,6 +1853,12 @@ namespace OrionClientLib.Modules.Vanity
             Z.X7 = (uint)c;
 
             return Z;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static UInt256 AddReduce_cl(UInt256 Z, UInt256 X, UInt256 Y)
+        {
+            return AddReduce(Z, X, Y);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1920,7 +1938,6 @@ namespace OrionClientLib.Modules.Vanity
 
         #region Sub
 
-
         private static void SubReduce_Generate(PTXBackend backend, PTXCodeGenerator codeGenerator, Value value)
         {
             var z = (RegisterAllocator<PTXRegisterKind>.CompoundRegister)codeGenerator.Allocate(value);
@@ -1956,7 +1973,7 @@ namespace OrionClientLib.Modules.Vanity
             var test = codeGenerator.Builder.ToString();
         }
 
-        [IntrinsicMethod(nameof(SubReduce_Generate))]
+        [IntrinsicMethod(nameof(SubReduce_Generate), nameof(SubReduce_cl), true)]
         [IntrinsicImplementation]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static UInt256 SubReduce(UInt256 Z, UInt256 X, UInt256 Y)
@@ -2008,6 +2025,11 @@ namespace OrionClientLib.Modules.Vanity
             return Z;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static UInt256 SubReduce_cl(UInt256 Z, UInt256 X, UInt256 Y)
+        {
+            return SubReduce(Z, X, Y);
+        }
 
         private static void MaxPSubReduce_Generate(PTXBackend backend, PTXCodeGenerator codeGenerator, Value value)
         {
@@ -2043,7 +2065,7 @@ namespace OrionClientLib.Modules.Vanity
             var test = codeGenerator.Builder.ToString();
         }
 
-        [IntrinsicMethod(nameof(MaxPSubReduce_Generate))]
+        [IntrinsicMethod(nameof(MaxPSubReduce_Generate), nameof(MaxPSubReduce_cl), true)]
         [IntrinsicImplementation]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static UInt256 MaxPSubReduce(UInt256 Z, UInt256 Y)
@@ -2092,6 +2114,12 @@ namespace OrionClientLib.Modules.Vanity
             Z.X7 = (uint)c;
 
             return Z;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static UInt256 MaxPSubReduce_cl(UInt256 Z, UInt256 Y)
+        {
+            return MaxPSubReduce(Z, Y);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
