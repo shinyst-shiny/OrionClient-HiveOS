@@ -29,6 +29,7 @@ using System.Windows.Input;
 using System.Diagnostics;
 using OrionClientLib.Hashers.GPU.AMDBaseline;
 using OrionClientLib.Utilities;
+using ILGPU.Runtime.Cuda;
 
 namespace OrionClient
 {
@@ -50,17 +51,72 @@ namespace OrionClient
         private static string _message = String.Empty;
         private static string _version = "1.2.0.0";
         private static GithubApi.Data _updateData;
+        private static string _cudaLocation = String.Empty;
+
+        private static IntPtr DllImportResolver(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
+        {
+            if (OperatingSystem.IsLinux() && (libraryName  == "nvcuda" || libraryName == "cuda"))
+            {
+                if (String.IsNullOrEmpty(_cudaLocation))
+                {
+                    string[] files = GetLibCudaFromDirectory("/usr/lib");
+
+                    if (files.Length == 0)
+                    {
+                        files = GetLibCudaFromDirectory("/usr/lib/wsl/lib/");
+
+                        if (files.Length == 0)
+                        {
+                            _logger.Log(LogLevel.Warn, $"Failed to find libcuda.so. Using default resolver");
+
+                            return IntPtr.Zero;
+                        }
+                    }
+
+                    if (files.Length > 1)
+                    {
+                        _logger.Log(LogLevel.Debug, $"Found multiple locations for libcuda.so. Using first. {String.Join(", ", files)}");
+                    }
+
+
+                    _cudaLocation = files[0];
+                }
+
+                return NativeLibrary.Load(_cudaLocation, assembly, searchPath);
+            }
+
+            // Otherwise, fallback to default import resolver.
+            return IntPtr.Zero;
+
+            string[] GetLibCudaFromDirectory(string directory)
+            {
+                if (Directory.Exists(directory))
+                {
+                    return Directory.GetFiles(directory, "libcuda.so", new EnumerationOptions
+                    {
+                        IgnoreInaccessible = true,
+                        RecurseSubdirectories = false
+                    });
+                }
+
+                return new string[0];
+            }
+        }
 
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Settings))]
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Program))]
         static async Task Main(string[] args)
         {
+            ///usr/lib/wsl/lib/libcuda.so
             if (!IsSupported())
             {
                 Console.WriteLine($"Only x64 Windows/Linux is currently supported");
 
                 return;
             }
+
+            NativeLibrary.SetDllImportResolver(Assembly.GetAssembly(typeof(CudaAccelerator)), DllImportResolver);
+
 
             AnsiConsole.Clear();
 
