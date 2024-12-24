@@ -122,7 +122,7 @@ namespace OrionClientLib.Modules
                 const string reload = "Reload Vanity File";
                 const string exit = "Exit";
 
-                if(_currentData.Settings.VanitySetting.GPUDevices.Count > 0)
+                if(_currentData.Settings.VanitySetting.GPUDevices?.Count > 0)
                 {
                     selectionPrompt.AddChoice(run);
                 }
@@ -138,9 +138,7 @@ namespace OrionClientLib.Modules
                         case run:
                             return true;
                         case view:
-
                             await ViewWallets();
-
                             break;
                         case setup:
                             await SelectGPUs();
@@ -176,7 +174,7 @@ namespace OrionClientLib.Modules
 
             deviceSelectionPrompt.UseConverter((device) =>
             {
-                bool selected = vanitySettings.GPUDevices.Contains(devices.IndexOf(device));
+                bool selected = vanitySettings.GPUDevices?.Contains(devices.IndexOf(device)) == true;
 
                 return $"{(selected ? "[b][[Current]][/] " : String.Empty)}{device.Name} - {device.AcceleratorType}{(!validDevices.Contains(device) ? " [red][[Not supported]][/]" : String.Empty)}";
             });
@@ -208,6 +206,7 @@ namespace OrionClientLib.Modules
             vanitySettings.GPUDevices = chosenGPUs;
 
             await _currentData.Settings.SaveAsync();
+            GenerateUI();
         }
 
         private async Task ViewWallets()
@@ -366,7 +365,6 @@ namespace OrionClientLib.Modules
         {
             int index = e.Index;
 
-
             _hashrateTable.UpdateCell(index, 2, e.Speed.ToString());
             _hashrateTable.UpdateCell(index, 3, $"{e.ExecutionTime.TotalMilliseconds:0.00}ms");
 
@@ -447,23 +445,25 @@ namespace OrionClientLib.Modules
             List<Device> devices = _vanity.GetDevices(false); //All devices
             HashSet<Device> supportedDevices = new HashSet<Device>(_vanity.GetDevices(true)); //Only supported
 
-
-            foreach (var d in _currentData.Settings.VanitySetting.GPUDevices)
+            if (_currentData.Settings.VanitySetting.GPUDevices?.Count > 0)
             {
-                if (d >= 0 && d < devices.Count)
+                foreach (var d in _currentData.Settings.VanitySetting.GPUDevices)
                 {
-                    if (supportedDevices.Contains(devices[d]))
+                    if (d >= 0 && d < devices.Count)
                     {
-                        devicesToUse.Add(devices[d]);
+                        if (supportedDevices.Contains(devices[d]))
+                        {
+                            devicesToUse.Add(devices[d]);
+                        }
                     }
                 }
-            }
 
-            foreach (var device in devicesToUse)
-            {
-                string gpuName = device.Name.Replace("NVIDIA ", "").Replace("GeForce ", "");
+                foreach (var device in devicesToUse)
+                {
+                    string gpuName = device.Name.Replace("NVIDIA ", "").Replace("GeForce ", "");
 
-                _hashrateTable.AddRow(gpuName, (_currentData.Settings.VanitySetting.VanityThreads == 0 ? Environment.ProcessorCount : _currentData.Settings.VanitySetting.VanityThreads).ToString(), "-", "-", "-", "-");
+                    _hashrateTable.AddRow(gpuName, (_currentData.Settings.VanitySetting.VanityThreads == 0 ? Environment.ProcessorCount : _currentData.Settings.VanitySetting.VanityThreads).ToString(), "-", "-", "-", "-");
+                }
             }
         }
 
