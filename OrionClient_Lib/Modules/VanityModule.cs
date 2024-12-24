@@ -240,6 +240,7 @@ namespace OrionClientLib.Modules
                 vanitySelectionPrompt.Title($"Select vanity to view private key.");
                 vanitySelectionPrompt.EnableSearch();
                 vanitySelectionPrompt.PageSize = 20;
+
                 vanitySelectionPrompt.UseConverter((vanity) =>
                 {
                     if(vanity.Exported)
