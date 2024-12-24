@@ -15,9 +15,11 @@ namespace OrionClientLib.Modules.Vanity
         public TimeSpan ExecutionTime { get; set; }
         public TimeSpan VanitySearchTime { get; set; }
         public TimeSpan Runtime { get; set; }
+        public ulong SessionHashes { get; set; }
 
         public int CurrentBatchSize { get; set; }
 
         public HashesPerSecond Speed => new HashesPerSecond((ulong)CurrentBatchSize, ExecutionTime);
+        public HashesPerSecond SessionSpeed => new HashesPerSecond(SessionHashes, Runtime);
     }
 }

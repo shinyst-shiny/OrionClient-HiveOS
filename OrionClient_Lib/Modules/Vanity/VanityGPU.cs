@@ -26,7 +26,6 @@ namespace OrionClientLib.Hashers
         public bool Initialized => _taskRunner?.IsCompleted == false;
         public event EventHandler<VanityHashingInfo> OnHashrateUpdate;
         public bool InitializedVanities { get; private set; }
-
         public int FoundWallets => _vanityFinder.TotalWallets;
         public int FoundUniqueWallets => _vanityFinder.TotalUniqueWallets;
         public int SearchVanities => _vanityFinder.SearchVanities;
@@ -69,7 +68,6 @@ namespace OrionClientLib.Hashers
             _running = true;
             VanitiesByLength.Values.ToList().ForEach(x => x.Reset());
             _threads = Environment.ProcessorCount;
-
             if(settings.VanitySetting.VanityThreads > 0)
             {
                 _threads = settings.VanitySetting.VanityThreads;
@@ -352,6 +350,7 @@ namespace OrionClientLib.Hashers
             private Task _gpuCopyFromTask = null;
 
             private bool _hasNotice => !_running;
+            private ulong _totalHashes = 0;
 
             public GPUDeviceHasher(Action<RunData> vanityKernel,
                          Accelerator accelerator, Device device, int deviceId,
@@ -619,6 +618,8 @@ namespace OrionClientLib.Hashers
 
                         TimeSpan vanityTime = _sw.Elapsed - start;
 
+                        _totalHashes += (ulong)deviceData.CurrentBatchSize;
+
                         OnHashrateUpdate?.Invoke(this, new VanityHashingInfo
                         {
                             Index = _deviceId,
@@ -626,7 +627,8 @@ namespace OrionClientLib.Hashers
                             PrivateKeyGenerationTime = deviceData.CurrentCPUData.PrivateKeyGenerationTime,
                             VanitySearchTime = vanityTime,
                             CurrentBatchSize = deviceData.CurrentBatchSize,
-                            Runtime = _sw.Elapsed
+                            Runtime = _sw.Elapsed,
+                            SessionHashes = _totalHashes
                         });
 
                         int foundLocation = 0;

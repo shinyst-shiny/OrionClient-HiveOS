@@ -365,19 +365,20 @@ namespace OrionClientLib.Modules
         {
             int index = e.Index;
 
-            _hashrateTable.UpdateCell(index, 2, e.Speed.ToString());
-            _hashrateTable.UpdateCell(index, 3, $"{e.ExecutionTime.TotalMilliseconds:0.00}ms");
+            _hashrateTable.UpdateCell(index, 2, e.SessionSpeed.ToString());
+            _hashrateTable.UpdateCell(index, 3, e.Speed.ToString());
+            _hashrateTable.UpdateCell(index, 4, $"{e.ExecutionTime.TotalMilliseconds:0.00}ms");
 
             if (e.ExecutionTime.TotalMilliseconds < e.VanitySearchTime.TotalMilliseconds)
             {
-                _hashrateTable.UpdateCell(index, 4, $"[red]{e.VanitySearchTime.TotalMilliseconds:0.00}ms[/]");
+                _hashrateTable.UpdateCell(index, 5, $"[red]{e.VanitySearchTime.TotalMilliseconds:0.00}ms[/]");
             }
             else
             {
-                _hashrateTable.UpdateCell(index, 4, $"{e.VanitySearchTime.TotalMilliseconds:0.00}ms");
+                _hashrateTable.UpdateCell(index, 5, $"{e.VanitySearchTime.TotalMilliseconds:0.00}ms");
             }
 
-            _hashrateTable.UpdateCell(index, 5, $"{PrettyFormatTime(e.Runtime)}");
+            _hashrateTable.UpdateCell(index, 6, $"{PrettyFormatTime(e.Runtime)}");
 
             //Update all rows for now
             foreach (var kvp in _vanity.VanitiesByLength.OrderByDescending(x => x.Key))
@@ -425,6 +426,7 @@ namespace OrionClientLib.Modules
             
             _hashrateTable.AddColumn(new TableColumn("Name").Centered());
             _hashrateTable.AddColumn(new TableColumn("Threads").Centered());
+            _hashrateTable.AddColumn(new TableColumn("Session Hashrate").Centered());
             _hashrateTable.AddColumn(new TableColumn("Hashrate").Centered());
             _hashrateTable.AddColumn(new TableColumn("Execution Time").Centered());
             _hashrateTable.AddColumn(new TableColumn("Vanity Time").Centered());
@@ -440,6 +442,10 @@ namespace OrionClientLib.Modules
 
             _uiLayout["hashrate"].Update(_hashrateTable);
             _uiLayout["vanityInfo"].Update(_vanityTable);
+
+
+            _uiLayout["hashrate"].Ratio = 100;
+            _uiLayout["vanityInfo"].Ratio = 65;
 
             List<Device> devicesToUse = new List<Device>();
             List<Device> devices = _vanity.GetDevices(false); //All devices
