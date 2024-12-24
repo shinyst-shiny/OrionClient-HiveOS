@@ -565,8 +565,8 @@ namespace OrionClientLib.Hashers
                 using var stream = _accelerator.CreateStream();
 
                 //Use a single set of CPU data here rather than reusing to prevent issues
-                byte[] publicKeys = new byte[_maxBatchSize * CPUData.KeySize];
-                byte[] vanityKeys = new byte[_maxBatchSize * CPUData.KeySize];
+                using var publicKeys =  _accelerator.AllocatePageLocked1D<byte>(_maxBatchSize * CPUData.KeySize, false);
+                using var vanityKeys =  _accelerator.AllocatePageLocked1D<byte>(_maxBatchSize * CPUData.KeySize, false);
 
                 try
                 {
@@ -590,15 +590,18 @@ namespace OrionClientLib.Hashers
                         }
 
                         //Copies back to host
-                        deviceData.PublicKeyData.CopyToCPU(stream, publicKeys);
-                        deviceData.VanityKeyData.CopyToCPU(stream, vanityKeys);
+                        //deviceData.PublicKeyData.CopyToCPU(stream, publicKeys);
+                        //deviceData.VanityKeyData.CopyToCPU(stream, vanityKeys);
+
+                        deviceData.PublicKeyData.View.CopyToPageLockedAsync(stream, publicKeys);
+                        deviceData.VanityKeyData.View.CopyToPageLockedAsync(stream, vanityKeys);
 
                         //Wait for copy to finish
                         stream.Synchronize();
 
+                        TimeSpan start = _sw.Elapsed;
                         deviceData.CurrentCPUData.InUse = false;
 
-                        TimeSpan start = _sw.Elapsed;
 
                         #region Vanity Search
 
@@ -612,7 +615,7 @@ namespace OrionClientLib.Hashers
 
                         //    }
                         //}
-                        _vanityFinder.Find(deviceData.CurrentCPUData.PrivateKeys, publicKeys, vanityKeys, deviceData.CurrentBatchSize, _threads);
+                        _vanityFinder.Find(deviceData.CurrentCPUData.PrivateKeys, publicKeys.GetArray(), vanityKeys.GetArray(), deviceData.CurrentBatchSize, _threads);
 
                         #endregion
 
