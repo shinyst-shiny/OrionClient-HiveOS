@@ -17,13 +17,25 @@ namespace OrionClientLib.Modules.Vanity
         public int UniqueCount => _uniqueVanities.Count;
         public int Searching { get; set; }
 
+        public int SessionCount { get; set; }
+        public int SessionUniqueCount { get; set; }
+
         public void Add(FoundVanity vanity)
         {
             lock (Vanities)
             {
                 Vanities.Add(vanity);
                 _uniqueVanities.Add(vanity.VanityText);
+
+                ++SessionCount;
+                ++SessionUniqueCount;
             }
+        }
+
+        public void Reset()
+        {
+            SessionUniqueCount = 0;
+            SessionCount = 0;
         }
     }
 

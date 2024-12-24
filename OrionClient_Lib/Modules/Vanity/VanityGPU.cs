@@ -67,7 +67,7 @@ namespace OrionClientLib.Hashers
             }
 
             _running = true;
-
+            VanitiesByLength.Values.ToList().ForEach(x => x.Reset());
             _threads = Environment.ProcessorCount;
 
             if(settings.VanitySetting.VanityThreads > 0)

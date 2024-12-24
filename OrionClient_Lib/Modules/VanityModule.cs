@@ -386,8 +386,8 @@ namespace OrionClientLib.Modules
             {
                 int row = _lengthToRow[kvp.Key];
 
-                _vanityTable.UpdateCell(row, 1, kvp.Value.UniqueCount.ToString());
-                _vanityTable.UpdateCell(row, 2, kvp.Value.Total.ToString());
+                _vanityTable.UpdateCell(row, 1, $"{kvp.Value.UniqueCount}{(kvp.Value.SessionUniqueCount > 0 ? $" [green](+{kvp.Value.SessionUniqueCount})[/]" : String.Empty)}");
+                _vanityTable.UpdateCell(row, 2, $"{kvp.Value.Total}{(kvp.Value.SessionCount > 0 ? $" [green](+{kvp.Value.SessionCount})[/]" : String.Empty)}");
                 _vanityTable.UpdateCell(row, 3, kvp.Value.Searching.ToString());
             }
 
