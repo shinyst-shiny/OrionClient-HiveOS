@@ -13,6 +13,7 @@ using OrionClientLib.Utilities;
 using Solnet.Wallet;
 using Solnet.Wallet.Utilities;
 using Spectre.Console;
+using Spectre.Console.Prompts;
 using Spectre.Console.Rendering;
 using System;
 using System.Collections.Generic;
@@ -130,25 +131,35 @@ namespace OrionClientLib.Modules
 
                 string choice = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
 
-                switch (choice)
+                try
                 {
-                    case run:
-                        return true;
-                    case view:
-                        await ViewWallets();
-                        break;
-                    case setup:
-                        await SelectGPUs();
-                        break;
-                    case reload:
-                        AnsiConsole.Clear();
-                        AnsiConsole.WriteLine("Reloading vanity information ...");
-                        await _vanity.InitializeVanities(_currentData.Settings);
-                        GenerateVanityFoundUI();
-                        AnsiConsole.Clear();
-                        break;
-                    case exit:
-                        return false;
+                    switch (choice)
+                    {
+                        case run:
+                            return true;
+                        case view:
+
+                            await ViewWallets();
+
+                            break;
+                        case setup:
+                            await SelectGPUs();
+                            break;
+                        case reload:
+                            AnsiConsole.Clear();
+                            AnsiConsole.WriteLine("Reloading vanity information ...");
+                            await _vanity.InitializeVanities(_currentData.Settings);
+                            GenerateVanityFoundUI();
+                            AnsiConsole.Clear();
+                            break;
+                        case exit:
+                            return false;
+                    }
+                }
+                catch(PromptAbortException)
+                {
+                    //Returns to main menu
+                    AnsiConsole.Clear();
                 }
             }
         }
@@ -160,7 +171,9 @@ namespace OrionClientLib.Modules
             var vanitySettings = _currentData.Settings.VanitySetting;
 
             MultiSelectionPrompt<Device> deviceSelectionPrompt = new MultiSelectionPrompt<Device>();
-            deviceSelectionPrompt.Title($"Select GPUs to use. Selecting different GPU types may cause performance issues");
+            deviceSelectionPrompt.Title($"Select GPUs to use. Selecting different GPU types may cause performance issues.\n[gray]Press `ESC` to return to vanity menu[/]");
+            deviceSelectionPrompt.AbortKey = ConsoleKey.Escape;
+
             deviceSelectionPrompt.UseConverter((device) =>
             {
                 bool selected = vanitySettings.GPUDevices.Contains(devices.IndexOf(device));
@@ -200,7 +213,9 @@ namespace OrionClientLib.Modules
         private async Task ViewWallets()
         {
             SelectionPrompt<VanityTracker> selectionPrompt = new SelectionPrompt<VanityTracker>();
-            selectionPrompt.Title($"View Vanities By Length");
+            selectionPrompt.Title($"View Vanities By Length\n[gray]Press `ESC` to return to vanity menu[/]");
+            selectionPrompt.AbortKey = ConsoleKey.Escape;
+
             selectionPrompt.UseConverter((tracker) =>
             {
                 if (tracker.VanityLength == 0)
@@ -237,8 +252,9 @@ namespace OrionClientLib.Modules
             while (true)
             {
                 SelectionPrompt<FoundVanity> vanitySelectionPrompt = new SelectionPrompt<FoundVanity>();
-                vanitySelectionPrompt.Title($"Select vanity to view private key.");
+                vanitySelectionPrompt.Title($"Select vanity to view private key.\n[gray]Press `ESC` to return to vanity menu[/]");
                 vanitySelectionPrompt.EnableSearch();
+                vanitySelectionPrompt.AbortKey = ConsoleKey.Escape;
                 vanitySelectionPrompt.PageSize = 20;
                 vanitySelectionPrompt.OnlyShowSearchedResults = true;
                 vanitySelectionPrompt.SearchFunc = (FoundVanity vanity, string search) => { 
