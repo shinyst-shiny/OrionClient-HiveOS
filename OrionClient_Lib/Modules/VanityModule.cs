@@ -240,6 +240,10 @@ namespace OrionClientLib.Modules
                 vanitySelectionPrompt.Title($"Select vanity to view private key.");
                 vanitySelectionPrompt.EnableSearch();
                 vanitySelectionPrompt.PageSize = 20;
+                vanitySelectionPrompt.OnlyShowSearchedResults = true;
+                vanitySelectionPrompt.SearchFunc = (FoundVanity vanity, string search) => { 
+                    return vanity.VanityText.StartsWith(search, StringComparison.OrdinalIgnoreCase); 
+                };
 
                 vanitySelectionPrompt.UseConverter((vanity) =>
                 {
@@ -270,7 +274,7 @@ namespace OrionClientLib.Modules
                 }
                 else
                 {
-                    optionSelectionPrompt.Title($"Exporting will create a keypair file that can be 'searched' in the main setup\n\nWallet Import (Solflare/Phantom): {encoder.EncodeData(fullKey.ToArray())}");
+                    optionSelectionPrompt.Title($"Exporting will create a keypair file that can be 'searched' in the main setup\n\nWallet: {vanity.PublicKey}\nWallet Import (Solflare/Phantom): {encoder.EncodeData(fullKey.ToArray())}");
                 }
 
                 const string export = "Export";
