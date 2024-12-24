@@ -1,0 +1,3 @@
+[submodule "spectre.console"]
+	path = spectre.console
+	url = https://github.com/SL-x-TnT/spectre.console.git
