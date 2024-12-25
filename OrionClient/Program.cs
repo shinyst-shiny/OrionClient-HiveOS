@@ -343,7 +343,7 @@ namespace OrionClient
             string newVersion = _updateData == null ? String.Empty : $" -- New Version {_updateData.TagName} {(_updateData.Prerelease ? $"[[Prerelease]]" : String.Empty)}";
 
             prompt.Title($"         [lime]Orion Client v{_version}[/]{newVersion}\n\nWallet: {publicKey ?? "N/A"}\nHasher: CPU - {cpuHasher?.Name ?? "N/A"} ({(_settings.CPUSetting.CPUThreads > 0 ? _settings.CPUSetting.CPUThreads : Environment.ProcessorCount)} threads), GPU - {gpuHasher?.Name ?? "N/A"}\nPool: {pool?.DisplayName ?? "N/A"}" +
-                $"{(!String.IsNullOrEmpty(_message) ? $"\n\n[red]Error: {_message}[/]\n" : String.Empty)}");
+                $"{(!String.IsNullOrEmpty(_message) ? $"\n\n[red]Error: {_message}[/]" : String.Empty)}");
             _message = String.Empty;
 
             prompt.UseConverter((module) =>
