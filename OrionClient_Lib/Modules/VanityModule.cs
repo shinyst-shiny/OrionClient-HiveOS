@@ -114,7 +114,7 @@ namespace OrionClientLib.Modules
                 SelectionPrompt<string> selectionPrompt = new SelectionPrompt<string>();
                 selectionPrompt.Title($"Vanity Finder. Purpose is for interesting burner wallets." +
                     $"\n\nVanities To Find: {_vanity.SearchVanities} (unique)" +
-                    $"{(_vanity.SearchVanities == 0 ? $" [aqua]Add vanities to find to '{Path.Combine(Settings.VanitySettings.Directory, _currentData.Settings.VanitySetting.VanitySearchFile)}' then reload[/]" : String.Empty)}" +
+                    $"{(_vanity.SearchVanities == 0 ? $" [red]Add vanities to find to '{Path.Combine(Settings.VanitySettings.Directory, _currentData.Settings.VanitySetting.VanitySearchFile)}' then reload[/]" : String.Empty)}" +
                     $"{(_vanity.InvalidLines ? $" [red]{_vanity.InvalidMessage}[/]" : "")}" +
                     $"\nTotal Vanities Found: {_vanity.FoundWallets} (nonunique) / {_vanity.FoundUniqueWallets} (unique)" +
                     $"\n\nValidate public keys are accurate prior to sending any funds{(!String.IsNullOrEmpty(lastError) ? $"\n\n[red]{lastError}[/]" : String.Empty)}");
