@@ -5,6 +5,7 @@ using ILGPU.Runtime;
 using Newtonsoft.Json;
 using NLog;
 using OrionClientLib.Hashers;
+using OrionClientLib.Hashers.GPU.RTX4090Opt;
 using OrionClientLib.Modules.Models;
 using OrionClientLib.Modules.Vanity;
 using OrionClientLib.Pools;
@@ -18,6 +19,7 @@ using Spectre.Console.Rendering;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Runtime;
@@ -59,6 +61,7 @@ namespace OrionClientLib.Modules
             _stop = true;
         }
 
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(VanityKernel))]
         public async Task<(bool, string)> InitializeAsync(Data data)
         {
             _cts = new CancellationTokenSource();
