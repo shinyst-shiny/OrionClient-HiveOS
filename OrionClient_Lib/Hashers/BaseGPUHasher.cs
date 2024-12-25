@@ -732,7 +732,7 @@ namespace OrionClientLib.Hashers
                             //Return data
                             if (cpuData != null)
                             {
-                                _readyCPUData.TryAdd(cpuData);
+                                _availableCPUData.TryAdd(cpuData);
                             }
 
                             if(deviceData != null)
@@ -789,6 +789,11 @@ namespace OrionClientLib.Hashers
                             if(deviceData != null)
                             {
                                 _copyToData.TryAdd(deviceData);
+
+                                if (deviceData.CurrentCPUData != null)
+                                {
+                                    _availableCPUData.TryAdd(deviceData.CurrentCPUData);
+                                }
                             }
 
                             continue;
@@ -842,6 +847,11 @@ namespace OrionClientLib.Hashers
                             if(deviceData != null)
                             {
                                 _copyToData.TryAdd(deviceData);
+
+                                if(deviceData.CurrentCPUData != null)
+                                {
+                                    _availableCPUData.TryAdd(deviceData.CurrentCPUData);
+                                }
                             }
 
                             continue;
