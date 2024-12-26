@@ -12,7 +12,7 @@ sudo apt-get update && sudo apt-get install -y dotnet-sdk-8.0
 
 ## 2. Download source
 ```
-git clone https://github.com/SL-x-TnT/OrionClient.git
+git clone --recurse-submodules https://github.com/SL-x-TnT/OrionClient.git
 ```
 
 ## 3. Publish
