@@ -505,9 +505,12 @@ namespace OrionClientLib.Modules
 
             string walletDirectory = Path.Combine(Path.Combine(Utils.GetExecutableDirectory(), Settings.VanitySettings.Directory), "wallets");
 
-            foreach(string exportedWallet in Directory.GetFiles(walletDirectory, "*.json"))
+            if (Directory.Exists(walletDirectory))
             {
-                await AddWallet(exportedWallet);
+                foreach (string exportedWallet in Directory.GetFiles(walletDirectory, "*.json"))
+                {
+                    await AddWallet(exportedWallet);
+                }
             }
 
             SelectionPrompt<int> selectionPrompt = new SelectionPrompt<int>();
