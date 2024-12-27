@@ -226,6 +226,12 @@ namespace OrionClientLib.Hashers
         {
             try
             {
+                int minimumBatchSize = 64;
+
+                minimumBatchSize = Math.Max(minimumBatchSize, (int)Math.Pow(2, (int)Math.Log2(_threads * 2)));
+
+                _info.BatchSize = Math.Max((ulong)minimumBatchSize, _info.BatchSize);
+
                 while (_running)
                 {
                     _executing = false;
@@ -274,13 +280,13 @@ namespace OrionClientLib.Hashers
                         {
                             _info.BatchSize *= 2;
 
-                            _info.BatchSize = Math.Min(4096, _info.BatchSize);
+                            _info.BatchSize = Math.Min(8192, _info.BatchSize);
                         }
                         else if (hashingTime.TotalSeconds > 2)
                         {
                             _info.BatchSize /= 2;
 
-                            _info.BatchSize = Math.Max(64, _info.BatchSize);
+                            _info.BatchSize = Math.Max((ulong)minimumBatchSize, _info.BatchSize);
                         }
                     }
 
