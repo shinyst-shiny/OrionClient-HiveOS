@@ -280,6 +280,7 @@ namespace OrionClientLib.Modules
                 totalThreads = coreInfo.Sum(x => x.ThreadCount);
                 bool hasECores = coreInfo.Any(x => !x.IsPCore);
 
+                totalThreads = Math.Max(totalThreads, Environment.ProcessorCount);
 
                 choices.Add((totalThreads, "(100% usage) [green]Recommended[/]"));
 
