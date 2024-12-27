@@ -67,7 +67,7 @@ namespace OrionClient
 
                         if (files.Length == 0)
                         {
-                            _logger.Log(LogLevel.Warn, $"Failed to find libcuda.so. Using default resolver");
+                            //_logger.Log(LogLevel.Warn, $"Failed to find libcuda.so. Using default resolver");
 
                             return IntPtr.Zero;
                         }
