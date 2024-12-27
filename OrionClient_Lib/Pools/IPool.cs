@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 namespace OrionClientLib.Pools
 {
     [Flags]
-    public enum Coin { Ore, Coal };
+    public enum Coin { Ore, Coal, Chromium };
 
     public interface IPool
     {

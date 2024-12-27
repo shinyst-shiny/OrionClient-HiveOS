@@ -23,14 +23,14 @@ namespace OrionClientLib.Pools
         public override string DisplayName => Name;
         public override bool DisplaySetting => true;
         public override string Description => $"[Cyan]{Coin.Coal}[/]/[green]{Coin.Ore}[/] pool using Ore-HQ implementation. Operator (discord): Shinyst";
-        public override Coin Coins { get; } = Coin.Coal;
+        public override Coin Coins { get; } = Coin.Coal | Coin.Ore | Coin.Chromium;
 
         public override Dictionary<string, string> Features { get; } = new Dictionary<string, string>();
 
         public override bool HideOnPoolList { get; } = false;
         public override string HostName { get; protected set; } = "pool.coal-pool.xyz";
 
-        public override Dictionary<Coin, double> MiniumumRewardPayout { get; } = new Dictionary<Coin, double> { { Coin.Coal, 1 }, { Coin.Ore, 0.05 } };
+        public override Dictionary<Coin, double> MiniumumRewardPayout { get; } = new Dictionary<Coin, double> { { Coin.Coal, 1 }, { Coin.Ore, 0.05 }, { Coin.Chromium, 0.0 } };
 
         protected override async Task<(bool success, string message)> ClaimMiningRewards(Coin coin, string claimWallet, ulong amount, CancellationToken token)
         {
