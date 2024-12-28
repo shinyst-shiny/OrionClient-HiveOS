@@ -1005,7 +1005,6 @@ namespace OrionClientLib.Hashers
                             _logger.Log(LogLevel.Warn, $"Failed to verify {failedPercent:0.00}% of the total solutions in the batch on {_device.Name} [{_deviceId}]");
                         }
 
-                        _copyToData.TryAdd(deviceData);
                         _hasherInfo.AddSolutionCount((ulong)totalSolutions);
 
                         OnHashrateUpdate?.Invoke(this, new HashrateInfo
@@ -1022,6 +1021,8 @@ namespace OrionClientLib.Hashers
                             CurrentThreads = -1,
                             ChallengeId = _hasherInfo.ChallengeId
                         });
+                        
+                        _copyToData.TryAdd(deviceData);
 
                         //Return data
                         _availableCPUData.TryAdd(deviceData.CurrentCPUData);
