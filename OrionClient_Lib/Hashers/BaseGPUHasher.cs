@@ -821,8 +821,8 @@ namespace OrionClientLib.Hashers
             {
                 using var stream = _accelerator.CreateStream();
 
-                EquixSolution[] solutions_ = new EquixSolution[_nonceCount * EquixSolution.MaxLength];
-                uint[] solutionCounts_ = new uint[_nonceCount];
+                using PageLockedArray1D<EquixSolution> solutions_ = _accelerator.AllocatePageLocked1D<EquixSolution>(_nonceCount * EquixSolution.MaxLength, false);
+                using PageLockedArray1D<uint> solutionCounts_ = _accelerator.AllocatePageLocked1D<uint>(_nonceCount, false);
 
                 try
                 {
@@ -845,7 +845,7 @@ namespace OrionClientLib.Hashers
 
                         if (_hasNotice)
                         {
-                            if(deviceData != null)
+                            if (deviceData != null)
                             {
                                 _copyToData.TryAdd(deviceData);
                             }
@@ -854,8 +854,8 @@ namespace OrionClientLib.Hashers
                         }
 
                         //Copies back to host
-                        deviceData.Solutions.CopyToCPU(stream, solutions_);
-                        deviceData.SolutionCounts.CopyToCPU(stream, solutionCounts_);
+                        deviceData.Solutions.View.CopyToPageLockedAsync(stream, solutions_);
+                        deviceData.SolutionCounts.View.CopyToPageLockedAsync(stream, solutionCounts_);
 
                         //Wait for copy to finish
                         stream.Synchronize();
@@ -864,8 +864,8 @@ namespace OrionClientLib.Hashers
 
                         #region Verify
 
-                        Span<EquixSolution> allSolutions = solutions_.AsSpan();// deviceData.CurrentCPUData.Solutions;
-                        Span<uint> solutionCounts = solutionCounts_.AsSpan();// deviceData.CurrentCPUData.SolutionCounts;
+                        Span<EquixSolution> allSolutions = solutions_.GetArray().AsSpan();// deviceData.CurrentCPUData.Solutions;
+                        Span<uint> solutionCounts = solutionCounts_.GetArray().AsSpan();// deviceData.CurrentCPUData.SolutionCounts;
                         byte[] challenge = new byte[40];
                         _hasherInfo.Challenge.CopyTo(challenge, 0);
                         byte[] b_nonceOutput = new byte[24];
@@ -996,7 +996,7 @@ namespace OrionClientLib.Hashers
                         double failedPercent = (double)totalFailed / totalSolutions * 100;
                         const double failureRatePercent = 1;
 
-                        if(failedPercent > failureRatePercent)
+                        if (failedPercent > failureRatePercent)
                         {
                             _logger.Log(LogLevel.Warn, $"Failed to verify {failedPercent:0.00}% of the total solutions in the batch on {_device.Name} [{_deviceId}]");
                         }
@@ -1017,7 +1017,7 @@ namespace OrionClientLib.Hashers
                             CurrentThreads = -1,
                             ChallengeId = _hasherInfo.ChallengeId
                         });
-                        
+
                         _copyToData.TryAdd(deviceData);
                     }
                 }
@@ -1025,7 +1025,7 @@ namespace OrionClientLib.Hashers
                 {
                     _logger.Log(LogLevel.Error, $"Unknown exception occurred during GPU->CPU copying. Reason: {ex.Message}");
                 }
-    }
+            }
 
             public void PauseMining()
             {
