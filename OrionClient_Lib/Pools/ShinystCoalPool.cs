@@ -43,7 +43,7 @@ namespace OrionClientLib.Pools
 
                 Base58Encoder _encoder = new Base58Encoder();
 
-                byte[] tBytes = new byte[8 + 32 + 8 + 8];
+                byte[] tBytes = new byte[8 + 32 + 8 + 8 + 8];
                 BinaryPrimitives.WriteUInt64LittleEndian(tBytes, _timestamp);
                 _encoder.DecodeData(claimWallet).CopyTo(tBytes, 8);
 
@@ -55,13 +55,18 @@ namespace OrionClientLib.Pools
                 {
                     BinaryPrimitives.WriteUInt64LittleEndian(tBytes.AsSpan().Slice(48, 8), amount);
                 }
+                else if (coin == Coin.Chromium)
+                {
+                    BinaryPrimitives.WriteUInt64LittleEndian(tBytes.AsSpan().Slice(56, 8), amount);
+                }
+
 
                 byte[] sigBytes = _wallet.Sign(tBytes);
                 string sig = _encoder.EncodeData(sigBytes);
 
                 string authHeader = $"Basic {Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_publicKey}:{sig}"))}";
 
-                using var requestMessage = new HttpRequestMessage(HttpMethod.Post, $"/v2/claim?timestamp={_timestamp}&receiver_pubkey={claimWallet}&amount={amount}");
+                using var requestMessage = new HttpRequestMessage(HttpMethod.Post, $"/v2/claim?timestamp={_timestamp}&receiver_pubkey={claimWallet}&amount_coal={amount}&amount_coal={amount}&amount_coal={amount}");
                 requestMessage.Headers.TryAddWithoutValidation("Authorization", authHeader);
 
                 using var response = await _client.SendAsync(requestMessage);

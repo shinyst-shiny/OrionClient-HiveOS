@@ -744,9 +744,10 @@ namespace OrionClientLib.Hashers
                             continue;
                         }
 
-                        //Set as the current CPU data
-                        deviceData.CurrentCPUData = cpuData;
+                        //Copy over nonces used as we need these for verification/submission
                         Array.Copy(cpuData.NoncesUsed, deviceData.CurrentNonces, cpuData.NoncesUsed.Length);
+                        deviceData.ProgramGenerationTime = cpuData.ProgramGenerationTime;
+
                         //Copies to device.
                         deviceData.ProgramInstructions.View.CopyFromCPU(stream, cpuData.InstructionData);
                         deviceData.Keys.View.CopyFromCPU(stream, cpuData.Keys);
@@ -754,6 +755,8 @@ namespace OrionClientLib.Hashers
                         //Wait for copy to finish
                         stream.Synchronize();
 
+                        //No need for cpu data now
+                        _availableCPUData.TryAdd(cpuData);
                         _executeData.TryAdd(deviceData);
                     }
                 }
@@ -789,11 +792,6 @@ namespace OrionClientLib.Hashers
                             if(deviceData != null)
                             {
                                 _copyToData.TryAdd(deviceData);
-
-                                if (deviceData.CurrentCPUData != null)
-                                {
-                                    _availableCPUData.TryAdd(deviceData.CurrentCPUData);
-                                }
                             }
 
                             continue;
@@ -823,6 +821,9 @@ namespace OrionClientLib.Hashers
             {
                 using var stream = _accelerator.CreateStream();
 
+                EquixSolution[] solutions_ = new EquixSolution[_nonceCount * EquixSolution.MaxLength];
+                uint[] solutionCounts_ = new uint[_nonceCount];
+
                 try
                 {
                     while (_running)
@@ -847,19 +848,14 @@ namespace OrionClientLib.Hashers
                             if(deviceData != null)
                             {
                                 _copyToData.TryAdd(deviceData);
-
-                                if(deviceData.CurrentCPUData != null)
-                                {
-                                    _availableCPUData.TryAdd(deviceData.CurrentCPUData);
-                                }
                             }
 
                             continue;
                         }
 
                         //Copies back to host
-                        deviceData.Solutions.CopyToCPU(stream, deviceData.CurrentCPUData.Solutions);
-                        deviceData.SolutionCounts.CopyToCPU(stream, deviceData.CurrentCPUData.SolutionCounts);
+                        deviceData.Solutions.CopyToCPU(stream, solutions_);
+                        deviceData.SolutionCounts.CopyToCPU(stream, solutionCounts_);
 
                         //Wait for copy to finish
                         stream.Synchronize();
@@ -868,8 +864,8 @@ namespace OrionClientLib.Hashers
 
                         #region Verify
 
-                        Span<EquixSolution> allSolutions = deviceData.CurrentCPUData.Solutions;
-                        Span<uint> solutionCounts = deviceData.CurrentCPUData.SolutionCounts;
+                        Span<EquixSolution> allSolutions = solutions_.AsSpan();// deviceData.CurrentCPUData.Solutions;
+                        Span<uint> solutionCounts = solutionCounts_.AsSpan();// deviceData.CurrentCPUData.SolutionCounts;
                         byte[] challenge = new byte[40];
                         _hasherInfo.Challenge.CopyTo(challenge, 0);
                         byte[] b_nonceOutput = new byte[24];
@@ -1005,14 +1001,13 @@ namespace OrionClientLib.Hashers
                             _logger.Log(LogLevel.Warn, $"Failed to verify {failedPercent:0.00}% of the total solutions in the batch on {_device.Name} [{_deviceId}]");
                         }
 
-                        _copyToData.TryAdd(deviceData);
                         _hasherInfo.AddSolutionCount((ulong)totalSolutions);
 
                         OnHashrateUpdate?.Invoke(this, new HashrateInfo
                         {
                             Index = _deviceId,
                             ExecutionTime = deviceData.ExecutionTime,
-                            ProgramGenerationTime = deviceData.CurrentCPUData.ProgramGenerationTime,
+                            ProgramGenerationTime = deviceData.ProgramGenerationTime,
                             GPUEquihashTime = deviceData.EquihashTime,
                             GPUHashXTime = deviceData.HashXTime,
                             NumNonces = (ulong)_nonceCount,
@@ -1023,9 +1018,7 @@ namespace OrionClientLib.Hashers
                             ChallengeId = _hasherInfo.ChallengeId
                         });
 
-                        //Return data
-                        _availableCPUData.TryAdd(deviceData.CurrentCPUData);
-
+                        _copyToData.TryAdd(deviceData);
                     }
                 }
                 catch (Exception ex)
@@ -1054,8 +1047,6 @@ namespace OrionClientLib.Hashers
 
                 foreach(var deviceData in _deviceData)
                 {
-                    deviceData.CurrentCPUData = null;
-
                     _copyToData.TryAdd(deviceData);
                 }
             }
@@ -1120,7 +1111,7 @@ namespace OrionClientLib.Hashers
                 public TimeSpan HashXTime { get; set; }
                 public TimeSpan EquihashTime { get; set; }
                 public TimeSpan ExecutionTime => HashXTime + EquihashTime;
-
+                public TimeSpan ProgramGenerationTime { get; set; }
                 //Unique
                 public MemoryBuffer1D<Instruction, Stride1D.Dense> ProgramInstructions { get; private set; }
                 public MemoryBuffer1D<SipState, Stride1D.Dense> Keys { get; private set; }
@@ -1131,7 +1122,7 @@ namespace OrionClientLib.Hashers
                 //These only need a single copy
                 public MemoryBuffer1D<ushort, Stride1D.Dense> Heap { get; private set; }
 
-                public CPUData CurrentCPUData { get; set; }
+               // public CPUData CurrentCPUData { get; set; }
                 public ulong[] CurrentNonces { get; private set; }
 
                 public GPUDeviceData(MemoryBuffer1D<Instruction, Stride1D.Dense> programInstructions, 
@@ -1178,8 +1169,8 @@ namespace OrionClientLib.Hashers
             public TimeSpan ProgramGenerationTime { get; set; }
             public Instruction[] InstructionData { get; private set; }
             public SipState[] Keys { get; private set; }
-            public EquixSolution[] Solutions { get; private set; }
-            public uint[] SolutionCounts { get; private set; }
+            //public EquixSolution[] Solutions { get; private set; }
+            //public uint[] SolutionCounts { get; private set; }
             public ulong[] NoncesUsed { get; private set; }
 
             //private Instruction* _instructionData;
@@ -1190,8 +1181,8 @@ namespace OrionClientLib.Hashers
             {
                 InstructionData = new Instruction[nonceCount * Instruction.TotalInstructions];
                 Keys = new SipState[nonceCount];
-                Solutions = new EquixSolution[EquixSolution.MaxLength * nonceCount];
-                SolutionCounts = new uint[nonceCount];
+                //Solutions = new EquixSolution[EquixSolution.MaxLength * nonceCount];
+                //SolutionCounts = new uint[nonceCount];
                 NoncesUsed = new ulong[nonceCount];
             }
 
