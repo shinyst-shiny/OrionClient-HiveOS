@@ -1017,6 +1017,8 @@ namespace OrionClientLib.Hashers
                             CurrentThreads = -1,
                             ChallengeId = _hasherInfo.ChallengeId
                         });
+                        
+                        _copyToData.TryAdd(deviceData);
 
                         _copyToData.TryAdd(deviceData);
                     }
