@@ -1019,8 +1019,6 @@ namespace OrionClientLib.Hashers
                         });
                         
                         _copyToData.TryAdd(deviceData);
-
-                        _copyToData.TryAdd(deviceData);
                     }
                 }
                 catch (Exception ex)
