@@ -336,9 +336,16 @@ namespace OrionClientLib.Pools
                 {
                     var c = obj.Item2;
 
-                    if (obj.Item1 == claimRewardBalance || obj.Item1 == claimStakeBalance)
+                    if (obj.Item1 == claimRewardBalance)
                     {
                         if (_minerInformation.TotalMiningRewards.TryGetValue(c, out var b) && b.CurrentBalance < MiniumumRewardPayout[c])
+                        {
+                            return $"[red]{obj.Item1} (Min: {MiniumumRewardPayout[c]})[/]";
+                        }
+                    }
+                    else if (obj.Item1 == claimStakeBalance)
+                    {
+                        if (_minerInformation.TotalStakeRewards.TryGetValue(c, out var b) && b.CurrentBalance < MiniumumRewardPayout[c])
                         {
                             return $"[red]{obj.Item1} (Min: {MiniumumRewardPayout[c]})[/]";
                         }
@@ -463,6 +470,11 @@ namespace OrionClientLib.Pools
 
         protected async Task ClaimStakeOptionAsync(Coin coin, CancellationToken token)
         {
+            if (_minerInformation.TotalStakeRewards.TryGetValue(coin, out var b) && b.CurrentBalance < MiniumumRewardPayout[coin])
+            {
+                return;
+            }
+
             string message = String.Empty;
 
             while (true)
@@ -537,6 +549,11 @@ namespace OrionClientLib.Pools
 
         protected virtual async Task ClaimRewardsOptionAsync(Coin coin, CancellationToken token)
         {
+            if (_minerInformation.TotalMiningRewards.TryGetValue(coin, out var b) && b.CurrentBalance < MiniumumRewardPayout[coin])
+            {
+                return;
+            }
+
             string message = String.Empty;
 
             await RefreshStakeBalancesAsync(true, token);
