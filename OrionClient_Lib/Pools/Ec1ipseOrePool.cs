@@ -20,5 +20,8 @@ namespace OrionClientLib.Pools
         public override string HostName { get; protected set; } = "ec1ipse.me";
 
         public override Dictionary<Coin, double> MiniumumRewardPayout => new Dictionary<Coin, double> { { Coin.Ore, 0.05 } };
+
+        public override string Website => String.Empty;
+        public override bool StakingEnabled => true;
     }
 }

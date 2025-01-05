@@ -52,6 +52,8 @@ namespace OrionClientLib.Pools
         public abstract override string Description { get; }
         public abstract override Dictionary<string, string> Features { get; }
         public abstract override Coin Coins { get; }
+        public abstract string Website { get; }
+        public abstract bool StakingEnabled { get; }
 
         public abstract override bool HideOnPoolList { get; }
         public override bool RequiresKeypair { get; } = true;
@@ -64,7 +66,6 @@ namespace OrionClientLib.Pools
         protected HQPoolSettings _poolSettings;
         protected ulong _timestamp = 0;
         protected DifficultyInfo _bestDifficulty;
-
         protected int _currentBestDifficulty = 0;
         protected string _errorMessage = String.Empty;
 
@@ -289,9 +290,13 @@ namespace OrionClientLib.Pools
                     builder.AppendLine($"   {"Mining Rewards".PadRight(14)} {miningReward} {c} " +
                         $"{(miningReward.BalanceChangeSinceUpdate > 0 ? $"([green]+{miningReward.BalanceChangeSinceUpdate:0.00000000000}[/])" : String.Empty)}" +
                         $"{(miningReward.TotalChange > 0 ? $"[[[Cyan]+{miningReward.TotalChange:0.00000000000} since start[/]]]" : String.Empty)}");
-                    builder.AppendLine($"   {"Stake Rewards".PadRight(14)} {stakeReward} {c} " +
-                    $"{(stakeReward.BalanceChangeSinceUpdate > 0 ? $"([green]+{stakeReward.BalanceChangeSinceUpdate:0.00000000000}[/])" : String.Empty)}" +
-                    $"{(stakeReward.TotalChange > 0 ? $"[[[Cyan]+{stakeReward.TotalChange:0.00000000000} since start[/]]]" : String.Empty)}");
+
+                    if (StakingEnabled)
+                    {
+                        builder.AppendLine($"   {"Stake Rewards".PadRight(14)} {stakeReward} {c} " +
+                        $"{(stakeReward.BalanceChangeSinceUpdate > 0 ? $"([green]+{stakeReward.BalanceChangeSinceUpdate:0.00000000000}[/])" : String.Empty)}" +
+                        $"{(stakeReward.TotalChange > 0 ? $"[[[Cyan]+{stakeReward.TotalChange:0.00000000000} since start[/]]]" : String.Empty)}");
+                    }
 
                     builder.AppendLine();
                 }
@@ -319,49 +324,74 @@ namespace OrionClientLib.Pools
                     _errorMessage = String.Empty;
                 }
 
-                SelectionPrompt<(string, Coin)> choices = new SelectionPrompt<(string, Coin)>();
-                choices.Title(builder.ToString());
-                choices.UseConverter((obj) =>
-                {
-                    return obj.Item1;
-                });
-
                 const string claimRewardBalance = "Claim Mining Rewards";
                 const string claimStakeBalance = "Claim Staking Rewards";
                 const string changeWallet = "Change Claim Wallet";
                 const string refreshBalance = "Refresh Balance";
+                const string viewWebsite = "View Website";
 
-                foreach(Coin c in Enum.GetValues(typeof(Coin)))
+                SelectionPrompt<(string, Coin)> choices = new SelectionPrompt<(string, Coin)>();
+                choices.Title(builder.ToString());
+                choices.UseConverter((obj) =>
                 {
-                    if(!Coins.HasFlag(c))
+                    var c = obj.Item2;
+
+                    if (obj.Item1 == claimRewardBalance || obj.Item1 == claimStakeBalance)
                     {
-                        continue;
+                        if (_minerInformation.TotalMiningRewards.TryGetValue(c, out var b) && b.CurrentBalance < MiniumumRewardPayout[c])
+                        {
+                            return $"[red]{obj.Item1} (Min: {MiniumumRewardPayout[c]})[/]";
+                        }
                     }
 
-                    List<(string, Coin)> innerChoices = new List<(string, Coin)>();
+                    return obj.Item1;
+                });
 
-                    if (_minerInformation.TotalMiningRewards[c].CurrentBalance >= MiniumumRewardPayout[c])
-                    {
-                        innerChoices.Add((claimRewardBalance, c));
-                    }
-
-                    if (_minerInformation.TotalStakeRewards[c].CurrentBalance >= MiniumumRewardPayout[c])
-                    {
-                        innerChoices.Add((claimStakeBalance, c));
-                    }
-
-                    if(innerChoices.Count > 0)
-                    {
-                        choices.AddChoiceGroup(($"{c} ({MiniumumRewardPayout[c]} min payout)", Coins), innerChoices);
-                    }
+                if (!String.IsNullOrEmpty(Website) && OperatingSystem.IsWindows() && Environment.UserInteractive)
+                {
+                    choices.AddChoice((viewWebsite, Coins));
                 }
+
+                choices.AddChoice((claimRewardBalance, Coins));
+
+                if (StakingEnabled)
+                {
+                    choices.AddChoice((claimStakeBalance, Coins));
+                }
+
+
+                //foreach(Coin c in Enum.GetValues(typeof(Coin)))
+                //{
+                //    if(!Coins.HasFlag(c))
+                //    {
+                //        continue;
+                //    }
+
+                //    List<(string, Coin)> innerChoices = new List<(string, Coin)>();
+
+                //    innerChoices.Add((claimRewardBalance, c));
+                //    innerChoices.Add((claimStakeBalance, c));
+
+                //    if (_minerInformation.TotalMiningRewards[c].CurrentBalance >= MiniumumRewardPayout[c])
+                //    {
+                //    }
+
+                //    if (_minerInformation.TotalStakeRewards[c].CurrentBalance >= MiniumumRewardPayout[c])
+                //    {
+                //    }
+
+                //    if(innerChoices.Count > 0)
+                //    {
+                //        choices.AddChoiceGroup(($"{c} ({MiniumumRewardPayout[c]} min payout)", c), innerChoices);
+                //    }
+                //}
 
 
                 choices.AddChoice((refreshBalance, Coins));
                 choices.AddChoice((changeWallet, Coins));
                 choices.AddChoice(("Exit", Coins));
 
-                (string choice, Coin coin) = await choices.ShowAsync(AnsiConsole.Console, token);
+                (string choice, Coin coins) = await choices.ShowAsync(AnsiConsole.Console, token);
 
                 switch (choice)
                 {
@@ -372,10 +402,13 @@ namespace OrionClientLib.Pools
                         await SetClaimWalletOptionAsync(token);
                         break;
                     case claimStakeBalance:
-                        await ClaimStakeOptionAsync(coin, token);
+                        await ClaimStakeOptionAsync(coins, token);
                         break;
                     case claimRewardBalance:
-                        await ClaimRewardsOptionAsync(coin, token);
+                        await ClaimRewardsOptionAsync(coins, token);
+                        break;
+                    case viewWebsite:
+                        await ViewWebsiteOptionAsync(token);
                         break;
                     default:
                         return;
@@ -502,7 +535,7 @@ namespace OrionClientLib.Pools
             }
         }
 
-        protected async Task ClaimRewardsOptionAsync(Coin coin, CancellationToken token)
+        protected virtual async Task ClaimRewardsOptionAsync(Coin coin, CancellationToken token)
         {
             string message = String.Empty;
 
@@ -552,6 +585,18 @@ namespace OrionClientLib.Pools
             else
             {
                 _errorMessage = $"[yellow]Notice: User canceled claiming[/]";
+            }
+        }
+
+        protected async Task ViewWebsiteOptionAsync(CancellationToken token)
+        {
+            string website = String.Format(Website, _publicKey);
+
+            ConfirmationPrompt confirmationPrompt = new ConfirmationPrompt($"Open browser to view website '{website}'?");
+
+            if(await confirmationPrompt.ShowAsync(AnsiConsole.Console, token))
+            {
+                Process.Start(new ProcessStartInfo(website) { UseShellExecute = true });
             }
         }
 

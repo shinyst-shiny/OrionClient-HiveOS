@@ -23,6 +23,9 @@ namespace OrionClientLib.Pools
 
         public override Uri WebsocketUrl => _poolSettings?.CustomDomain == null ? null : new Uri($"wss://{_poolSettings.CustomDomain}/v2/ws?timestamp={_timestamp}");
 
+        public override string Website => String.Empty;
+        public override bool StakingEnabled => false;
+
         public override void SetWalletInfo(Wallet wallet, string publicKey)
         {
             _poolSettings ??= new HQPoolSettings(Name);

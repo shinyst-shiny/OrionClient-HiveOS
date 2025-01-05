@@ -1,8 +1,11 @@
 ﻿using Newtonsoft.Json;
 using NLog;
+using OrionClientLib.CoinPrograms;
 using OrionClientLib.Pools.CoalPool;
 using OrionClientLib.Pools.HQPool;
+using Solnet.Wallet;
 using Solnet.Wallet.Utilities;
+using Spectre.Console;
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
@@ -30,9 +33,92 @@ namespace OrionClientLib.Pools
         public override bool HideOnPoolList { get; } = false;
         public override string HostName { get; protected set; } = "pool.coal-pool.xyz";
 
-        public override Dictionary<Coin, double> MiniumumRewardPayout { get; } = new Dictionary<Coin, double> { { Coin.Coal, 1 }, { Coin.Ore, 0.05 }, { Coin.Chromium, 0.0 } };
+        public override Dictionary<Coin, double> MiniumumRewardPayout { get; } = new Dictionary<Coin, double> { { Coin.Coal, 5 }, { Coin.Ore, 0.05 }, { Coin.Chromium, 0.0 } };
 
-        protected override async Task<(bool success, string message)> ClaimMiningRewards(Coin coin, string claimWallet, ulong amount, CancellationToken token)
+        public override string Website => "https://mine.coal-pool.xyz/miner/balance-stats?key={0}";
+        public override bool StakingEnabled => false;
+
+        protected override async Task ClaimRewardsOptionAsync(Coin coin, CancellationToken token)
+        {
+            string message = String.Empty;
+
+            await RefreshStakeBalancesAsync(true, token);
+
+            AnsiConsole.Clear();
+
+            //Check if there's enough
+            bool enoughCoal = _minerInformation.TotalMiningRewards[Coin.Coal].CurrentBalance >= MiniumumRewardPayout[Coin.Coal];
+            bool enoughOre = _minerInformation.TotalMiningRewards[Coin.Ore].CurrentBalance >= MiniumumRewardPayout[Coin.Ore];
+
+            if(!enoughCoal && !enoughOre)
+            {
+                _errorMessage = $"[red]You must have a minimum of {MiniumumRewardPayout[Coin.Coal]} {Coin.Coal} or {MiniumumRewardPayout[Coin.Ore]} {Coin.Ore} to start a claim[/]";
+
+                return;
+            }
+
+            double totalCoal = _minerInformation.TotalMiningRewards[Coin.Coal].CurrentBalance;
+            double totalOre = _minerInformation.TotalMiningRewards[Coin.Ore].CurrentBalance;
+            double totalChromium = _minerInformation.TotalMiningRewards[Coin.Chromium].CurrentBalance;
+
+            double coalClaim = totalCoal > 0 ? await GetClaimAmount(Coin.Coal) : 0;
+            double oreClaim = totalOre > 0 ? await GetClaimAmount(Coin.Ore) : 0;
+            
+            if(coalClaim < MiniumumRewardPayout[Coin.Coal] && oreClaim < MiniumumRewardPayout[Coin.Ore])
+            {
+                _errorMessage = $"[red]You must claim a minimum of {MiniumumRewardPayout[Coin.Coal]} {Coin.Coal} or {MiniumumRewardPayout[Coin.Ore]} {Coin.Ore}[/]";
+
+                return;
+            }
+
+            double chromiumClaim = totalChromium > 0 ? await GetClaimAmount(Coin.Chromium) : 0;
+
+            async Task<double> GetClaimAmount(Coin coin)
+            {
+                //Display claim prompt
+                TextPrompt<double> claimPrompt = new TextPrompt<double>($"Claim [green]{coin}[/] amount (Min: {MiniumumRewardPayout[coin]}): ");
+                claimPrompt.DefaultValue(_minerInformation.TotalMiningRewards[coin].CurrentBalance);
+                claimPrompt.Validate((v) =>
+                {
+                    return v >= 0 && v <= _minerInformation.TotalMiningRewards[coin].CurrentBalance;
+                });
+
+                return await claimPrompt.ShowAsync(AnsiConsole.Console, token);
+            }
+
+            //Confirmation
+            string claimWallet = _poolSettings.ClaimWallet ?? _wallet.Account.PublicKey;
+            bool isSame = claimWallet == _wallet.Account.PublicKey;
+
+            ConfirmationPrompt confirmationPrompt = new ConfirmationPrompt($"Claim {totalCoal} {Coin.Coal}, {totalOre} {Coin.Ore}, and {totalChromium} {Coin.Chromium} mining rewards to {claimWallet}" +
+                $"{(!isSame ? $"\n[yellow]Warning: Claim wallet {claimWallet} is different from mining wallet {_wallet.Account.PublicKey}. Continue?[/]" : String.Empty)}?");
+            confirmationPrompt.DefaultValue = false;
+
+            if (await confirmationPrompt.ShowAsync(AnsiConsole.Console, token))
+            {
+                //Try claim
+                (bool success, string message) claimResult = await ClaimMiningRewards(
+                    (ulong)(totalCoal * CoalProgram.CoalDecimals), 
+                    (ulong)(totalOre * OreProgram.OreDecimals), 
+                    (ulong)(totalChromium * CoalProgram.CoalDecimals), 
+                    claimWallet, token);
+
+                if (claimResult.success)
+                {
+                    _errorMessage = $"[green]{claimResult.message}[/]";
+                }
+                else
+                {
+                    _errorMessage = $"[red]Failed to claim: {claimResult.message}[/]";
+                }
+            }
+            else
+            {
+                _errorMessage = $"[yellow]Notice: User canceled claiming[/]";
+            }
+        }
+
+        protected async Task<(bool success, string message)> ClaimMiningRewards(ulong coalClaim, ulong oreClaim, ulong chromiumClaim, string claimWallet, CancellationToken token)
         {
             try
             {
@@ -47,26 +133,16 @@ namespace OrionClientLib.Pools
                 BinaryPrimitives.WriteUInt64LittleEndian(tBytes, _timestamp);
                 _encoder.DecodeData(claimWallet).CopyTo(tBytes, 8);
 
-                if (coin == Coin.Coal)
-                {
-                    BinaryPrimitives.WriteUInt64LittleEndian(tBytes.AsSpan().Slice(40, 8), amount);
-                }
-                else if (coin == Coin.Ore)
-                {
-                    BinaryPrimitives.WriteUInt64LittleEndian(tBytes.AsSpan().Slice(48, 8), amount);
-                }
-                else if (coin == Coin.Chromium)
-                {
-                    BinaryPrimitives.WriteUInt64LittleEndian(tBytes.AsSpan().Slice(56, 8), amount);
-                }
-
+                BinaryPrimitives.WriteUInt64LittleEndian(tBytes.AsSpan().Slice(40, 8), coalClaim);
+                BinaryPrimitives.WriteUInt64LittleEndian(tBytes.AsSpan().Slice(48, 8), oreClaim);
+                BinaryPrimitives.WriteUInt64LittleEndian(tBytes.AsSpan().Slice(56, 8), chromiumClaim);
 
                 byte[] sigBytes = _wallet.Sign(tBytes);
                 string sig = _encoder.EncodeData(sigBytes);
 
                 string authHeader = $"Basic {Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_publicKey}:{sig}"))}";
 
-                using var requestMessage = new HttpRequestMessage(HttpMethod.Post, $"/v2/claim?timestamp={_timestamp}&receiver_pubkey={claimWallet}&amount_coal={amount}&amount_coal={amount}&amount_coal={amount}");
+                using var requestMessage = new HttpRequestMessage(HttpMethod.Post, $"/v2/claim?timestamp={_timestamp}&receiver_pubkey={claimWallet}&amount_coal={coalClaim}&amount_ore={oreClaim}&amount_chromium={chromiumClaim}");
                 requestMessage.Headers.TryAddWithoutValidation("Authorization", authHeader);
 
                 using var response = await _client.SendAsync(requestMessage);
