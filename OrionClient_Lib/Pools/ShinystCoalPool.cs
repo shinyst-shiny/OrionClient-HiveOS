@@ -26,7 +26,9 @@ namespace OrionClientLib.Pools
         public override string DisplayName => Name;
         public override bool DisplaySetting => true;
         public override string Description => $"[Cyan]{Coin.Coal}[/]/[green]{Coin.Ore}[/] pool using Ore-HQ implementation. Operator (discord): Shinyst";
+        public override Uri WebsocketUrl => new Uri($"wss://{HostName}/v2/ws-pubkey?pubkey={_publicKey}&timestamp={_timestamp}");
         public override Coin Coins { get; } = Coin.Coal | Coin.Ore | Coin.Chromium;
+        public override bool RequiresKeypair => false;
 
         public override Dictionary<string, string> Features { get; } = new Dictionary<string, string>();
 
@@ -41,6 +43,14 @@ namespace OrionClientLib.Pools
         protected override async Task ClaimRewardsOptionAsync(Coin coin, CancellationToken token)
         {
             string message = String.Empty;
+
+
+            if(!RequiresKeypair && _wallet == null)
+            {
+                _errorMessage = $"[red]A full keypair is required to initiate a claim. Can claim through the website [cyan]{String.Format(Website, _publicKey)}[/][/]";
+
+                return;
+            }
 
             await RefreshStakeBalancesAsync(true, token);
 

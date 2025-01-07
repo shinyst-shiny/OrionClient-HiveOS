@@ -163,7 +163,7 @@ namespace OrionClientLib.Pools
             BinaryPrimitives.WriteUInt64LittleEndian(tBytes, _timestamp);
 
             Base58Encoder _encoder = new Base58Encoder();
-            byte[] sigBytes = _wallet.Sign(tBytes);
+            byte[] sigBytes = RequiresKeypair ? _wallet.Sign(tBytes) : new byte[64];
             string sig = _encoder.EncodeData(sigBytes);
 
             _authorization = $"Basic {Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_publicKey}:{sig}"))}";
@@ -197,7 +197,7 @@ namespace OrionClientLib.Pools
 
             await AnsiConsole.Status().StartAsync($"Setting up {Name} pool", async ctx =>
             {
-                if (_wallet == null)
+                if (RequiresKeypair && _wallet == null)
                 {
                     errorMessage = "A full keypair is required to sign message for this pool. Private keys are never sent to the server";
 
@@ -336,22 +336,35 @@ namespace OrionClientLib.Pools
                 {
                     var c = obj.Item2;
 
+                    string message = obj.Item1;
+
+
                     if (obj.Item1 == claimRewardBalance)
                     {
                         if (_minerInformation.TotalMiningRewards.TryGetValue(c, out var b) && b.CurrentBalance < MiniumumRewardPayout[c])
                         {
-                            return $"[red]{obj.Item1} (Min: {MiniumumRewardPayout[c]})[/]";
+                            message = $"[red]{obj.Item1} (Min: {MiniumumRewardPayout[c]})[/]";
+                        }
+
+                        if(_wallet == null)
+                        {
+                            message = $"[red]{obj.Item1} (Full key required)[/]";
                         }
                     }
                     else if (obj.Item1 == claimStakeBalance)
                     {
                         if (_minerInformation.TotalStakeRewards.TryGetValue(c, out var b) && b.CurrentBalance < MiniumumRewardPayout[c])
                         {
-                            return $"[red]{obj.Item1} (Min: {MiniumumRewardPayout[c]})[/]";
+                            message =  $"[red]{obj.Item1} (Min: {MiniumumRewardPayout[c]})[/]";
+                        }
+
+                        if(_wallet == null)
+                        {
+                            message = $"[red]{obj.Item1} (Full key required)[/]";
                         }
                     }
 
-                    return obj.Item1;
+                    return message;
                 });
 
                 if (!String.IsNullOrEmpty(Website) && OperatingSystem.IsWindows() && Environment.UserInteractive)
@@ -517,7 +530,7 @@ namespace OrionClientLib.Pools
                 }
 
                 //Confirmation
-                string claimWallet = _poolSettings.ClaimWallet ?? _wallet.Account.PublicKey;
+                string claimWallet = _poolSettings.ClaimWallet ?? _wallet?.Account.PublicKey;
                 bool isSame = claimWallet == _wallet.Account.PublicKey;
 
                 ConfirmationPrompt confirmationPrompt = new ConfirmationPrompt($"Claim {claimAmount} {Coins} from {result.PoolName} pool to {claimWallet}" +
@@ -989,11 +1002,11 @@ namespace OrionClientLib.Pools
 
             byte[] tBytes = new byte[8];
             BinaryPrimitives.WriteUInt64LittleEndian(tBytes, _timestamp);
-            byte[] sigBytes = _wallet.Sign(tBytes);
+            byte[] sigBytes = RequiresKeypair ? _wallet.Sign(tBytes) : new byte[0];
 
             bool result = await SendMessageAsync(new ReadyRequestMessage
             {
-                PublicKey = _wallet.Account.PublicKey,
+                PublicKey = _wallet?.Account.PublicKey ?? new PublicKey(_publicKey),
                 Timestamp = _timestamp,
                 Signature = sigBytes
             });
@@ -1024,8 +1037,8 @@ namespace OrionClientLib.Pools
             {
                 Digest = info.BestSolution,
                 Nonce = info.BestNonce,
-                PublicKey = _wallet.Account.PublicKey,
-                B58Signature = encoder.EncodeData(_wallet.Account.Sign(nonce))
+                PublicKey = RequiresKeypair ? _wallet.Account.PublicKey : new PublicKey(_publicKey),
+                B58Signature = RequiresKeypair ? encoder.EncodeData(_wallet.Account.Sign(nonce)) : String.Empty
             });
 
             if(result)
