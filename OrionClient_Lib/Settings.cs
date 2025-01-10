@@ -22,33 +22,17 @@ namespace OrionClientLib
         [TypeValidator<BasePool>()]
         public string Pool { get; set; }
 
-        [Obsolete]
-        public string CPUHasher { get; set; } = "Stock";
-
-        [Obsolete]
-        public string GPUHasher { get; set; } = "Disabled";
-
         public List<int> GPUDevices { get; set; } = new List<int>();
 
         public bool HasPrivateKey { get; set; }
         public string KeyFile { get; set; }
         public string PublicKey { get; set; }
 
-        [Obsolete]
-        public int CPUThreads { get; set; } = 1;
-        [Obsolete]
-        public bool AutoSetCPUAffinity { get; set; } = true;
-
-        [Obsolete]
-        public int MaxGPUBlockSize { get; set; } = 2048;
-        [Obsolete]
-        public int ProgramGenerationThreads { get; set; } = 0;
-
         //public bool EnableDebugging { get; set; }
         public bool MigratedSettings { get; set; } = false;
 
         [JsonIgnore]
-        public bool NeedsSetup => String.IsNullOrEmpty(CPUHasher) || String.IsNullOrEmpty(GPUHasher) || String.IsNullOrEmpty(Pool) || (String.IsNullOrEmpty(PublicKey) && String.IsNullOrEmpty(KeyFile));
+        public bool NeedsSetup => String.IsNullOrEmpty(CPUSetting.CPUHasher) || String.IsNullOrEmpty(GPUSetting.GPUHasher) || String.IsNullOrEmpty(Pool) || (String.IsNullOrEmpty(PublicKey) && String.IsNullOrEmpty(KeyFile));
 
 
         [SettingDetails("View CPU Settings", "Configure CPU settings")]
@@ -143,13 +127,6 @@ namespace OrionClientLib
             if (!t.MigratedSettings)
             {
                 t.CPUSetting.CPUThreads = t.CPUSetting.CPUThreads;
-#pragma warning disable CS0612 // Type or member is obsolete
-                t.CPUSetting.AutoSetCPUAffinity = t.AutoSetCPUAffinity;
-                t.CPUSetting.CPUHasher = t.CPUHasher;
-                t.GPUSetting.GPUHasher = t.GPUHasher;
-                t.GPUSetting.MaxGPUNoncePerBatch = t.MaxGPUBlockSize;
-                t.GPUSetting.ProgramGenerationThreads = t.ProgramGenerationThreads;
-#pragma warning restore CS0612 // Type or member is obsolete
                 t.MigratedSettings = true;
             }
 

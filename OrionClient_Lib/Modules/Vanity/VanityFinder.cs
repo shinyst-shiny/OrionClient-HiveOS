@@ -170,7 +170,6 @@ namespace OrionClientLib.Modules.Vanity
             InvalidFormat = 0;
             _outputFile = outputFile;
 
-            Directory.CreateDirectory(Settings.VanitySettings.Directory);
             Directory.CreateDirectory(walletDirectory);
 
             if(File.Exists(outputFile))
