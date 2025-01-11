@@ -890,12 +890,13 @@ namespace OrionClientLib.Hashers.GPU.RTX4090Opt
 
                                         var loc = Atomic.Add(ref solutionCount[0], 1);
 
-                                        BuildSolution(heap, solutions.SubView(loc * 8, 8), itemLeft, itemRight);
-
                                         if (loc >= 8)
                                         {
                                             return;
                                         }
+
+                                        BuildSolution(heap, solutions.SubView(loc * 8, 8), itemLeft, itemRight);
+
                                     }
                                 }
                             }

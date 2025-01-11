@@ -49,7 +49,7 @@ namespace OrionClient
         private static Table _logTable;
 
         private static string _message = String.Empty;
-        private static string _version = "1.3.0.1";
+        private static string _version = "1.3.1.0";
         private static GithubApi.Data _updateData;
         private static string _cudaLocation = String.Empty;
 

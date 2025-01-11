@@ -299,6 +299,7 @@ namespace OrionClientLib.Hashers.GPU.Baseline
 
             values = values.SubView(block * TotalValues, TotalValues);
 
+
             //Interop.WriteLine("start {0}", index);
             #region Shared Memory Setup
 
@@ -894,12 +895,13 @@ namespace OrionClientLib.Hashers.GPU.Baseline
 
                                         var loc = Atomic.Add(ref solutionCount[0], 1);
 
-                                        BuildSolution(heap, solutions.SubView(loc * 8, 8), itemLeft, itemRight);
-
                                         if (loc >= 8)
                                         {
                                             return;
                                         }
+
+                                        BuildSolution(heap, solutions.SubView(loc * 8, 8), itemLeft, itemRight);
+
                                     }
                                 }
                             }
