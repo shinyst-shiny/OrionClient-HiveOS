@@ -95,59 +95,66 @@ namespace OrionClientLib.Pools
 
         public override async void OnMessage(ArraySegment<byte> buffer, WebSocketMessageType type)
         {
-            if (type == WebSocketMessageType.Text)
+            try
             {
-                string message = Encoding.UTF8.GetString(buffer);
-
-                const string serverMineSend = "Server is sending mine transaction...";
-
-                if (message == serverMineSend)
+                if (type == WebSocketMessageType.Text)
                 {
-                    //"info" log with best difficulty submitted
-                    if(_bestDifficulty != null)
-                    {
-                        _logger.Log(LogLevel.Info, $"Challenge Id: {_bestDifficulty.ChallengeId}. Best Difficulty: {_bestDifficulty.BestDifficulty}. Best Nonce: {_bestDifficulty.BestNonce}");
-                    }
+                    string message = Encoding.UTF8.GetString(buffer);
 
-                    //Continue to attempt to send readyup message until successful
-                    if(!_sendingReadyUp)
-                    {
-                        _sendingReadyUp = true;
+                    const string serverMineSend = "Server is sending mine transaction...";
 
-                        while(!await SendReadyUp())
+                    if (message == serverMineSend)
+                    {
+                        //"info" log with best difficulty submitted
+                        if (_bestDifficulty != null)
                         {
-                            await Task.Delay(1000);
+                            _logger.Log(LogLevel.Info, $"Challenge Id: {_bestDifficulty.ChallengeId}. Best Difficulty: {_bestDifficulty.BestDifficulty}. Best Nonce: {_bestDifficulty.BestNonce}");
                         }
 
-                        _sendingReadyUp = false;
+                        //Continue to attempt to send readyup message until successful
+                        if (!_sendingReadyUp)
+                        {
+                            _sendingReadyUp = true;
+
+                            while (!await SendReadyUp())
+                            {
+                                await Task.Delay(1000);
+                            }
+
+                            _sendingReadyUp = false;
+                        }
+                    }
+                    else
+                    {
+                        _logger.Log(LogLevel.Debug, $"Server sent message: {message}");
                     }
                 }
                 else
                 {
-                    _logger.Log(LogLevel.Debug, $"Server sent message: {message}");
+                    switch ((OreHQResponseTypes)buffer[0])
+                    {
+                        case OreHQResponseTypes.StartMining:
+                            {
+                                OreHQChallengeResponse challenge = new OreHQChallengeResponse();
+                                challenge.Deserialize(buffer);
+
+                                HandleNewChallenge(challenge);
+                            }
+                            break;
+                        case OreHQResponseTypes.SubmissionResult:
+                            {
+                                HandleSubmissionResult(buffer);
+                            }
+                            break;
+                        default:
+                            _logger.Log(LogLevel.Warn, $"Unknown message type {buffer[0]}");
+                            break;
+                    }
                 }
             }
-            else
+            catch(Exception ex)
             {
-                switch ((OreHQResponseTypes)buffer[0])
-                {
-                    case OreHQResponseTypes.StartMining:
-                        {
-                            OreHQChallengeResponse challenge = new OreHQChallengeResponse();
-                            challenge.Deserialize(buffer);
-
-                            HandleNewChallenge(challenge);
-                        }
-                        break;
-                    case OreHQResponseTypes.SubmissionResult:
-                        {
-                            HandleSubmissionResult(buffer);
-                        }
-                        break;
-                    default:
-                        _logger.Log(LogLevel.Warn, $"Unknown message type {buffer[0]}");
-                        break;
-                }
+                _logger.Log(LogLevel.Warn, ex, $"Failed to parse message from server. Reason: {ex.Message}");
             }
         }
 

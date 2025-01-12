@@ -31,6 +31,7 @@ namespace OrionClientLib.Pools
 
         public override async Task<bool> ConnectAsync(CancellationToken token)
         {
+            //TODO: Detect multiple calls to this and return true as a patch
             _webSocket = new ClientWebSocket();
             _cts = new CancellationTokenSource();
 
@@ -158,7 +159,7 @@ namespace OrionClientLib.Pools
             if(!_cts.IsCancellationRequested)
             {
                 _logger.Log(LogLevel.Warn, $"Websocket disconnected. Trying to reconnecting ...");
-                while(!await ConnectAsync(_cts.Token))
+                while(!_cts.IsCancellationRequested && !await ConnectAsync(_cts.Token))
                 {
                     const int seconds = 5;
 
