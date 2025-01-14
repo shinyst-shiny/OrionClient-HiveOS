@@ -2,6 +2,9 @@
 
 Ore/Coal mining client with expandable pool and hashing implementation support.
 
+# Standalone versions (no dependencies required)
+- https://github.com/SL-x-TnT/OrionClient/releases
+  
 # Build From Source
 
 ## 1. Install net8 sdk 
@@ -9,6 +12,12 @@ Ubuntu
 ```
 sudo apt-get update && sudo apt-get install -y dotnet-sdk-8.0
 ```
+Windows
+- https://dotnet.microsoft.com/en-us/download/dotnet/8.0
+
+## 1a. Install git (windows only)
+Windows
+- https://git-scm.com/downloads
 
 ## 2. Download source
 ```
@@ -17,23 +26,24 @@ git clone --recurse-submodules https://github.com/SL-x-TnT/OrionClient.git
 
 ## 3. Publish
 ```
-cd OrionClient && dotnet publish -o Build
+cd OrionClient
+dotnet publish -o Build -f net8.0
+```
+
+## 3a. Pulling new changes
+While in the `OrionClient` folder
+```
+git pull --recurse-submodules
+dotnet publish -o Build -f net8.0
 ```
 
 ## 4. Run
+Ubuntu
 ```
 ./Build/OrionClient
 ```
 
-# Release builds
-
-https://github.com/SL-x-TnT/OrionClient/releases
-- **Standalone** versions do not require net8 runtime to be installed
-  
-## 1. Install net8 runtime (optional)
-Ubuntu
-```
-sudo apt-get update && sudo apt-get install -y dotnet-runtime-8.0
-```
 Windows
-https://dotnet.microsoft.com/en-us/download/dotnet/8.0
+```
+.\Build\OrionClient.exe
+```
