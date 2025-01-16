@@ -234,17 +234,17 @@ namespace OrionClientLib.Pools
                 DateTime.Now.ToShortTimeString(),
                 GenerateChallengeId(submissionResponse.Challenge).ToString(),
                 $"{submissionResponse.CoalDetail.RewardDetails.MinerSuppliedDifficulty}/{submissionResponse.Difficulty}",
-                $"{submissionResponse.CoalDetail.RewardDetails.MinerEarnedRewards:0.00000000000}/{submissionResponse.OreDetail.RewardDetails.MinerEarnedRewards:0.00000000000}",
+                $"[cyan]{submissionResponse.CoalDetail.RewardDetails.MinerEarnedRewards:0.00000000000}[/]\n[green]{submissionResponse.OreDetail.RewardDetails.MinerEarnedRewards:0.00000000000}[/]",
                 //$"{_minerInformation.TotalStakeRewards.BalanceChangeSinceUpdate:0.00000000000}",
-                $"{submissionResponse.CoalDetail.RewardDetails.TotalRewards:0.00000000000}/{submissionResponse.OreDetail.RewardDetails.TotalRewards:0.00000000000}",
-                $"{_minerInformation.TotalMiningRewards[Coin.Coal]:0.00000000000}/{_minerInformation.TotalMiningRewards[Coin.Ore]:0.00000000000}",
+                $"[cyan]{submissionResponse.CoalDetail.RewardDetails.TotalRewards:0.00000000000}[/]\n[green]{submissionResponse.OreDetail.RewardDetails.TotalRewards:0.00000000000}[/]",
+                $"[cyan]{_minerInformation.TotalMiningRewards[Coin.Coal]:0.00000000000}[/]\n[green]{_minerInformation.TotalMiningRewards[Coin.Ore]:0.00000000000}[/]",
                 //$"{_minerInformation.TotalStakeRewards:0.00000000000}",
             ]);
         }
 
         public override string[] TableHeaders()
         {
-            return ["Time", "Id", "Diff", "Mining Rewards (Coal/Ore)", $"Pool Rewards", "Unclaimed Rewards"];
+            return ["Time", "Id", "Diff", "Mining Rewards\n[cyan]Coal[/]/[green]Ore[/]", $"Pool Rewards", "Unclaimed Rewards"];
         }
     }
 }
