@@ -1,8 +1,7 @@
 {
   "profiles": {
     "OrionClient": {
-      "commandName": "Project",
-      "commandLineArgs": "--gpu"
+      "commandName": "Project"
     }
   }
 }

@@ -40,7 +40,7 @@ namespace OrionClientLib.Hashers.GPU.AMDBaseline
                 return new List<Device>();
             }
 
-            return devices.Where(x => x.AcceleratorType != AcceleratorType.CPU).ToList();
+            return devices.Where(x => x.AcceleratorType != AcceleratorType.CPU && x is CLDevice).ToList();
         }
 
         public override KernelConfig GetHashXKernelConfig(Device device, int maxNonces, Settings settings)

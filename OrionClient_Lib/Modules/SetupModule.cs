@@ -14,6 +14,7 @@ using Solnet.Wallet;
 using Solnet.Wallet.Bip39;
 using Solnet.Wallet.Utilities;
 using Spectre.Console;
+using Spectre.Console.Prompts;
 using Spectre.Console.Rendering;
 using System;
 using System.Collections.Generic;
@@ -173,7 +174,7 @@ namespace OrionClientLib.Modules
             (IHasher cpuHasher, IHasher gpuHasher) = _data.GetChosenHasher();
 
             SelectionPrompt<IHasher> selectionPrompt = new SelectionPrompt<IHasher>();
-            selectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nSelect GPU hashing implementation. Run benchmark to see hashrates");
+            selectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nSelect GPU hashing implementation. Run benchmark to see hashrates{(!String.IsNullOrEmpty(_errorMessage) ? $"\n[red]Error: {_errorMessage}[/]\n" : String.Empty)}");
             selectionPrompt.UseConverter((hasher) =>
             {
                 if(hasher == null)
@@ -190,6 +191,8 @@ namespace OrionClientLib.Modules
 
                 return $"{chosenText}{hasher.Name} - {hasher.Description} {(hasher.Experimental ? "[red][[Experimental]][/]" : String.Empty)}";
             });
+
+            _errorMessage = String.Empty;
 
             selectionPrompt.AddChoices(_data.Hashers.Where(x => x.HardwareType == IHasher.Hardware.GPU && (_settings.GPUSetting.EnableExperimentalHashers || !x.Experimental)).OrderByDescending(x => x == gpuHasher));
             selectionPrompt.AddChoice(null);
@@ -214,16 +217,40 @@ namespace OrionClientLib.Modules
             List<Device> devices = hasher.GetDevices(false);
             HashSet<Device> validDevices = new HashSet<Device>(hasher.GetDevices(true));
 
+            if(validDevices.Count == 0)
+            {
+                _errorMessage = "No valid GPUs found";
+
+                return _currentStep;
+            }
+
             //Allow device selection
             MultiSelectionPrompt<Device> deviceSelectionPrompt = new MultiSelectionPrompt<Device>();
-            deviceSelectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nSelect GPUs to use. Selecting different GPU types may cause performance issues");
+            deviceSelectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nSelect GPUs to use. Selecting different GPU types may cause performance issues\n[gray]Press escape to return to GPU implementation step[/]");
             deviceSelectionPrompt.UseConverter((device) =>
             {
                 bool selected = _settings.GPUDevices.Contains(devices.IndexOf(device));
 
                 return $"{(selected ? "[b][[Current]][/] " : String.Empty)}{device.Name} - {device.AcceleratorType}{(!validDevices.Contains(device) ? " [red][[Not supported]][/]" : String.Empty)}";
             });
+            deviceSelectionPrompt.AbortKey = ConsoleKey.Escape;
 
+            HashSet<Device> selectedDevices = new HashSet<Device>();
+
+            if (_settings.GPUDevices.Count == 0)
+            {
+                selectedDevices = validDevices;
+            }
+            else
+            {
+                foreach (var deviceId in _settings.GPUDevices)
+                {
+                    if (deviceId >= 0 && deviceId < devices.Count)
+                    {
+                        selectedDevices.Add(devices[deviceId]);
+                    }
+                }
+            }
 
             //Shouldn't happen, but disable GPU hasher for now
             if (devices == null)
@@ -233,21 +260,24 @@ namespace OrionClientLib.Modules
                 return _currentStep + 1;
             }
 
-            var groups = devices.OrderByDescending(x => x.NumMultiprocessors).GroupBy(x => x.Name);
-
-            foreach(var group in groups)
+            foreach(var device in devices.OrderByDescending(x => x.NumMultiprocessors))
             {
-                if (group.Count() == 1)
-                {
-                    deviceSelectionPrompt.AddChoice(group.First());
-                }
-                else
-                {
-                    deviceSelectionPrompt.AddChoiceGroup(group.First(), group);
-                }
+                deviceSelectionPrompt.AddChoice(device, selectedDevices.Contains(device));
             }
 
-            List<Device> result = await deviceSelectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
+
+            List<Device> result = new List<Device>();
+
+            try
+            {
+                result = await deviceSelectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
+            }
+            catch(PromptAbortException)
+            {
+                AnsiConsole.Clear();
+
+                return _currentStep;
+            }
 
             List<int> chosenGPUs = new List<int>();
 
@@ -365,6 +395,11 @@ namespace OrionClientLib.Modules
 
             selectionPrompt.UseConverter((pool) =>
             {
+                if (pool == null)
+                {
+                    return "[aqua]<-- Previous Step[/]";
+                }
+
                 string chosenText = String.Empty;
 
                 if(pool == chosenPool)
@@ -389,9 +424,15 @@ namespace OrionClientLib.Modules
                 selectionPrompt.AddChoices(_data.Pools.OrderByDescending(x => x == chosenPool));
             }
 
+            selectionPrompt.AddChoice(null);
+
             chosenPool = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
 
-            if(chosenPool != null)
+            if (chosenPool == null)
+            {
+                return _currentStep - 1;
+            }
+            else
             {
                 (Wallet wallet, string publicKey) = await _data.Settings.GetWalletAsync();
 
