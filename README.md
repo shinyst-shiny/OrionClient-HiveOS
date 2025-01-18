@@ -8,7 +8,7 @@ Ore/Coal mining client with expandable pool and hashing implementation support.
 # Build From Source
 
 ## 1. Install net8 sdk 
-Ubuntu
+Ubuntu (22.04 and later)
 ```
 sudo apt-get update && sudo apt-get install -y dotnet-sdk-8.0
 ```
