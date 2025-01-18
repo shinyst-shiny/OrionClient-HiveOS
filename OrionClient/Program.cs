@@ -260,7 +260,7 @@ namespace OrionClient
             {
                 if(!String.IsNullOrEmpty(cmdOptions.PublicKey))
                 {
-                    AnsiConsole.MarkupLine($"[red]Error: [green]--keypair[/] and [green]--key[/] options can't be used together");
+                    AnsiConsole.MarkupLine($"[red]Error: [green]--keypair[/] and [green]--key[/] options can't be used together[/]");
 
                     return false;
                 }
