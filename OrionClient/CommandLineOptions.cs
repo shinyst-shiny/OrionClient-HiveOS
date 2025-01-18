@@ -39,7 +39,7 @@ namespace OrionClient
         public int? BatchSize { get; set; }
         [Option("gpu-block-size", HelpText = "GPU block size")]
         public int? BlockSize { get; set; }
-        [Option("gpu-gen-threads", HelpText = "CPU threads to use to generation program for GPU")]
+        [Option("gpu-gen-threads", HelpText = "CPU threads to use to generation program for GPU (0 = all threads)")]
         public int? ProgramGenerationThreads { get; set; }
 
         #endregion
