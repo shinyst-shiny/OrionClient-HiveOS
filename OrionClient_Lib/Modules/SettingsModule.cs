@@ -298,7 +298,7 @@ namespace OrionClientLib.Modules
             builder.AppendLine("[/]");
 
             selectionPrompt.Title(builder.ToString());
-            selectionPrompt.EnableSearch();
+            //selectionPrompt.EnableSearch();
             selectionPrompt.UseConverter((det) =>
             {
                 if(det.IsBack)
@@ -441,7 +441,6 @@ namespace OrionClientLib.Modules
 
                 await File.WriteAllTextAsync(keyFile, JsonConvert.SerializeObject(wallet.Account.PrivateKey.KeyBytes.ToList()));
                 _settings.KeyFile = keyFile;
-                _settings.HasPrivateKey = true;
             }
         }
 
@@ -486,7 +485,6 @@ namespace OrionClientLib.Modules
             if(selection >= 0)
             {
                 _settings.KeyFile = potentialWallets[selection].path;
-                _settings.HasPrivateKey = true;
             }
             else if(selection == -1)
             {
@@ -524,7 +522,6 @@ namespace OrionClientLib.Modules
                     else
                     {
                         _settings.KeyFile = path;
-                        _settings.HasPrivateKey = true;
 
                         return;
                     }
@@ -599,7 +596,6 @@ namespace OrionClientLib.Modules
                 return;
             }
 
-            _settings.HasPrivateKey = false;
             _settings.KeyFile = String.Empty;
             _settings.PublicKey = publicKey;
         }

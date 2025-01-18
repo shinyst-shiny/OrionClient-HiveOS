@@ -24,7 +24,9 @@ namespace OrionClientLib
 
         public List<int> GPUDevices { get; set; } = new List<int>();
 
-        public bool HasPrivateKey { get; set; }
+        [JsonIgnore]
+        public bool HasPrivateKey => !String.IsNullOrEmpty(KeyFile);
+
         public string KeyFile { get; set; }
         public string PublicKey { get; set; }
 

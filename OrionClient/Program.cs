@@ -30,6 +30,10 @@ using System.Diagnostics;
 using OrionClientLib.Hashers.GPU.AMDBaseline;
 using OrionClientLib.Utilities;
 using ILGPU.Runtime.Cuda;
+using CommandLine;
+using Microsoft.Extensions.Options;
+using System.Security.Cryptography.X509Certificates;
+using ILGPU.Runtime.OpenCL;
 
 namespace OrionClient
 {
@@ -116,19 +120,6 @@ namespace OrionClient
 
             NativeLibrary.SetDllImportResolver(Assembly.GetAssembly(typeof(CudaAccelerator)), DllImportResolver);
 
-            AnsiConsole.Clear();
-
-            Console.WriteLine("Checking for updates ...");
-
-            _updateData = await GithubApi.CheckForUpdates(_version);
-
-            AnsiConsole.Clear();
-
-            _settings = await Settings.LoadAsync();
-            await _settings.SaveAsync();
-
-            Console.CancelKeyPress += Console_CancelKeyPress;
-
             #region Configure
 
             _pools = new List<IPool>
@@ -164,7 +155,7 @@ namespace OrionClient
 
             void AddSupportedHasher(IHasher hasher)
             {
-                if(hasher.IsSupported())
+                if (hasher.IsSupported())
                 {
                     _hashers.Add(hasher);
                 }
@@ -188,6 +179,25 @@ namespace OrionClient
             _uiLayout["Logs"].Update(_logTable);
 
             #endregion
+
+
+            _settings = await Settings.LoadAsync();
+            await _settings.SaveAsync();
+
+            if (!await HandleSettings(args))
+            {
+                return;
+            }
+
+            AnsiConsole.Clear();
+
+            Console.WriteLine("Checking for updates ...");
+
+            _updateData = await GithubApi.CheckForUpdates(_version);
+
+            AnsiConsole.Clear();
+
+            Console.CancelKeyPress += Console_CancelKeyPress;
 
             if(args.Length > 0)
             {
@@ -223,6 +233,195 @@ namespace OrionClient
 
                 AnsiConsole.Clear();
             }
+        }
+
+        private static async Task<bool> HandleSettings(string[] args)
+        {
+            var parser = new Parser((settings) =>
+            {
+                settings.AutoVersion = true;
+                settings.HelpWriter = Parser.Default.Settings.HelpWriter;
+            });
+            
+            var parsedOptions = parser.ParseArguments<CommandLineOptions>(args);
+
+            if(parsedOptions.Errors.Count() > 0)
+            {
+                return false;
+            }
+
+            CommandLineOptions cmdOptions = parsedOptions.Value;
+
+            //Manually handle options
+
+            #region Main
+
+            if (!String.IsNullOrEmpty(cmdOptions.KeyFile))
+            {
+                if(!String.IsNullOrEmpty(cmdOptions.PublicKey))
+                {
+                    AnsiConsole.MarkupLine($"[red]Error: [green]--keypair[/] and [green]--key[/] options can't be used together");
+
+                    return false;
+                }
+
+                _settings.KeyFile = cmdOptions.KeyFile;
+                (Wallet wallet, string publicKey) result = await _settings.GetWalletAsync();
+
+                if (result.wallet == null)
+                {
+                    AnsiConsole.MarkupLine($"[red]Error: [green]--keypair[/] path '[cyan]{cmdOptions.KeyFile}[/]' is invalid[/]");
+
+                    return false;
+                }
+            }
+            else if (!String.IsNullOrEmpty(cmdOptions.PublicKey))
+            {
+                _settings.KeyFile = null; //Remove key file
+                _settings.PublicKey = cmdOptions.PublicKey;
+
+                (Wallet wallet, string publicKey) result = await _settings.GetWalletAsync();
+
+                if (String.IsNullOrEmpty(result.publicKey))
+                {
+                    AnsiConsole.MarkupLine($"[red]Error: [green]--key[/] value '[cyan]{cmdOptions.PublicKey}[/]' is invalid[/]");
+
+                    return false;
+                }
+            }
+
+            #endregion
+
+            #region CPU
+
+            if (cmdOptions.CPUThreads.HasValue)
+            {
+                int threads = cmdOptions.CPUThreads.Value;
+
+                if(threads < 0 || threads > Environment.ProcessorCount)
+                {
+                    AnsiConsole.MarkupLine($"[red]Error: [green]--cpu-threads[/] value '[cyan]{cmdOptions.CPUThreads}[/]' is invalid. Valid (0-{Environment.ProcessorCount})[/]");
+
+                    return false;
+                }
+
+                _settings.CPUSetting.CPUThreads = threads;
+            }
+
+            if (cmdOptions.DisableCPU)
+            {
+                _settings.CPUSetting.CPUHasher = "Disabled";
+            }
+
+            #endregion
+
+            #region GPU
+
+            if(cmdOptions.EnableGPU)
+            {
+                if(_settings.GPUDevices == null || _settings.GPUDevices.Count == 0)
+                {
+                    _settings.GPUDevices = new List<int>();
+
+                    var gpuHasher = (BaseGPUHasher)_hashers.FirstOrDefault(x => x is BaseGPUHasher);
+
+                    var allDevices = gpuHasher.GetDevices(false);
+
+                    bool has4090 = false;
+
+                    //Will assume we're using cuda
+                    if (!cmdOptions.OpenCL && allDevices.Any(x => x is CudaDevice))
+                    {
+                        for(int i = 0; i < allDevices.Count; i++)
+                        {
+                            if (allDevices[i] is CudaDevice cudaDevice)
+                            {
+                                _settings.GPUDevices.Add(i);
+
+                                if(cudaDevice.Name.Contains("RTX 4090"))
+                                {
+                                    has4090 = true;
+                                }
+                            }
+                        }
+
+                        if(_settings.GPUSetting.GPUHasher == "Disabled" || !_hashers.Any(x => x.Name == _settings.GPUSetting.GPUHasher))
+                        {
+                            _settings.GPUSetting.GPUHasher = _hashers.FirstOrDefault(x => x is CudaBaselineGPUHasher)?.Name ?? "Disabled";
+
+                            if (has4090)
+                            {
+                                _settings.GPUSetting.GPUHasher = _hashers.FirstOrDefault(x => x is Cuda4090OptGPUHasher)?.Name ?? _settings.GPUSetting.GPUHasher;
+                            }
+                        }
+                    }
+                    else if (cmdOptions.OpenCL || allDevices.Any(x => x is CLDevice))
+                    {
+                        for (int i = 0; i < allDevices.Count; i++)
+                        {
+                            if (allDevices[i] is CLDevice cudaDevice)
+                            {
+                                _settings.GPUDevices.Add(i);
+                            }
+                        }
+
+                        if (_settings.GPUSetting.GPUHasher == "Disabled" || !_hashers.Any(x => x.Name == _settings.GPUSetting.GPUHasher))
+                        {
+                            _settings.GPUSetting.GPUHasher = _hashers.FirstOrDefault(x => x is OpenCLBaselineGPUHasher)?.Name ?? "Disabled";
+                        }
+                    }
+                }
+            }
+
+            if (cmdOptions.BatchSize.HasValue)
+            {
+                int batchSize = cmdOptions.BatchSize.Value;
+
+                int[] validValues = new int[] { 2048, 1024, 512, 256, 128 };
+
+                if (!validValues.Contains(batchSize))
+                {
+                    AnsiConsole.MarkupLine($"[red]Error: [green]--gpu-batch-size[/] value '[cyan]{cmdOptions.BatchSize}[/]' is invalid. Valid ({String.Join(", ", validValues)})[/]");
+
+                    return false;
+                }
+
+                _settings.GPUSetting.MaxGPUNoncePerBatch = batchSize;
+            }
+
+            if (cmdOptions.BlockSize.HasValue)
+            {
+                int blockSize = cmdOptions.BlockSize.Value;
+
+                int[] validValues = new int[] { 512, 256, 128, 64, 32, 16 };
+
+                if (!validValues.Contains(blockSize))
+                {
+                    AnsiConsole.MarkupLine($"[red]Error: [green]--gpu-block-size[/] value '[cyan]{cmdOptions.BlockSize}[/]' is invalid. Valid ({String.Join(", ", validValues)})[/]");
+
+                    return false;
+                }
+
+                _settings.GPUSetting.GPUBlockSize = blockSize;
+            }
+
+            if (cmdOptions.ProgramGenerationThreads.HasValue)
+            {
+                int threads = cmdOptions.ProgramGenerationThreads.Value;
+
+                if (threads < 0 || threads > Environment.ProcessorCount)
+                {
+                    AnsiConsole.MarkupLine($"[red]Error: [green]--gpu-gen-threads[/] value '[cyan]{cmdOptions.ProgramGenerationThreads}[/]' is invalid. Valid (0-{Environment.ProcessorCount})[/]");
+
+                    return false;
+                }
+
+                _settings.GPUSetting.ProgramGenerationThreads = threads;
+            }
+
+            #endregion
+
+            return true;
         }
 
         private static async void Console_CancelKeyPress(object? sender, ConsoleCancelEventArgs e)
