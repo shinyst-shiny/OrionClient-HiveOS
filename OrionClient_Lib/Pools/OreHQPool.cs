@@ -298,31 +298,31 @@ namespace OrionClientLib.Pools
                         $"{(miningReward.BalanceChangeSinceUpdate > 0 ? $"([green]+{miningReward.BalanceChangeSinceUpdate:0.00000000000}[/])" : String.Empty)}" +
                         $"{(miningReward.TotalChange > 0 ? $"[[[Cyan]+{miningReward.TotalChange:0.00000000000} since start[/]]]" : String.Empty)}");
 
-                    if (StakingEnabled)
-                    {
-                        builder.AppendLine($"   {"Stake Rewards".PadRight(14)} {stakeReward} {c} " +
-                        $"{(stakeReward.BalanceChangeSinceUpdate > 0 ? $"([green]+{stakeReward.BalanceChangeSinceUpdate:0.00000000000}[/])" : String.Empty)}" +
-                        $"{(stakeReward.TotalChange > 0 ? $"[[[Cyan]+{stakeReward.TotalChange:0.00000000000} since start[/]]]" : String.Empty)}");
-                    }
+                    //if (StakingEnabled)
+                    //{
+                    //    builder.AppendLine($"   {"Stake Rewards".PadRight(14)} {stakeReward} {c} " +
+                    //    $"{(stakeReward.BalanceChangeSinceUpdate > 0 ? $"([green]+{stakeReward.BalanceChangeSinceUpdate:0.00000000000}[/])" : String.Empty)}" +
+                    //    $"{(stakeReward.TotalChange > 0 ? $"[[[Cyan]+{stakeReward.TotalChange:0.00000000000} since start[/]]]" : String.Empty)}");
+                    //}
 
                     builder.AppendLine();
                 }
 
-                if (_minerInformation.Stakes?.Count > 0)
-                {
-                    builder.AppendLine();
-                    builder.AppendLine($"Stake Info:");
+                //if (_minerInformation.Stakes?.Count > 0)
+                //{
+                //    builder.AppendLine();
+                //    builder.AppendLine($"Stake Info:");
 
-                    if (_minerInformation.Stakes != null)
-                    {
-                        foreach (var stakeInfo in _minerInformation.Stakes)
-                        {
-                            OreProgram.BoostMints.TryGetValue(new PublicKey(stakeInfo.MintPubkey), out (string name, int decimals) data);
+                //    if (_minerInformation.Stakes != null)
+                //    {
+                //        foreach (var stakeInfo in _minerInformation.Stakes)
+                //        {
+                //            OreProgram.BoostMints.TryGetValue(new PublicKey(stakeInfo.MintPubkey), out (string name, int decimals) data);
 
-                            builder.AppendLine($"   {(data.name ?? "??").PadRight(11)} {stakeInfo.StakedBalance / Math.Pow(10, !String.IsNullOrEmpty(data.name) ? data.decimals : 11)}");
-                        }
-                    }
-                }
+                //            builder.AppendLine($"   {(data.name ?? "??").PadRight(11)} {stakeInfo.StakedBalance / Math.Pow(10, !String.IsNullOrEmpty(data.name) ? data.decimals : 11)}");
+                //        }
+                //    }
+                //}
 
                 if (!String.IsNullOrEmpty(_errorMessage))
                 {
@@ -381,10 +381,10 @@ namespace OrionClientLib.Pools
 
                 choices.AddChoice((claimRewardBalance, Coins));
 
-                if (StakingEnabled)
-                {
-                    choices.AddChoice((claimStakeBalance, Coins));
-                }
+                //if (StakingEnabled)
+                //{
+                //    choices.AddChoice((claimStakeBalance, Coins));
+                //}
 
 
                 //foreach(Coin c in Enum.GetValues(typeof(Coin)))
@@ -741,7 +741,7 @@ namespace OrionClientLib.Pools
 
             }
 
-            _minerInformation.UpdateStakes(await GetStakingInformationAsync(token));
+            //_minerInformation.UpdateStakes(await GetStakingInformationAsync(token));
         }
 
         protected virtual async Task<(List<(Coin, double)> value, bool success)> GetDataAsync(string endpoint, CancellationToken token)
@@ -1088,39 +1088,39 @@ namespace OrionClientLib.Pools
                 _coin = coin;
             }
 
-            public void UpdateStakes(List<OreHQPoolStake> stakes)
-            {
-                if(stakes == null)
-                {
-                    return;
-                }
+            //public void UpdateStakes(List<OreHQPoolStake> stakes)
+            //{
+            //    if(stakes == null)
+            //    {
+            //        return;
+            //    }
 
-                Stakes = stakes;
+            //    Stakes = stakes;
 
-                double totalStakeRewards = 0;
+            //    double totalStakeRewards = 0;
 
-                var stakeMints = _coin.HasFlag(Coin.Ore) ? OreProgram.BoostMints : null;
+            //    var stakeMints = _coin.HasFlag(Coin.Ore) ? OreProgram.BoostMints : null;
 
-                if(stakeMints == null)
-                {
-                    return;
-                }
+            //    if(stakeMints == null)
+            //    {
+            //        return;
+            //    }
 
-                var boostAccounts = _coin.HasFlag(Coin.Ore) ? OreProgram.BoostMints : null;
+            //    var boostAccounts = _coin.HasFlag(Coin.Ore) ? OreProgram.BoostMints : null;
                 
-                foreach(OreHQPoolStake stake in stakes)
-                {
-                    if(boostAccounts != null && boostAccounts.TryGetValue(new PublicKey(stake.MintPubkey), out var d))
-                    {
-                        stake.PoolName = d.name;
-                        stake.Decimals = Math.Pow(10, d.decimals);
-                    }
+            //    foreach(OreHQPoolStake stake in stakes)
+            //    {
+            //        if(boostAccounts != null && boostAccounts.TryGetValue(new PublicKey(stake.MintPubkey), out var d))
+            //        {
+            //            stake.PoolName = d.name;
+            //            stake.Decimals = Math.Pow(10, d.decimals);
+            //        }
 
-                    totalStakeRewards += stake.RewardsBalance / (_coin.HasFlag(Coin.Ore) ? OreProgram.OreDecimals : CoalProgram.CoalDecimals);
-                }
+            //        totalStakeRewards += stake.RewardsBalance / (_coin.HasFlag(Coin.Ore) ? OreProgram.OreDecimals : CoalProgram.CoalDecimals);
+            //    }
 
-                TotalStakeRewards[Coin.Ore].Update(totalStakeRewards);
-            }
+            //    TotalStakeRewards[Coin.Ore].Update(totalStakeRewards);
+            //}
 
             public void UpdateMiningRewards(Coin coin, double rewards)
             {

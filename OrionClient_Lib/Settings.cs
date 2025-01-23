@@ -44,6 +44,10 @@ namespace OrionClientLib
         [SettingDetails("View Vanity Settings", "Configure Vanity settings")]
         public VanitySettings VanitySetting { get; set; } = new VanitySettings();
 
+        [SettingDetails("View RPC Settings", "Configure RPC settings")]
+        public RPCSettings RPCSetting { get; set; } = new RPCSettings();
+
+
         public class CPUSettings
         {
             [SettingDetails("Hasher", "Change CPU hasher implementation")]
@@ -105,6 +109,13 @@ namespace OrionClientLib
             [SettingDetails("Vanity Threads", "Total CPU threads to use to validate found vanities (0 = all threads)")]
             [ThreadValidator]
             public int VanityThreads { get; set; } = 0;
+        }
+
+        public class RPCSettings
+        {
+            [SettingDetails("RPC URL", "RPC URL to use for requests. Default: https://api.mainnet-beta.solana.com/")]
+            [UrlSettingValidation]
+            public string Url { get; set; } = "https://api.mainnet-beta.solana.com/";
         }
 
         public static async Task<Settings> LoadAsync()

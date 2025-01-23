@@ -143,6 +143,10 @@ namespace OrionClientLib.Modules
             {
                 details.Property.SetValue(details.Obj, await HandleInt($"Set '{details.Attribute.Name}'", (int)details.Property.GetValue(details.Obj), details.Validator));
             }
+            else if (details.Type == typeof(string))
+            {
+                details.Property.SetValue(details.Obj, await HandleString($"Set '{details.Attribute.Name}'", (string)details.Property.GetValue(details.Obj), details.Validator));
+            }
 
             AnsiConsole.Clear();
 
@@ -230,6 +234,23 @@ namespace OrionClientLib.Modules
                 textPrompt.Validate((i) =>
                 {
                     if(validation == null)
+                    {
+                        return true;
+                    }
+
+                    return validation.Validate(i);
+                });
+
+                return await textPrompt.ShowAsync(AnsiConsole.Console, token);
+            }
+
+            async Task<string> HandleString(string message, string defaultOption, SettingValidatorAttribute validation)
+            {
+                TextPrompt<string> textPrompt = new TextPrompt<string>(message);
+                textPrompt.DefaultValue(defaultOption);
+                textPrompt.Validate((i) =>
+                {
+                    if (validation == null)
                     {
                         return true;
                     }

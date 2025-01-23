@@ -77,6 +77,24 @@ namespace OrionClientLib.Modules.SettingsData
         }
     }
 
+    public class UrlSettingValidation : SettingValidatorAttribute
+    {
+        public override bool Validate(object data)
+        {
+            if (data == null)
+            {
+                return false;
+            }
+
+            if(Uri.TryCreate(data.ToString(), UriKind.Absolute, out Uri result))
+            {
+                return true;
+            }
+
+            return false;
+        }
+    }
+
     public class OptionSettingValidation<T> : SettingValidatorAttribute
     {
         public T[] Options;

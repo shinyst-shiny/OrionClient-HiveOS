@@ -133,6 +133,7 @@ namespace OrionClient
             {
                 new MinerModule(),
                 new PoolModule(),
+                new StakingModule(),
                 new VanityModule(),
                 new BenchmarkerModule(),
                 new SetupModule(),

@@ -1,5 +1,7 @@
 ﻿using NLog;
+using OrionClientLib.CoinPrograms.Ore;
 using Solnet.Programs;
+using Solnet.Programs.Abstract;
 using Solnet.Programs.Utilities;
 using Solnet.Rpc.Models;
 using Solnet.Wallet;
@@ -47,11 +49,17 @@ namespace OrionClientLib.CoinPrograms
         public static PublicKey MintId;
         public static PublicKey ProgramId = new PublicKey("oreV2ZymfyeXgNgBdqMkumTqqAprVqgBWQfoYkrtKWQ");
         public static readonly PublicKey NoopId = new PublicKey("noop8ytexvkpCuqbf6FB89BSuNemHtPRqaNC31GWivW");
+        public static readonly PublicKey BoostProgramId = new PublicKey("BoosTyJFPPtrqJTdi49nnztoEWDJXfDRhyb2fha6PPy");
 
-        public static readonly PublicKey OreISC = new PublicKey("meUwDp23AaxhiNKaQCyJ2EAF2T4oe1gSkEkGXSRVdZb");
-        public static readonly PublicKey OreSol = new PublicKey("DrSS5RM7zUd9qjUEdDaf31vnDUSbCrMto6mjqTrHFifN");
+        public static readonly List<BoostInformation> Boosts = new List<BoostInformation>()
+        {
+            new BoostInformation(new PublicKey("oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp"), 11, "Ore", BoostInformation.PoolType.Ore, null),
+            new BoostInformation(new PublicKey("8H8rPiWW4iTFCfEkSnf7jpqeNpFfvdH9gLouAL3Fe2Zx"), 6, "Ore-Sol (Kamino)", BoostInformation.PoolType.Kamino,new PublicKey("6TFdY15Mxty9sRCtzMXG8eHSbZy4oiAEQUvLQdz9YwEn")),
+            new BoostInformation(new PublicKey("7G3dfZkSk1HpDGnyL37LMBbPEgT4Ca6vZmZPUyi2syWt"), 6, "Ore-Hnt (Kamino)", BoostInformation.PoolType.Kamino,new PublicKey("9XsAPjk1yp4U6hKZj9r9szhcxBi3RidGuyxiC2Y8JtAe")),
+            new BoostInformation(new PublicKey("DrSS5RM7zUd9qjUEdDaf31vnDUSbCrMto6mjqTrHFifN"), 11, "Ore-Sol (Meteroa)", BoostInformation.PoolType.Meteroa,new PublicKey("GgaDTFbqdgjoZz3FP7zrtofGwnRS4E6MCzmmD5Ni1Mxj")),
+            new BoostInformation(new PublicKey("meUwDp23AaxhiNKaQCyJ2EAF2T4oe1gSkEkGXSRVdZb"), 11, "Ore-ISC (Meteroa)", BoostInformation.PoolType.Meteroa,new PublicKey("2vo5uC7jbmb1zNqYpKZfVyewiQmRmbJktma4QHuGNgS5")),
+        };
 
-        public static readonly Dictionary<PublicKey, (string name, int decimals)> BoostMints = new Dictionary<PublicKey, (string, int)>();
 
         public static readonly double OreDecimals = Math.Pow(10, 11);
         private static readonly byte[] MintNoise = new byte[] { 89, 157, 88, 232, 243, 249, 197, 132, 199, 49, 19, 234, 91, 94, 150, 41 };
@@ -84,10 +92,6 @@ namespace OrionClientLib.CoinPrograms
             ConfigAddress = b;
 
             TreasuryATAId = AssociatedTokenAccountProgram.DeriveAssociatedTokenAccount(TreasuryId, MintId);
-
-            BoostMints.Add(MintId, ("Ore", 11));
-            BoostMints.Add(OreISC, ("Ore-ISC", 11));
-            BoostMints.Add(OreSol, ("Ore-SOL", 11));
         }
 
         public static (PublicKey key, uint nonce) GetProofKey(PublicKey signer, PublicKey programId)
@@ -209,6 +213,36 @@ namespace OrionClientLib.CoinPrograms
                 Keys = keys,
                 Data = data
             };
+        }
+
+        public static PublicKey DeriveBoost(PublicKey mint)
+        {
+            if (PublicKey.TryFindProgramAddress(new List<byte[]> { Encoding.UTF8.GetBytes("boost"), mint.KeyBytes }, BoostProgramId, out PublicKey address, out byte nonce))
+            {
+                return address;
+            }
+
+            return default;
+        }
+
+        public static PublicKey DeriveCheckpoint(PublicKey boost)
+        {
+            if (PublicKey.TryFindProgramAddress(new List<byte[]> { Encoding.UTF8.GetBytes("checkpoint"), boost.KeyBytes }, BoostProgramId, out PublicKey address, out byte nonce))
+            {
+                return address;
+            }
+
+            return default;
+        }
+
+        public static PublicKey DeriveStakeAccount(PublicKey boost, PublicKey authority)
+        {
+            if (PublicKey.TryFindProgramAddress(new List<byte[]> { Encoding.UTF8.GetBytes("stake"), authority.KeyBytes, boost.KeyBytes }, BoostProgramId, out PublicKey address, out byte nonce))
+            {
+                return address;
+            }
+
+            return default;
         }
 
     }
