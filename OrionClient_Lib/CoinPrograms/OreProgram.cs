@@ -47,6 +47,8 @@ namespace OrionClientLib.CoinPrograms
         public static PublicKey TreasuryATAId;
         public static PublicKey TreasuryOreATAId;
         public static PublicKey MintId;
+        public static PublicKey BoostDirectoryId;
+
         public static PublicKey ProgramId = new PublicKey("oreV2ZymfyeXgNgBdqMkumTqqAprVqgBWQfoYkrtKWQ");
         public static readonly PublicKey NoopId = new PublicKey("noop8ytexvkpCuqbf6FB89BSuNemHtPRqaNC31GWivW");
         public static readonly PublicKey BoostProgramId = new PublicKey("BoosTyJFPPtrqJTdi49nnztoEWDJXfDRhyb2fha6PPy");
@@ -90,6 +92,10 @@ namespace OrionClientLib.CoinPrograms
 
             PublicKey.TryFindProgramAddress(new List<byte[]> { Encoding.UTF8.GetBytes("config") }, ProgramId, out b, out n);
             ConfigAddress = b;
+
+
+            PublicKey.TryFindProgramAddress(new List<byte[]> { Encoding.UTF8.GetBytes("directory") }, BoostProgramId, out b, out n);
+            BoostDirectoryId = b;
 
             TreasuryATAId = AssociatedTokenAccountProgram.DeriveAssociatedTokenAccount(TreasuryId, MintId);
         }
@@ -244,6 +250,5 @@ namespace OrionClientLib.CoinPrograms
 
             return default;
         }
-
     }
 }

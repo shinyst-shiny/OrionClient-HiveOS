@@ -34,6 +34,7 @@ using CommandLine;
 using Microsoft.Extensions.Options;
 using System.Security.Cryptography.X509Certificates;
 using ILGPU.Runtime.OpenCL;
+using System.Buffers.Binary;
 
 namespace OrionClient
 {

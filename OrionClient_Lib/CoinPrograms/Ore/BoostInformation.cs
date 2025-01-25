@@ -10,7 +10,7 @@ namespace OrionClientLib.CoinPrograms.Ore
 {
     public class BoostInformation
     {
-        public enum PoolType { Ore, Meteroa, Kamino };
+        public enum PoolType { Unknown, Ore, Meteroa, Kamino };
 
         public PublicKey BoostAddress { get; private set; }
         public PublicKey MintAddress { get; private set; }

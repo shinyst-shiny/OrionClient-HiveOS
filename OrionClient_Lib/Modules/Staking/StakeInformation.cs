@@ -28,6 +28,7 @@ namespace OrionClientLib.Modules.Staking
         public ulong TotalStakers { get; set; }
         public DateTime LastUpdated { get; set; }
         public DateTime LastPayout { get; set; }
+        public bool Enabled { get; set; }
 
         public decimal LPTotalUSDValue => LPUSDValue * (decimal)TotalStake;
         public decimal UserStakeUSDValue => (decimal)(UserStake) * LPUSDValue;

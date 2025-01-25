@@ -15,6 +15,7 @@ using OrionClientLib.Modules.SettingsData;
 using OrionClientLib.Modules.Staking;
 using OrionClientLib.Pools;
 using OrionClientLib.Utilities;
+using Solnet.Programs;
 using Solnet.Rpc;
 using Solnet.Rpc.Core.Http;
 using Solnet.Wallet;
@@ -131,6 +132,62 @@ namespace OrionClientLib.Modules
             }
 
             _stakeInfo = boosts.Select(x => new StakeInformation(x, wallet?.Account.PublicKey ?? new PublicKey(pubKey))).ToList();
+
+            var result = await SendWithRetry(() => _client.GetAccountInfoAsync(OreProgram.BoostDirectoryId, Solnet.Rpc.Types.Commitment.Processed));
+
+            if(result != null)
+            {
+                BoostDirectory directory = BoostDirectory.Deserialize(Convert.FromBase64String(result.Result.Value.Data[0]));
+
+                List<PublicKey> newBoosts = new List<PublicKey>();
+
+                for(int i = 0; i < (int)directory.ActiveBoosts; i++)
+                {
+                    PublicKey boost = directory.Boosts[i];
+
+                    StakeInformation stakeInfo = _stakeInfo.FirstOrDefault(x => x.Boost.BoostAddress.Equals(boost));
+
+                    //New boost, add
+                    if(stakeInfo == null)
+                    {
+                        newBoosts.Add(boost);
+                    }
+                    else
+                    {
+                        stakeInfo.Enabled = true;
+                    }
+                }
+
+                //Will add the boosts in to see stake, but that's it
+                if(newBoosts.Count > 0)
+                {
+                    var boostResults = await SendWithRetry(() => _client.GetMultipleAccountsAsync(newBoosts.Select(x => x.Key).ToList(), Solnet.Rpc.Types.Commitment.Processed));
+
+                    if (boostResults != null)
+                    {
+                        for (int i = 0; i < boostResults.Result.Value.Count; i++)
+                        {
+                            var boostInfo = boostResults.Result.Value[i];
+
+                            if(boostInfo == null)
+                            {
+                                continue;
+                            }
+
+                            Boost newBoost = Boost.Deserialize(Convert.FromBase64String(boostInfo.Data[0]));
+
+                            var boostTokenInfoResults = await SendWithRetry(() => _client.GetTokenMintInfoAsync(newBoost.Mint, Solnet.Rpc.Types.Commitment.Processed));
+
+                            if (boostTokenInfoResults != null)
+                            {
+                                var bInfo = new BoostInformation(newBoost.Mint, boostTokenInfoResults.Result.Value.Data.Parsed.Info.Decimals, "Unknown", BoostInformation.PoolType.Unknown, newBoosts[i]);
+
+                                _stakeInfo.Add(new StakeInformation(bInfo, wallet?.Account.PublicKey ?? new PublicKey(pubKey)));
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         private async Task<bool> DisplayOptions()
@@ -184,7 +241,7 @@ namespace OrionClientLib.Modules
                     var relativeProfit = stakeInfo.Multiplier == 0 || stakeInfo.LPTotalUSDValue  == 0? 0 : (double)oreBoost.LPTotalUSDValue / ((double)stakeInfo.LPTotalUSDValue / stakeInfo.Multiplier);
 
 
-                    _stakingTable.AddRow(stakeInfo.Boost.Name,
+                    _stakingTable.AddRow(WrapBooleanColor(stakeInfo.Boost.Name, stakeInfo.Enabled, null, Color.Red),
                                         $"{stakeInfo.Multiplier:0.##}x",
                                         stakeInfo.TotalStakers.ToString(),
                                         $"{stakeInfo.TotalStake:0.###} (${stakeInfo.LPTotalUSDValue:n2})",
@@ -192,8 +249,8 @@ namespace OrionClientLib.Modules
                                         $"{stakeInfo.UserStake:0.###} (${stakeInfo.UserStakeUSDValue:n2})", 
                                         $"{stakeInfo.PendingStake:0.###} (${stakeInfo.UserPendingStakeUSDValue:n2})",
                                         $"{stakeInfo.SharePercent:0.####}%",
-                                        $"[yellow]{stakeInfo.Rewards:n11} (${stakeInfo.RewardUSDValue:n2})[/]",
-                                        $"[yellow]{stakeInfo.UserPendingRewards:n11} (${stakeInfo.PendingUserRewardUSDValue:n2})[/]",
+                                        WrapBooleanColor($"{stakeInfo.Rewards:n11} (${stakeInfo.RewardUSDValue:n2})", stakeInfo.Rewards > 0, Color.Green, null),
+                                        WrapBooleanColor($"{stakeInfo.UserPendingRewards:n11} (${stakeInfo.PendingUserRewardUSDValue:n2})", stakeInfo.UserPendingRewards > 0, Color.Green, null),
                                         PrettyFormatTime(nextPayoutTime)
                                         );
                 }
@@ -216,8 +273,8 @@ namespace OrionClientLib.Modules
                     _stakingTable.UpdateCell(i, 5, $"{stakeInfo.UserStake:0.###} (${stakeInfo.UserStakeUSDValue:n2})");
                     _stakingTable.UpdateCell(i, 6, $"{stakeInfo.PendingStake:0.###} (${stakeInfo.UserPendingStakeUSDValue:n2})");
                     _stakingTable.UpdateCell(i, 7, $"{stakeInfo.SharePercent:0.####}%");
-                    _stakingTable.UpdateCell(i, 8, $"[yellow]{stakeInfo.Rewards:n11} (${stakeInfo.RewardUSDValue:n2})[/]");
-                    _stakingTable.UpdateCell(i, 9, $"[yellow]{stakeInfo.UserPendingRewards:n11} (${stakeInfo.PendingUserRewardUSDValue:n2})[/]");
+                    _stakingTable.UpdateCell(i, 8, WrapBooleanColor($"{stakeInfo.Rewards:n11} (${stakeInfo.RewardUSDValue:n2})", stakeInfo.Rewards > 0, Color.Green, null));
+                    _stakingTable.UpdateCell(i, 9, WrapBooleanColor($"{stakeInfo.UserPendingRewards:n11} (${stakeInfo.PendingUserRewardUSDValue:n2})", stakeInfo.UserPendingRewards > 0, Color.Green, null));
                     _stakingTable.UpdateCell(i, 10, PrettyFormatTime(nextPayoutTime));
                 }
             }
@@ -283,9 +340,13 @@ namespace OrionClientLib.Modules
 
                 //Set native ore price
                 StakeInformation? nativeOre = _stakeInfo.FirstOrDefault(x => x.Boost.Type == BoostInformation.PoolType.Ore);
-                nativeOre.LPUSDValue = _stakeInfo.OrderByDescending(x => x.LastUpdated).FirstOrDefault(x => x.Boost.Type != BoostInformation.PoolType.Ore)?.OreUSDValue ?? 0;
-                nativeOre.OreUSDValue = nativeOre.LPUSDValue;
-                nativeOre.LastUpdated = DateTime.UtcNow;
+
+                if (nativeOre != null)
+                {
+                    nativeOre.LPUSDValue = _stakeInfo.OrderByDescending(x => x.LastUpdated).FirstOrDefault(x => x.Boost.Type != BoostInformation.PoolType.Ore)?.OreUSDValue ?? 0;
+                    nativeOre.OreUSDValue = nativeOre.LPUSDValue;
+                    nativeOre.LastUpdated = DateTime.UtcNow;
+                }
             });
 
             AnsiConsole.Clear();
@@ -467,6 +528,20 @@ namespace OrionClientLib.Modules
             }
 
             return false;
+        }
+
+        private string WrapBooleanColor(string text, bool result, Color? successColor, Color? failedColor)
+        {
+            if(result && successColor.HasValue)
+            {
+                return $"[{successColor}]{text}[/]";
+            }
+            else if (!result && failedColor.HasValue)
+            {
+                return $"[{failedColor}]{text}[/]";
+            }
+
+            return text;
         }
     }
 }
