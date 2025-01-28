@@ -60,6 +60,7 @@ namespace OrionClientLib.Modules.Staking
 
             [JsonProperty("tokenB")]
             public Token TokenB { get; set; }
+
         }
     }
 }

@@ -16,6 +16,7 @@ using OrionClientLib.Modules.Staking;
 using OrionClientLib.Pools;
 using OrionClientLib.Utilities;
 using Solnet.Programs;
+using Solnet.Programs.Utilities;
 using Solnet.Rpc;
 using Solnet.Rpc.Core.Http;
 using Solnet.Wallet;
@@ -39,6 +40,7 @@ namespace OrionClientLib.Modules
     {
         private static readonly string KaminoPoolUrl = "https://api.kamino.finance/strategies/metrics?env=mainnet-beta&status=LIVE";
         private static readonly string MeteroaPoolUrl = "https://app.meteora.ag/amm/pools?address={0}";
+        private static readonly PublicKey _solMint = new PublicKey("So11111111111111111111111111111111111111111");
 
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private const int PoolUpdateDelayMin = 60;
@@ -92,7 +94,7 @@ namespace OrionClientLib.Modules
         public async Task<(bool, string)> InitializeAsync(Data data)
         {
             _client = ClientFactory.GetClient(data.Settings.RPCSetting.Url);
-            _streamingClient = ClientFactory.GetStreamingClient(data.Settings.RPCSetting.Url);
+            _streamingClient = ClientFactory.GetStreamingClient(data.Settings.RPCSetting.Url.Replace("http", "ws"));
             _httpClient = new HttpClient()
             {
                 Timeout = TimeSpan.FromSeconds(3)
@@ -180,7 +182,7 @@ namespace OrionClientLib.Modules
 
                             if (boostTokenInfoResults != null)
                             {
-                                var bInfo = new BoostInformation(newBoost.Mint, boostTokenInfoResults.Result.Value.Data.Parsed.Info.Decimals, "Unknown", BoostInformation.PoolType.Unknown, newBoosts[i]);
+                                var bInfo = new BoostInformation(newBoost.Mint, boostTokenInfoResults.Result.Value.Data.Parsed.Info.Decimals, "Unknown", BoostInformation.PoolType.Unknown, newBoosts[i], null);
 
                                 _stakeInfo.Add(new StakeInformation(bInfo, wallet?.Account.PublicKey ?? new PublicKey(pubKey)));
                             }
@@ -198,21 +200,42 @@ namespace OrionClientLib.Modules
             AnsiConsole.Write(_stakingTable);
 
             const string refresh = "Refresh";
+            const string liveView = "Live View";
             const string exit = "Exit";
 
-            SelectionPrompt<string> test = new SelectionPrompt<string>();
-            test.Title("");
-            test.AddChoice("Refresh");
-            test.AddChoice("Exit");
+            SelectionPrompt<string> displayPrompt = new SelectionPrompt<string>();
+            displayPrompt.Title(_errorMessage);
+            _errorMessage = String.Empty;
 
-            string result = await test.ShowAsync(AnsiConsole.Console, _cts.Token);
+            displayPrompt.AddChoice(refresh);
+            //test.AddChoice(liveView);
+            displayPrompt.AddChoice(exit);
+
+            string result = await displayPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
 
             switch (result)
             {
                 case refresh:
                     return true;
+                case liveView:
+                    await LiveView();
+                    return true;
                 case exit:
                     return false;
+            }
+
+            return false;
+        }
+
+        private async Task<bool> LiveView()
+        {
+            try
+            {
+                await _streamingClient.ConnectAsync();
+            }
+            catch
+            {
+
             }
 
             return false;
@@ -238,13 +261,13 @@ namespace OrionClientLib.Modules
                     var nextPayoutTime = (stakeInfo.LastPayout.AddHours(1) - DateTime.UtcNow);
 
                     //Calculate relative reward rate
-                    var relativeProfit = stakeInfo.Multiplier == 0 || stakeInfo.LPTotalUSDValue  == 0? 0 : (double)oreBoost.LPTotalUSDValue / ((double)stakeInfo.LPTotalUSDValue / stakeInfo.Multiplier);
+                    var relativeProfit = stakeInfo.Multiplier == 0 || stakeInfo.BoostTotalUSDValue  == 0? 0 : (double)oreBoost.BoostTotalUSDValue / ((double)stakeInfo.BoostTotalUSDValue / stakeInfo.Multiplier);
 
 
                     _stakingTable.AddRow(WrapBooleanColor(stakeInfo.Boost.Name, stakeInfo.Enabled, null, Color.Red),
                                         $"{stakeInfo.Multiplier:0.##}x",
                                         stakeInfo.TotalStakers.ToString(),
-                                        $"{stakeInfo.TotalStake:0.###} (${stakeInfo.LPTotalUSDValue:n2})",
+                                        $"{stakeInfo.TotalBoostStake:0.###} (${stakeInfo.BoostTotalUSDValue:n2})",
                                         $"{relativeProfit:0.00}x",
                                         $"{stakeInfo.UserStake:0.###} (${stakeInfo.UserStakeUSDValue:n2})", 
                                         $"{stakeInfo.PendingStake:0.###} (${stakeInfo.UserPendingStakeUSDValue:n2})",
@@ -263,12 +286,12 @@ namespace OrionClientLib.Modules
                     var nextPayoutTime = (stakeInfo.LastPayout.AddHours(1) - DateTime.UtcNow);
 
                     //Calculate relative reward rate
-                    var relativeProfit = (double)oreBoost.LPTotalUSDValue / ((double)stakeInfo.LPTotalUSDValue / stakeInfo.Multiplier);
+                    var relativeProfit = (double)oreBoost.BoostTotalUSDValue / ((double)stakeInfo.BoostTotalUSDValue / stakeInfo.Multiplier);
 
 
                     _stakingTable.UpdateCell(i, 1, $"{stakeInfo.Multiplier:0.##}x");
                     _stakingTable.UpdateCell(i, 2, stakeInfo.TotalStakers.ToString());
-                    _stakingTable.UpdateCell(i, 3, $"{stakeInfo.TotalStake:0.###} (${stakeInfo.LPTotalUSDValue:n2})");
+                    _stakingTable.UpdateCell(i, 3, $"{stakeInfo.TotalBoostStake:0.###} (${stakeInfo.BoostTotalUSDValue:n2})");
                     _stakingTable.UpdateCell(i, 4, $"{relativeProfit:0.00}x");
                     _stakingTable.UpdateCell(i, 5, $"{stakeInfo.UserStake:0.###} (${stakeInfo.UserStakeUSDValue:n2})");
                     _stakingTable.UpdateCell(i, 6, $"{stakeInfo.PendingStake:0.###} (${stakeInfo.UserPendingStakeUSDValue:n2})");
@@ -329,7 +352,7 @@ namespace OrionClientLib.Modules
 
                 ctx.Status("Updating Meteroa pool info ...");
 
-                if (await UpdateMeteroaPool(_stakeInfo.Where(x => x.Boost.Type == BoostInformation.PoolType.Meteroa)))
+                if (await UpdateMeteroaPool(_stakeInfo.Where(x => x.Boost.Type == BoostInformation.PoolType.Meteora)))
                 {
                     AnsiConsole.MarkupLine($"[green]Successfully updated meteroa pool info[/]");
                 }
@@ -338,23 +361,64 @@ namespace OrionClientLib.Modules
                     AnsiConsole.MarkupLine($"[red]Failed to update meteroa pool info[/]");
                 }
 
-                //Set native ore price
-                StakeInformation? nativeOre = _stakeInfo.FirstOrDefault(x => x.Boost.Type == BoostInformation.PoolType.Ore);
+                ctx.Status("Grabbing prices from Coin Gecko...");
 
-                if (nativeOre != null)
+                if(await UpdatePrices())
                 {
-                    nativeOre.LPUSDValue = _stakeInfo.OrderByDescending(x => x.LastUpdated).FirstOrDefault(x => x.Boost.Type != BoostInformation.PoolType.Ore)?.OreUSDValue ?? 0;
-                    nativeOre.OreUSDValue = nativeOre.LPUSDValue;
-                    nativeOre.LastUpdated = DateTime.UtcNow;
+                    AnsiConsole.MarkupLine($"[green]Successfully updated prices[/]");
+                }
+                else
+                {
+                    AnsiConsole.MarkupLine($"[red]Failed to update prices from Coin Gecko[/]");
                 }
             });
 
             AnsiConsole.Clear();
         }
 
+        private async Task<bool> UpdatePrices()
+        {
+            try
+            {
+                HashSet<string> coingeckoids = _stakeInfo.Where(x => !String.IsNullOrEmpty(x.Boost.CoinGeckoName)).Select(x => x.Boost.CoinGeckoName).ToHashSet();
+
+                string url = String.Format("https://api.coingecko.com/api/v3/simple/price?ids={0}&vs_currencies=usd", String.Join(",", coingeckoids));
+
+                string data = await _httpClient.GetStringAsync(url);
+
+                var priceData = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, decimal>>>(data);
+
+                foreach(var s in _stakeInfo)
+                {
+                    if(priceData.TryGetValue("ore", out var v))
+                    {
+                        s.OreUSDValue = v["usd"];
+                    }
+
+                    if (!String.IsNullOrEmpty(s.Boost.CoinGeckoName))
+                    {
+                        if (priceData.TryGetValue(s.Boost.CoinGeckoName, out v))
+                        {
+                            s.TokenBUSDValue = v["usd"];
+                        }
+                    }
+                }
+
+                return true;
+            }
+            catch(Exception ex)
+            {
+                _logger.Log(LogLevel.Warn, $"Failed to pull prices from Coin Gecko. Message: {ex.Message}");
+
+                return false;
+            }
+        }
+
         private async Task<bool> UpdateBoostInformation()
         {
             List<string> accounts = new List<string>();
+
+            const int baseAccountSize = 5;
 
             foreach(var info in _stakeInfo)
             {
@@ -362,9 +426,18 @@ namespace OrionClientLib.Modules
                 accounts.Add(info.StakeAccount);
                 accounts.Add(info.Boost.BoostProof);
                 accounts.Add(info.Boost.CheckpointAddress);
-            }
+                accounts.Add(info.Boost.MintAddress);
 
-            int totalAccounts = accounts.Count / _stakeInfo.Count;
+                if (info.Boost.ExtraData != null)
+                {
+                    accounts.Add(info.Boost.ExtraData.LPVaultA);
+                    accounts.Add(info.Boost.ExtraData.LPVaultB);
+                    accounts.Add(info.Boost.ExtraData.TokenVaultA);
+                    accounts.Add(info.Boost.ExtraData.TokenVaultB);
+                    accounts.Add(info.Boost.ExtraData.LPAMint);
+                    accounts.Add(info.Boost.ExtraData.LPBMint);
+                }
+            }
 
             var result = await SendWithRetry(() => _client.GetMultipleAccountsAsync(accounts, Solnet.Rpc.Types.Commitment.Confirmed));
 
@@ -373,24 +446,74 @@ namespace OrionClientLib.Modules
                 return false;
             }
 
-            for(int i = 0; i < accounts.Count / totalAccounts; i++)
+            int accountCount = 0;
+            int i = 0;
+
+            while(accountCount < accounts.Count)
             {
-                var tAccounts = result.Result.Value.Skip(i * totalAccounts).Take(totalAccounts).ToList();
-                StakeInformation stakeInfo = _stakeInfo[i];
+                var stakeInfo = _stakeInfo[i++];
+
+                int totalAccountsToRead = baseAccountSize + (stakeInfo.Boost.ExtraData == null ? 0 : BoostInformation.MeteoraExtraData.TotalAccounts);
+
+                var tAccounts = result.Result.Value.Skip(accountCount).Take(totalAccountsToRead).ToList();
+
+                accountCount += totalAccountsToRead;
 
                 var boostData = tAccounts[0];
                 var stakeData = tAccounts[1];
                 var proofData = tAccounts[2];
                 var checkpointData = tAccounts[3];
+                var mintAccountData = tAccounts[4];
+
+                BoostInformation.PoolType poolType = stakeInfo.Boost.Type;
+
+                //Meteora has slow updates for their API, so pulling on-chain data
+                if(poolType == BoostInformation.PoolType.Meteora)
+                {
+                    var lpVaultA = tAccounts[5];
+                    var lpVaultB = tAccounts[6];
+                    var tokenVaultA = tAccounts[7];
+                    var tokenVaultB = tAccounts[8];
+                    var lpAMint = tAccounts[9];
+                    var lpBMint = tAccounts[10];
+
+                    var mintData = Convert.FromBase64String(mintAccountData.Data[0]); //LP pair token
+                    var lpVaultAData = Convert.FromBase64String(lpVaultA.Data[0]);  //LP Token A Vault
+                    var lpVaultBData = Convert.FromBase64String(lpVaultB.Data[0]);  //LP Token B Vault
+                    var tokenVaultAData = Convert.FromBase64String(tokenVaultA.Data[0]); //Token A Vault
+                    var tokenVaultBData = Convert.FromBase64String(tokenVaultB.Data[0]); //Token B Vault
+                    var lpAMintData = Convert.FromBase64String(lpAMint.Data[0]); //LP A Mint
+                    var lpBMintData = Convert.FromBase64String(lpBMint.Data[0]); //LP B Mint
+
+                    double mintAmount = new ReadOnlySpan<byte>(mintData).GetU64(36) / Math.Pow(10, stakeInfo.Boost.Decimal);
+                    ulong lpASupply = new ReadOnlySpan<byte>(lpAMintData).GetU64(36);
+                    ulong lpBSupply = new ReadOnlySpan<byte>(lpBMintData).GetU64(36);
+                    ulong aVaultAmount = new ReadOnlySpan<byte>(lpVaultAData).GetU64(64);
+                    ulong bVaultAmount = new ReadOnlySpan<byte>(lpVaultBData).GetU64(64);
+
+                    ulong tokenAAmount = stakeInfo.Boost.ExtraData.CalculateTokenAmount(aVaultAmount, lpASupply, tokenVaultAData);
+                    ulong tokenBAmount = stakeInfo.Boost.ExtraData.CalculateTokenAmount(bVaultAmount, lpBSupply, tokenVaultBData);
+
+                    //Assuming ore is first
+
+                    stakeInfo.TotalLPStake = (decimal)mintAmount;
+                    stakeInfo.TotalOreStaked = (decimal)(tokenAAmount / OreProgram.OreDecimals);
+                    stakeInfo.TotalTokenBStaked = (decimal)(tokenBAmount / Math.Pow(10, stakeInfo.Boost.ExtraData.TokenBDecimal));
+                }
 
                 if(boostData != null)
                 {
                     Boost boost = Boost.Deserialize(Convert.FromBase64String(boostData.Data[0]));
 
-                    stakeInfo.TotalStake = boost.TotalDeposits / Math.Pow(10, stakeInfo.Boost.Decimal);
+                    stakeInfo.TotalBoostStake = boost.TotalDeposits / Math.Pow(10, stakeInfo.Boost.Decimal);
                     stakeInfo.TotalStakers = boost.TotalStakers;
                     stakeInfo.Multiplier = boost.Multiplier / 1000.0;
 
+                    if(poolType == BoostInformation.PoolType.Ore)
+                    {
+                        stakeInfo.TotalOreStaked = (decimal)stakeInfo.TotalBoostStake;
+                        stakeInfo.TotalLPStake = (decimal)stakeInfo.TotalBoostStake;
+                    }
                 }
 
                 if(proofData != null)
@@ -450,9 +573,13 @@ namespace OrionClientLib.Modules
                     }
 
                     boost.LastUpdated = DateTime.UtcNow;
-                    boost.LPUSDValue = boostData.SharePrice;
                     boost.OreUSDValue = boostData.TokenAMint == OreProgram.MintId.Key ? boostData.VaultBalances_.TokenA.TokenUSDValue : boostData.VaultBalances_.TokenB.TokenUSDValue;
                     boost.TokenBUSDValue = boostData.TokenAMint != OreProgram.MintId.Key ? boostData.VaultBalances_.TokenA.TokenUSDValue : boostData.VaultBalances_.TokenB.TokenUSDValue;
+                    boost.TotalOreStaked = boostData.TokenAMint == OreProgram.MintId.Key ? boostData.VaultBalances_.TokenA.Total : boostData.VaultBalances_.TokenB.Total;
+                    boost.TotalTokenBStaked = boostData.TokenAMint != OreProgram.MintId.Key ? boostData.VaultBalances_.TokenA.Total : boostData.VaultBalances_.TokenB.Total;
+                    boost.TotalLPStake = boostData.SharesIssued;
+
+                    //boost.TokenB = boostData.TokenAMint != OreProgram.MintId.Key ? new PublicKey(boostData.TokenAMint) : new PublicKey(boostData.TokenBMint);
                 }
 
                 return true;
@@ -486,8 +613,9 @@ namespace OrionClientLib.Modules
                         MeteroaPoolInfo poolInfo = poolData[0];
 
                         boost.LastUpdated = DateTime.UtcNow;
-                        boost.LPUSDValue = poolInfo.PoolLpPriceInUsd;
+
                         boost.OreUSDValue = poolInfo.PoolTokenMints[0] == OreProgram.MintId.Key ? (poolInfo.PoolTokenUsdAmounts[0] / poolInfo.PoolTokenAmounts[0]) : (poolInfo.PoolTokenUsdAmounts[1] / poolInfo.PoolTokenAmounts[1]);
+                        //boost.TokenB = poolInfo.PoolTokenMints[0] != OreProgram.MintId.Key ? new PublicKey(poolInfo.PoolTokenMints[0]) : new PublicKey(poolInfo.PoolTokenMints[1]);
                         boost.TokenBUSDValue = poolInfo.PoolTokenMints[0] != OreProgram.MintId.Key ? (poolInfo.PoolTokenUsdAmounts[0] / poolInfo.PoolTokenAmounts[0]) : (poolInfo.PoolTokenUsdAmounts[1] / poolInfo.PoolTokenAmounts[1]);
                     }
                 }

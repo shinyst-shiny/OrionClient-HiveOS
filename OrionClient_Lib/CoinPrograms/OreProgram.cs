@@ -55,11 +55,18 @@ namespace OrionClientLib.CoinPrograms
 
         public static readonly List<BoostInformation> Boosts = new List<BoostInformation>()
         {
-            new BoostInformation(new PublicKey("oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp"), 11, "Ore", BoostInformation.PoolType.Ore, null),
-            new BoostInformation(new PublicKey("8H8rPiWW4iTFCfEkSnf7jpqeNpFfvdH9gLouAL3Fe2Zx"), 6, "Ore-Sol (Kamino)", BoostInformation.PoolType.Kamino,new PublicKey("6TFdY15Mxty9sRCtzMXG8eHSbZy4oiAEQUvLQdz9YwEn")),
-            new BoostInformation(new PublicKey("7G3dfZkSk1HpDGnyL37LMBbPEgT4Ca6vZmZPUyi2syWt"), 6, "Ore-Hnt (Kamino)", BoostInformation.PoolType.Kamino,new PublicKey("9XsAPjk1yp4U6hKZj9r9szhcxBi3RidGuyxiC2Y8JtAe")),
-            new BoostInformation(new PublicKey("DrSS5RM7zUd9qjUEdDaf31vnDUSbCrMto6mjqTrHFifN"), 11, "Ore-Sol (Meteroa)", BoostInformation.PoolType.Meteroa,new PublicKey("GgaDTFbqdgjoZz3FP7zrtofGwnRS4E6MCzmmD5Ni1Mxj")),
-            new BoostInformation(new PublicKey("meUwDp23AaxhiNKaQCyJ2EAF2T4oe1gSkEkGXSRVdZb"), 11, "Ore-ISC (Meteroa)", BoostInformation.PoolType.Meteroa,new PublicKey("2vo5uC7jbmb1zNqYpKZfVyewiQmRmbJktma4QHuGNgS5")),
+            new BoostInformation("oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp", 11, "Ore", BoostInformation.PoolType.Ore, null, "ore"),
+            new BoostInformation("8H8rPiWW4iTFCfEkSnf7jpqeNpFfvdH9gLouAL3Fe2Zx", 6, "Ore-Sol (Kamino)", BoostInformation.PoolType.Kamino, "6TFdY15Mxty9sRCtzMXG8eHSbZy4oiAEQUvLQdz9YwEn", "solana"),
+            new BoostInformation("7G3dfZkSk1HpDGnyL37LMBbPEgT4Ca6vZmZPUyi2syWt", 6, "Ore-Hnt (Kamino)", BoostInformation.PoolType.Kamino, "9XsAPjk1yp4U6hKZj9r9szhcxBi3RidGuyxiC2Y8JtAe", "helium"),
+            //Index 168 and 200 of LP pool data for vaults
+            new BoostInformation("DrSS5RM7zUd9qjUEdDaf31vnDUSbCrMto6mjqTrHFifN", 11, "Ore-Sol (Meteroa)", BoostInformation.PoolType.Meteora, "GgaDTFbqdgjoZz3FP7zrtofGwnRS4E6MCzmmD5Ni1Mxj", "solana", 
+                new BoostInformation.MeteoraExtraData("2k7V1NtM1krwh1sdt5wWqBRcvNQ5jzxj3J2rV78zdTsL", 
+                                                      "CFATQFgkKXJyU3MdCNvQqN79qorNSMJFF8jrF66a7r6i", 
+                                                      "3s6ki6dQSM8FuqWiPsnGkgVsAEo8BTAfUR1Vvt1TPiJN", 
+                                                      "FERjPVNEa7Udq8CEv68h6tPL46Tq7ieE49HrE2wea3XT",
+                                                      "6Av9sdKvnjwoDHVnhEiz6JEq8e6SGzmhCsCncT2WJ7nN",
+                                                      "FZN7QZ8ZUUAxMPfxYEYkH3cXUASzH8EqA6B4tyCL8f1j", 9)),
+            //new BoostInformation(new PublicKey("meUwDp23AaxhiNKaQCyJ2EAF2T4oe1gSkEkGXSRVdZb"), 11, "Ore-ISC (Meteroa)", BoostInformation.PoolType.Meteroa,new PublicKey("2vo5uC7jbmb1zNqYpKZfVyewiQmRmbJktma4QHuGNgS5"), "international-stable-currency"),
         };
 
 
