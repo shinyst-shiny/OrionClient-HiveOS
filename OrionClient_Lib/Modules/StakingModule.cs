@@ -19,6 +19,7 @@ using Solnet.Programs;
 using Solnet.Programs.Utilities;
 using Solnet.Rpc;
 using Solnet.Rpc.Core.Http;
+using Solnet.Rpc.Core.Sockets;
 using Solnet.Wallet;
 using Solnet.Wallet.Bip39;
 using Solnet.Wallet.Utilities;
@@ -29,6 +30,7 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.Linq;
 using System.Net.Http;
+using System.Net.WebSockets;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -59,7 +61,6 @@ namespace OrionClientLib.Modules
         private HttpClient _httpClient;
         private List<StakeInformation> _stakeInfo;
         private (int Width, int Height) windowSize = (Console.WindowWidth, Console.WindowHeight);
-
         private Table _stakingTable;
 
         public StakingModule()
@@ -94,7 +95,6 @@ namespace OrionClientLib.Modules
         public async Task<(bool, string)> InitializeAsync(Data data)
         {
             _client = ClientFactory.GetClient(data.Settings.RPCSetting.Url);
-            _streamingClient = ClientFactory.GetStreamingClient(data.Settings.RPCSetting.Url.Replace("http", "ws"));
             _httpClient = new HttpClient()
             {
                 Timeout = TimeSpan.FromSeconds(3)
@@ -117,7 +117,7 @@ namespace OrionClientLib.Modules
                     }
                 }
             }
-            catch(TaskCanceledException)
+            catch(OperationCanceledException)
             {
                 return (true, String.Empty);
             }
@@ -208,7 +208,7 @@ namespace OrionClientLib.Modules
             _errorMessage = String.Empty;
 
             displayPrompt.AddChoice(refresh);
-            //test.AddChoice(liveView);
+            displayPrompt.AddChoice(liveView);
             displayPrompt.AddChoice(exit);
 
             string result = await displayPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
@@ -229,17 +229,216 @@ namespace OrionClientLib.Modules
 
         private async Task<bool> LiveView()
         {
-            try
-            {
-                await _streamingClient.ConnectAsync();
-            }
-            catch
-            {
+            Table messageTable = new Table();
+            messageTable.Border(TableBorder.Square);
+            messageTable.AddColumns("Time", "Updates");
 
+            if (!await InitializeClient(_stakingTable, messageTable))
+            {
+                return false;
+            }
+
+            Layout liveLayout = new Layout("Root").SplitRows(
+                new Layout("staking", _stakingTable),
+                new Layout("messages", messageTable));
+            liveLayout.Ratio = 10;
+            liveLayout["staking"].Ratio = 4;
+            liveLayout["messages"].Ratio = 6;
+
+            bool redraw = true;
+
+            while (redraw && !_cts.IsCancellationRequested)
+            {
+                AnsiConsole.Clear();
+
+                await AnsiConsole.Live(liveLayout).StartAsync(async (ctx) =>
+                {
+                    while (!_cts.IsCancellationRequested)
+                    {
+                        if (_cts.IsCancellationRequested)
+                        {
+                            redraw = false;
+
+                            return;
+                        }
+
+                        if(WindowSizeChange())
+                        {
+                            return;
+                        }
+
+                        UpdateStakingTable();
+                        ctx.UpdateTarget(liveLayout);
+
+                        await Task.Delay(1000);
+                    }
+                });
             }
 
             return false;
         }
+
+        private async Task<bool> InitializeClient(Table stakingTable, Table messageTable)
+        {
+            try
+            {
+                if (_streamingClient != null && _streamingClient.State == WebSocketState.Open)
+                {
+                    try
+                    {
+                        _streamingClient.ConnectionStateChangedEvent -= _streamingClient_ConnectionStateChangedEvent;
+                        await _streamingClient.DisconnectAsync();
+                    }
+                    catch
+                    {
+                        //Ignore
+                    }
+                }
+
+                _streamingClient = ClientFactory.GetStreamingClient(_data.Settings.RPCSetting.Url.Replace("http", "ws"));
+                _streamingClient.ConnectionStateChangedEvent += _streamingClient_ConnectionStateChangedEvent;
+                await _streamingClient.ConnectAsync();
+
+                List<SubscriptionState> states = new List<SubscriptionState>();
+                List<string> boostsWatching = new List<string>();
+
+                foreach (var stakingInfo in _stakeInfo.Where(x => x.PendingStake > 0 || x.UserStake > 0))
+                {
+                    boostsWatching.Add(stakingInfo.Boost.Name);
+
+                    //Stake Account
+                    states.Add(await _streamingClient.SubscribeAccountInfoAsync(stakingInfo.StakeAccount, (state, info) =>
+                    {
+                        Stake stake = Stake.Deserialize(Convert.FromBase64String(info.Value.Data[0]));
+
+                        double oldUserStake = stakingInfo.UserStake;
+                        double oldPendingStake = stakingInfo.PendingStake;
+                        double oldRewards = stakingInfo.Rewards;
+
+                        stakingInfo.UserStake = stake.Balance / Math.Pow(10, stakingInfo.Boost.Decimal);
+                        stakingInfo.PendingStake = stake.BalancePending / Math.Pow(10, stakingInfo.Boost.Decimal);
+                        stakingInfo.Rewards = stake.Rewards / OreProgram.OreDecimals;
+
+                        if(stakingInfo.Rewards > oldRewards)
+                        {
+                            AddMessage($"[[{stakingInfo.Boost.Name}]] Received [green]{stakingInfo.Rewards - oldRewards:0.00000000000}[/] ORE for the hour");
+                        }
+                    }));
+
+                    //Checkpoint account
+                    states.Add(await _streamingClient.SubscribeAccountInfoAsync(stakingInfo.Boost.CheckpointAddress, (state, info) =>
+                    {
+                        CheckPoint checkpoint = CheckPoint.Deserialize(Convert.FromBase64String(info.Value.Data[0]));
+
+                        stakingInfo.LastPayout = checkpoint.LastCheckPoint.UtcDateTime;
+
+                    }));
+
+                    //Proof account for pending
+                    states.Add(await _streamingClient.SubscribeAccountInfoAsync(stakingInfo.Boost.BoostProof, (state, info) =>
+                    {
+                        Proof proof = Proof.Deserialize(Convert.FromBase64String(info.Value.Data[0]));
+
+                        double oldUserPendingRewards = stakingInfo.UserPendingRewards;
+
+                        stakingInfo.PendingRewards = proof.Balance / OreProgram.OreDecimals;
+
+                        if(oldUserPendingRewards < stakingInfo.UserPendingRewards)
+                        {
+                            AddMessage($"[[{stakingInfo.Boost.Name}]] Received [yellow]{stakingInfo.UserPendingRewards - oldUserPendingRewards:0.00000000000}[/] ORE as pending rewards");
+                        }
+                    }));
+
+                    //Boost account
+                    states.Add(await _streamingClient.SubscribeAccountInfoAsync(stakingInfo.Boost.BoostAddress, (state, info) =>
+                    {
+                        Boost boost = Boost.Deserialize(Convert.FromBase64String(info.Value.Data[0]));
+
+                        double oldMultiplier = boost.Multiplier;
+                        ulong oldLocked = boost.Locked;
+
+                        stakingInfo.TotalBoostStake = boost.TotalDeposits / Math.Pow(10, stakingInfo.Boost.Decimal);
+                        stakingInfo.TotalStakers = boost.TotalStakers;
+                        stakingInfo.Multiplier = boost.Multiplier / 1000.0;
+                        stakingInfo.Locked = boost.Locked > 0;
+
+                        if(oldLocked != boost.Locked)
+                        {
+                            AddMessage($"[[{stakingInfo.Boost.Name}]] Boost has been {(boost.Locked > 0 ? $"[red]locked[/] to initiate payouts" : $"[green]unlocked[/] to receive rewards")}");
+                        }
+
+                        if(oldMultiplier != stakingInfo.Multiplier)
+                        {
+                            AddMessage($"[[{stakingInfo.Boost.Name}]] Multiplier has been changed to [cyan]{stakingInfo.Multiplier:0.00}x[/]");
+                        }
+
+                        //if (oldUserPendingRewards < stakingInfo.UserPendingRewards)
+                        //{
+                        //    AddMessage($"[[{stakingInfo.Boost.Name}]] Received [yellow]{stakingInfo.UserPendingRewards - oldUserPendingRewards:0.00000000000}[/] ore as pending rewards");
+                        //}
+                    }));
+                }
+
+                int i = 0;
+
+                while(states.Any(x => x.State != SubscriptionStatus.Subscribed))
+                {
+                    if(i == 5)
+                    {
+                        _errorMessage = $"[red]Failed to subscribe to all accounts[/]";
+                        return false;
+                    }
+
+                    if(states.Any(x => x.State == SubscriptionStatus.ErrorSubscribing))
+                    {
+                        _errorMessage = $"[red]Failed to subscribe to all accounts with error '{states.FirstOrDefault(x => !String.IsNullOrEmpty(x.LastError))?.LastError}'[/]";
+                        return false;
+                    }
+
+                    await Task.Delay(1000);
+
+                    ++i;
+                }
+
+                AddMessage($"[green]Live updates for boosts you have staked in has started ({String.Join(", ", boostsWatching)})[/]");
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _errorMessage = $"\n[red]Error: Failed to connect to streaming client. Message: {ex.Message}[/]";
+            }
+
+            return false;
+
+
+            void AddMessage(string message)
+            {
+                messageTable.InsertRow(0, DateTime.Now.ToString("MM/dd HH:mm"), message);
+
+                if (messageTable.Rows.Count > 20)
+                {
+                    messageTable.Rows.RemoveAt(messageTable.Rows.Count - 1);
+                }
+            }
+
+            async void _streamingClient_ConnectionStateChangedEvent(object? sender, WebSocketState e)
+            {
+                if (e == WebSocketState.Aborted || e == WebSocketState.Closed)
+                {
+                    AddMessage($"[yellow]Disconnected from streaming client. Reason: {e}[/]");
+
+                    while (!await InitializeClient(stakingTable, messageTable) && !_cts.IsCancellationRequested)
+                    {
+                        const int totalSeconds = 5;
+
+                        AddMessage($"[yellow]Failed to reconnect. Will attempt in {totalSeconds}s[/]");
+                        await Task.Delay(totalSeconds * 1000);
+                    }
+                }
+            }
+        }
+
 
         private void UpdateStakingTable()
         {
@@ -273,8 +472,8 @@ namespace OrionClientLib.Modules
                                         $"{stakeInfo.PendingStake:0.###} (${stakeInfo.UserPendingStakeUSDValue:n2})",
                                         $"{stakeInfo.SharePercent:0.####}%",
                                         WrapBooleanColor($"{stakeInfo.Rewards:n11} (${stakeInfo.RewardUSDValue:n2})", stakeInfo.Rewards > 0, Color.Green, null),
-                                        WrapBooleanColor($"{stakeInfo.UserPendingRewards:n11} (${stakeInfo.PendingUserRewardUSDValue:n2})", stakeInfo.UserPendingRewards > 0, Color.Green, null),
-                                        PrettyFormatTime(nextPayoutTime)
+                                        WrapBooleanColor($"{stakeInfo.UserPendingRewards:n11} (${stakeInfo.PendingUserRewardUSDValue:n2})", stakeInfo.UserPendingRewards > 0, Color.Yellow, null),
+                                        WrapBooleanColor(PrettyFormatTime(nextPayoutTime), stakeInfo.Locked, Color.Red, null)
                                         );
                 }
             }
@@ -297,8 +496,8 @@ namespace OrionClientLib.Modules
                     _stakingTable.UpdateCell(i, 6, $"{stakeInfo.PendingStake:0.###} (${stakeInfo.UserPendingStakeUSDValue:n2})");
                     _stakingTable.UpdateCell(i, 7, $"{stakeInfo.SharePercent:0.####}%");
                     _stakingTable.UpdateCell(i, 8, WrapBooleanColor($"{stakeInfo.Rewards:n11} (${stakeInfo.RewardUSDValue:n2})", stakeInfo.Rewards > 0, Color.Green, null));
-                    _stakingTable.UpdateCell(i, 9, WrapBooleanColor($"{stakeInfo.UserPendingRewards:n11} (${stakeInfo.PendingUserRewardUSDValue:n2})", stakeInfo.UserPendingRewards > 0, Color.Green, null));
-                    _stakingTable.UpdateCell(i, 10, PrettyFormatTime(nextPayoutTime));
+                    _stakingTable.UpdateCell(i, 9, WrapBooleanColor($"{stakeInfo.UserPendingRewards:n11} (${stakeInfo.PendingUserRewardUSDValue:n2})", stakeInfo.UserPendingRewards > 0, Color.Yellow, null));
+                    _stakingTable.UpdateCell(i, 10, WrapBooleanColor(PrettyFormatTime(nextPayoutTime), stakeInfo.Locked, Color.Red, null));
                 }
             }
 
@@ -508,6 +707,7 @@ namespace OrionClientLib.Modules
                     stakeInfo.TotalBoostStake = boost.TotalDeposits / Math.Pow(10, stakeInfo.Boost.Decimal);
                     stakeInfo.TotalStakers = boost.TotalStakers;
                     stakeInfo.Multiplier = boost.Multiplier / 1000.0;
+                    stakeInfo.Locked = boost.Locked > 0;
 
                     if(poolType == BoostInformation.PoolType.Ore)
                     {

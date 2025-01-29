@@ -34,6 +34,7 @@ namespace OrionClientLib.Modules.Staking
         public DateTime LastUpdated { get; set; }
         public DateTime LastPayout { get; set; }
         public bool Enabled { get; set; }
+        public bool Locked { get; set; }
 
         public decimal BoostRatioStaked => TotalLPStake == 0 ? 0 : (decimal)TotalBoostStake / TotalLPStake;
         public decimal TradingVolumeLocked => TotalOreStaked * OreUSDValue + TotalTokenBStaked * TokenBUSDValue;
