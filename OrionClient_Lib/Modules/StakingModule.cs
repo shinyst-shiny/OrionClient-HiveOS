@@ -194,6 +194,11 @@ namespace OrionClientLib.Modules
 
         private async Task<bool> DisplayOptions()
         {
+            if(_cts.IsCancellationRequested)
+            {
+                return false;
+            }
+
             await UpdateStakeInformation();
             UpdateStakingTable();
 
