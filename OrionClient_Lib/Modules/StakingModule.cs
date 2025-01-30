@@ -359,15 +359,15 @@ namespace OrionClientLib.Modules
                     {
                         Boost boost = Boost.Deserialize(Convert.FromBase64String(info.Value.Data[0]));
 
-                        double oldMultiplier = boost.Multiplier;
-                        ulong oldLocked = boost.Locked;
+                        double oldMultiplier = Math.Round(stakingInfo.Multiplier, 2);
+                        bool oldLocked = stakingInfo.Locked;
 
                         stakingInfo.TotalBoostStake = boost.TotalDeposits / Math.Pow(10, stakingInfo.Boost.Decimal);
                         stakingInfo.TotalStakers = boost.TotalStakers;
-                        stakingInfo.Multiplier = boost.Multiplier / 1000.0;
+                        stakingInfo.Multiplier = Math.Round(boost.Multiplier / 1000.0, 2);
                         stakingInfo.Locked = boost.Locked > 0;
 
-                        if(oldLocked != boost.Locked)
+                        if(oldLocked != stakingInfo.Locked)
                         {
                             AddMessage($"[[{stakingInfo.Boost.Name}]] Boost has been {(boost.Locked > 0 ? $"[red]locked[/] to initiate payouts" : $"[green]unlocked[/] to receive rewards")}");
                         }
