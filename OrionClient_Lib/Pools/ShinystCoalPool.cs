@@ -33,7 +33,7 @@ namespace OrionClientLib.Pools
         public override Dictionary<string, string> Features { get; } = new Dictionary<string, string>();
 
         public override bool HideOnPoolList { get; } = false;
-        public override string HostName { get; protected set; } = "pool.coal-pool.xyz";
+        public override string HostName { get; protected set; } = "pool.excalivator.xyz";
 
         public override Dictionary<Coin, double> MiniumumRewardPayout { get; } = new Dictionary<Coin, double> { { Coin.Coal, 5 }, { Coin.Ore, 0.05 }, { Coin.Chromium, 0.0 } };
 
