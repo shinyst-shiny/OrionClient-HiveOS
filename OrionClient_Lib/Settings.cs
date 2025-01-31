@@ -43,10 +43,10 @@ namespace OrionClientLib
         public GPUSettings GPUSetting { get; set; } = new GPUSettings();
         [SettingDetails("View Vanity Settings", "Configure Vanity settings")]
         public VanitySettings VanitySetting { get; set; } = new VanitySettings();
-
         [SettingDetails("View RPC Settings", "Configure RPC settings")]
         public RPCSettings RPCSetting { get; set; } = new RPCSettings();
-
+        [SettingDetails("View Staking View Settings", "Configure Staking View settings")]
+        public StakingViewSettings StakingViewSetting { get; set; } = new StakingViewSettings();
 
         public class CPUSettings
         {
@@ -116,6 +116,16 @@ namespace OrionClientLib
             [SettingDetails("RPC URL", "RPC URL to use for requests. Default: https://api.mainnet-beta.solana.com/")]
             [UrlSettingValidation]
             public string Url { get; set; } = "https://api.mainnet-beta.solana.com/";
+        }
+
+        public class StakingViewSettings
+        {
+            public const string Directory = "staking_data";
+
+            public string StakingViewCacheFile { get; set; } = "cache.json";
+
+            [SettingDetails("Historical Days", "Total days of history to keep for daily boost rewards")]
+            public int TotalHistoricalDays { get; set; } = 7;
         }
 
         public static async Task<Settings> LoadAsync()

@@ -143,7 +143,7 @@ namespace DrillX.Compiler
             // Leaving memory writable+executable is considered a security risk
             // Unfortunately, this appears to lead to performance loss on high core count CPUs
 			// You can switch this behavior by uncommenting the lines in the Equix.csproj file
-            VirtualMemory.HashxVmRw(code, new nuint(CodeSize));
+            //VirtualMemory.HashxVmRw(code, new nuint(CodeSize));
 #endif
 			Span<byte> pos = new Span<byte>(code, (int)CodeSize);
 			byte* target = null;
@@ -229,7 +229,7 @@ namespace DrillX.Compiler
             }
 
 #if !IGNORE_SECURITY_RISK
-            VirtualMemory.HashxVmRx(codeStart, CodeSize);
+            //VirtualMemory.HashxVmRx(codeStart, CodeSize);
 #endif
 			return (delegate* unmanaged[Cdecl]<ulong*, void>)codeStart;
         }

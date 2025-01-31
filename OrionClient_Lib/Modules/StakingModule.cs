@@ -28,6 +28,7 @@ using Spectre.Console.Rendering;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.WebSockets;
@@ -62,6 +63,9 @@ namespace OrionClientLib.Modules
         private List<StakeInformation> _stakeInfo;
         private (int Width, int Height) windowSize = (Console.WindowWidth, Console.WindowHeight);
         private Table _stakingTable;
+        private HistoricalStakingData _historicalData = new HistoricalStakingData();
+
+        private string _historicalDataDirectory = Path.Combine(Utils.GetExecutableDirectory(), Settings.StakingViewSettings.Directory);
 
         public StakingModule()
         {
@@ -105,6 +109,36 @@ namespace OrionClientLib.Modules
             _data = data;
 
             await Setup();
+
+            Directory.CreateDirectory(_historicalDataDirectory);
+            string file = Path.Combine(_historicalDataDirectory, _settings.StakingViewSetting.StakingViewCacheFile);
+
+            if (File.Exists(file))
+            {
+                try
+                {
+                    string historicalData = await File.ReadAllTextAsync(file);
+
+                    _historicalData = JsonConvert.DeserializeObject<HistoricalStakingData>(historicalData);
+                }
+                catch
+                {
+                    //Ignore
+                    _logger.Log(LogLevel.Warn, $"Failed to read historical data from cache. Cache will be deleted");
+                }
+            }
+
+            if(_historicalData == null)
+            {
+                _historicalData = new HistoricalStakingData();
+            }
+
+            foreach(var stake in _stakeInfo)
+            {
+                _historicalData.BoostData.TryAdd(stake.Boost.Name, new List<HistoricalStakingData.HistoricalDay>());
+            }
+
+            await SaveHistoricalData();
 
             try
             {
@@ -206,6 +240,7 @@ namespace OrionClientLib.Modules
 
             const string refresh = "Refresh";
             const string liveView = "Live View";
+            const string historical = "Update Historical Rewards";
             const string exit = "Exit";
 
             SelectionPrompt<string> displayPrompt = new SelectionPrompt<string>();
@@ -214,6 +249,7 @@ namespace OrionClientLib.Modules
 
             displayPrompt.AddChoice(refresh);
             displayPrompt.AddChoice(liveView);
+            //displayPrompt.AddChoice(historical);
             displayPrompt.AddChoice(exit);
 
             string result = await displayPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
@@ -225,6 +261,9 @@ namespace OrionClientLib.Modules
                 case liveView:
                     await LiveView();
                     return true;
+                case historical:
+                    await UpdateHistoricalView();
+                    return true;
                 case exit:
                     return false;
             }
@@ -232,11 +271,35 @@ namespace OrionClientLib.Modules
             return false;
         }
 
+        private async Task<bool> UpdateHistoricalView()
+        {
+            return false;
+        }
+
+        private async Task<bool> SaveHistoricalData()
+        {
+            try
+            {
+                string data = JsonConvert.SerializeObject(_historicalData);
+                await File.WriteAllTextAsync(Path.Combine(_historicalDataDirectory, _settings.StakingViewSetting.StakingViewCacheFile), data);
+
+                return true;
+            }
+            catch(Exception ex)
+            {
+                _logger.Log(LogLevel.Warn, $"Failed to save historical data");
+
+                return false;
+            }
+        }
+
         private async Task<bool> LiveView()
         {
             Table messageTable = new Table();
             messageTable.Border(TableBorder.Square);
             messageTable.AddColumns("Time", "Updates");
+
+            AnsiConsole.MarkupLine($"\n[green]Subscribing to boost accounts...[/]");
 
             if (!await InitializeClient(_stakingTable, messageTable))
             {
@@ -354,6 +417,8 @@ namespace OrionClientLib.Modules
                         }
                     }));
 
+                    DateTime lockStart = default;
+
                     //Boost account
                     states.Add(await _streamingClient.SubscribeAccountInfoAsync(stakingInfo.Boost.BoostAddress, (state, info) =>
                     {
@@ -369,7 +434,12 @@ namespace OrionClientLib.Modules
 
                         if(oldLocked != stakingInfo.Locked)
                         {
-                            AddMessage($"[[{stakingInfo.Boost.Name}]] Boost has been {(boost.Locked > 0 ? $"[red]locked[/] to initiate payouts" : $"[green]unlocked[/] to receive rewards")}");
+                            if(stakingInfo.Locked)
+                            {
+                                lockStart = DateTime.Now;
+                            }
+
+                            AddMessage($"[[{stakingInfo.Boost.Name}]] Boost has been {(boost.Locked > 0 ? $"[red]locked[/] to initiate payouts" : $"[green]unlocked[/] to receive rewards. Checkpoint time: {PrettyFormatTime(DateTime.Now - lockStart)}")}");
                         }
 
                         if(oldMultiplier != stakingInfo.Multiplier)
@@ -377,6 +447,7 @@ namespace OrionClientLib.Modules
                             AddMessage($"[[{stakingInfo.Boost.Name}]] Multiplier has been changed to [cyan]{stakingInfo.Multiplier:0.00}x[/]");
                         }
 
+                        //TODO: seconds, new table with overall (profit, estimates, lo0ck time, checkpoint)
                         //if (oldUserPendingRewards < stakingInfo.UserPendingRewards)
                         //{
                         //    AddMessage($"[[{stakingInfo.Boost.Name}]] Received [yellow]{stakingInfo.UserPendingRewards - oldUserPendingRewards:0.00000000000}[/] ore as pending rewards");
@@ -444,7 +515,6 @@ namespace OrionClientLib.Modules
             }
         }
 
-
         private void UpdateStakingTable()
         {
             var oreBoost = _stakeInfo.FirstOrDefault(x => x.Boost.Type == BoostInformation.PoolType.Ore);
@@ -453,7 +523,7 @@ namespace OrionClientLib.Modules
             {
                 _stakingTable = new Table();
                 _stakingTable.Title("Staking Information");
-                _stakingTable.AddColumns("LP", "Mult", "Stakers", "Total Stake", "Relative Yield", "User Stake", "Pending Stake", "Share", "Rewards", "Pending Rewards", "Next Checkpoint");
+                _stakingTable.AddColumns("LP", "Mult", "Stakers", "Total Stake", "Relative Yield", "User Stake", "Pending Stake", "Share", "Rewards", "Pending Rewards", "Global Rewards", "Next Checkpoint");
                 _stakingTable.ShowRowSeparators = true;
                 foreach(var column in _stakingTable.Columns)
                 {
@@ -478,6 +548,7 @@ namespace OrionClientLib.Modules
                                         $"{stakeInfo.SharePercent:0.####}%",
                                         WrapBooleanColor($"{stakeInfo.Rewards:n11} (${stakeInfo.RewardUSDValue:n2})", stakeInfo.Rewards > 0, Color.Green, null),
                                         WrapBooleanColor($"{stakeInfo.UserPendingRewards:n11} (${stakeInfo.PendingUserRewardUSDValue:n2})", stakeInfo.UserPendingRewards > 0, Color.Yellow, null),
+                                        $"{stakeInfo.PendingRewards:n11}",
                                         WrapBooleanColor(PrettyFormatTime(nextPayoutTime), stakeInfo.Locked, Color.Red, null)
                                         );
                 }
@@ -502,30 +573,32 @@ namespace OrionClientLib.Modules
                     _stakingTable.UpdateCell(i, 7, $"{stakeInfo.SharePercent:0.####}%");
                     _stakingTable.UpdateCell(i, 8, WrapBooleanColor($"{stakeInfo.Rewards:n11} (${stakeInfo.RewardUSDValue:n2})", stakeInfo.Rewards > 0, Color.Green, null));
                     _stakingTable.UpdateCell(i, 9, WrapBooleanColor($"{stakeInfo.UserPendingRewards:n11} (${stakeInfo.PendingUserRewardUSDValue:n2})", stakeInfo.UserPendingRewards > 0, Color.Yellow, null));
-                    _stakingTable.UpdateCell(i, 10, WrapBooleanColor(PrettyFormatTime(nextPayoutTime), stakeInfo.Locked, Color.Red, null));
+                    _stakingTable.UpdateCell(i, 10, $"{stakeInfo.PendingRewards:n11}");
+                    _stakingTable.UpdateCell(i, 11, WrapBooleanColor(PrettyFormatTime(nextPayoutTime), stakeInfo.Locked, Color.Red, null));
                 }
             }
 
-            string PrettyFormatTime(TimeSpan span)
+        }
+
+        private string PrettyFormatTime(TimeSpan span)
+        {
+            string formatted = String.Format("{0}{1}{2}{3}",
+                span.Duration().Days > 0 ? String.Format("{0:0}d ", span.Days) : String.Empty,
+                span.Duration().Hours > 0 ? String.Format("{0:0}h ", span.Hours) : String.Empty,
+                span.Duration().Minutes > 0 ? String.Format("{0:0}m ", span.Minutes) : String.Empty,
+                span.Duration().Seconds > 0 ? String.Format("{0:0}s", span.Seconds) : String.Empty);
+
+            if (formatted.EndsWith(", "))
             {
-                string formatted = String.Format("{0}{1}{2}{3}",
-                    span.Duration().Days > 0 ? String.Format("{0:0}d ", span.Days) : String.Empty,
-                    span.Duration().Hours > 0 ? String.Format("{0:0}h ", span.Hours) : String.Empty,
-                    span.Duration().Minutes > 0 ? String.Format("{0:0}m ", span.Minutes) : String.Empty,
-                    span.Duration().Seconds > 0 ? String.Format("{0:0}s", span.Seconds) : String.Empty);
-
-                if (formatted.EndsWith(", "))
-                {
-                    formatted = formatted.Substring(0, formatted.Length - 2);
-                }
-
-                if (String.IsNullOrEmpty(formatted))
-                {
-                    formatted = "0s";
-                }
-
-                return formatted;
+                formatted = formatted.Substring(0, formatted.Length - 2);
             }
+
+            if (String.IsNullOrEmpty(formatted))
+            {
+                formatted = "0s";
+            }
+
+            return formatted;
         }
 
         private async Task UpdateStakeInformation()

@@ -131,24 +131,27 @@ namespace OrionClientLib.Pools
                 }
                 else
                 {
-                    switch ((OreHQResponseTypes)buffer[0])
+                    if (buffer.Count > 0)
                     {
-                        case OreHQResponseTypes.StartMining:
-                            {
-                                OreHQChallengeResponse challenge = new OreHQChallengeResponse();
-                                challenge.Deserialize(buffer);
+                        switch ((OreHQResponseTypes)buffer[0])
+                        {
+                            case OreHQResponseTypes.StartMining:
+                                {
+                                    OreHQChallengeResponse challenge = new OreHQChallengeResponse();
+                                    challenge.Deserialize(buffer);
 
-                                HandleNewChallenge(challenge);
-                            }
-                            break;
-                        case OreHQResponseTypes.SubmissionResult:
-                            {
-                                HandleSubmissionResult(buffer);
-                            }
-                            break;
-                        default:
-                            _logger.Log(LogLevel.Warn, $"Unknown message type {buffer[0]}");
-                            break;
+                                    HandleNewChallenge(challenge);
+                                }
+                                break;
+                            case OreHQResponseTypes.SubmissionResult:
+                                {
+                                    HandleSubmissionResult(buffer);
+                                }
+                                break;
+                            default:
+                                _logger.Log(LogLevel.Warn, $"Unknown message type {buffer[0]}");
+                                break;
+                        }
                     }
                 }
             }

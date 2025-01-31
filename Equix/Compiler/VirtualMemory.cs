@@ -34,9 +34,9 @@ namespace DrillX.Compiler
                 throw new Exception("Unknown operating system");
             }
 
-#if IGNORE_SECURITY_RISK
+//#if IGNORE_SECURITY_RISK
             HashxVmRx(mem, new nuint(X86Compiler.CodeSize));
-#endif
+//#endif
 
             return mem;
         }
