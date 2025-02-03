@@ -21,7 +21,7 @@ namespace OrionClientLib.Pools
 
         public override Dictionary<Coin, double> MiniumumRewardPayout => new Dictionary<Coin, double> { { Coin.Ore, 0.05 } };
 
-        public override string Website => String.Empty;
+        public override string Website => "https://stats.ec1ipse.me/miner-info/miner?pubkey={0}";
         public override bool StakingEnabled => true;
     }
 }
