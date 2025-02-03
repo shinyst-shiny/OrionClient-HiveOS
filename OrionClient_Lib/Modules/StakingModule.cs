@@ -336,24 +336,33 @@ namespace OrionClientLib.Modules
                     return;
                 }
 
-                var allCheckpoints = rewardData.Days.SelectMany(x => x.Checkpoints).OrderByDescending(x => x.CheckpointStart).ToList();
-                int totalColumns = 4;
-
-                int rowsPerColumn = (int)Math.Ceiling(allCheckpoints.Count / (double)totalColumns);
-
                 List<Table> tableColumns = new List<Table>();
 
-                for (int i = 0; i < totalColumns; i++)
+                foreach(var day in rewardData.Days.OrderByDescending(x => x.DayStart))
                 {
+                    var date = DateTimeOffset.FromUnixTimeSeconds(day.DayStart).UtcDateTime;
+
                     Table table = new Table();
-                    table.Title($"Hourly Profit For {stakeInformation.Boost.Name} {i+1}/{totalColumns}");
+                    table.Title($"{stakeInformation.Boost.Name} Boost | {date:M/dd}");
                     table.AddColumns("Date", "Rewards", "Time", "Lock Time");
 
-                    foreach (var checkpoint in allCheckpoints.Skip(i * rowsPerColumn).Take(rowsPerColumn ))
-                    {
-                        var date = DateTimeOffset.FromUnixTimeSeconds(checkpoint.CheckpointStart).LocalDateTime;
+                    //Add first row
+                    double hourlyRewards = (day.TotalRewards / OreProgram.OreDecimals) / TimeSpan.FromSeconds(day.TotalTime).TotalHours;
+                    double lostRewards = hourlyRewards * TimeSpan.FromSeconds(day.TotalLockTime).TotalHours;
 
-                        table.AddRow($"{date:M/dd HH:mm:ss}",
+
+                    table.AddRow($"Total", 
+                        $"{day.TotalRewards/OreProgram.OreDecimals:n11}", 
+                        $"{PrettyFormatTime(TimeSpan.FromSeconds(day.TotalTime))}",
+                        $"{PrettyFormatTime(TimeSpan.FromSeconds(day.TotalLockTime))}");
+                    table.AddRow($"Hourly Rate", $"{hourlyRewards:n11}", "Lost Rewards", $"{lostRewards:n11}");
+                    table.AddRow($"[cyan]-----------[/]", "[cyan]------------[/]", "[cyan]------------[/]", "[cyan]------------[/]");
+
+                    foreach (var checkpoint in day.Checkpoints.OrderByDescending(x => x.CheckpointStart))
+                    {
+                        var checkpointTime = DateTimeOffset.FromUnixTimeSeconds(checkpoint.CheckpointStart).UtcDateTime;
+
+                        table.AddRow($"{checkpointTime:HH:mm:ss}",
                             $"{checkpoint.RewardAmount / OreProgram.OreDecimals:n11}",
                             $"{WrapBooleanColor(PrettyFormatTime(TimeSpan.FromSeconds(checkpoint.TotalTime)), checkpoint.TotalTime < 3720, Color.Green, Color.Red)}",
                             WrapBooleanColor(PrettyFormatTime(TimeSpan.FromSeconds(checkpoint.LockTime)), checkpoint.LockTime < 60, Color.Green, Color.Red));

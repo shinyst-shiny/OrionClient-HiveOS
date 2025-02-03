@@ -119,6 +119,7 @@ namespace OrionClientLib.Modules.Staking
             public long DayStart { get; set; }
             public ulong TotalRewards => Checkpoints.Aggregate(0UL, (a, b) => a + b.RewardAmount);
             public long TotalLockTime => Checkpoints.Sum(x => x.LockTime);
+            public long TotalTime => Checkpoints.Sum(x => x.TotalTime);
 
             public List<HistoricalCheckpoint> Checkpoints { get; private set; } = new List<HistoricalCheckpoint>();
         }
