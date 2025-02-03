@@ -283,7 +283,7 @@ namespace OrionClientLib.Modules
                     await HistoricalHourlyView();
                     return true;
                 case historical:
-                    await UpdateHistoricalView();
+                    await UpdateHistoricalData();
                     return true;
                 case exit:
                     return false;
@@ -370,7 +370,7 @@ namespace OrionClientLib.Modules
             }
         }
 
-        private async Task<bool> UpdateHistoricalView()
+        private async Task<bool> UpdateHistoricalData()
         {
             DateTimeOffset currentDate = new DateTimeOffset(DateTime.Today.ToUniversalTime());
             long endTimeUTC = currentDate.AddDays(-_settings.StakingViewSetting.TotalHistoricalDays).ToUnixTimeSeconds();
@@ -500,7 +500,7 @@ namespace OrionClientLib.Modules
                 {
                     var boost = boostKvp.Value;
                     int failedTransactions = 0;
-
+                    var boostTotalTransactions = boostKvp.Value.TransactionCache.Count(x => !x.DataPulled);
                     Stopwatch sw = Stopwatch.StartNew();
                     TimeSpan lastSave = sw.Elapsed;
 
@@ -517,7 +517,7 @@ namespace OrionClientLib.Modules
 
                         if(counter > 0)
                         {
-                            int remainingTransactions = totalTransactions - counter;
+                            int remainingTransactions = boostTotalTransactions - counter;
 
                             //Calculating remaining time based on transaction pulls
                             double remaining = remainingTransactions / (double)counter;
@@ -525,7 +525,7 @@ namespace OrionClientLib.Modules
                             eta = TimeSpan.FromSeconds(sw.Elapsed.TotalSeconds * remaining);
                         }
 
-                        context.Status($"Pulling transaction data for [cyan]{boostKvp.Key}[/]. This can take awhile. Complete: {i}/{totalTransactions}. Failed: {WrapBooleanColor(failedTransactions.ToString(), failedTransactions > 0, Color.Red, null)}. " +
+                        context.Status($"Pulling transaction data for [cyan]{boostKvp.Key}[/]. This can take awhile. Complete: {i}/{boostTotalTransactions}. Failed: {WrapBooleanColor(failedTransactions.ToString(), failedTransactions > 0, Color.Red, null)}. " +
                             $"ETA: {PrettyFormatTime(eta)}. Last Save: {PrettyFormatTime(sw.Elapsed - lastSave)} ago");
 
                         StakeCheckpointTransaction transaction = boost.TransactionCache[i];
@@ -641,7 +641,7 @@ namespace OrionClientLib.Modules
                         }
                     }
 
-                    AnsiConsole.MarkupLine($"[green]Pulling transaction data for [cyan]{boostKvp.Key}[/] finished. Complete: {totalTransactions}. Failed: {WrapBooleanColor(failedTransactions.ToString(), failedTransactions > 0, Color.Red, null)}. " +
+                    AnsiConsole.MarkupLine($"[green]Pulling transaction data for [cyan]{boostKvp.Key}[/] finished. Complete: {boostTotalTransactions}. Failed: {WrapBooleanColor(failedTransactions.ToString(), failedTransactions > 0, Color.Red, null)}. " +
                             $"Time: {PrettyFormatTime(sw.Elapsed)}[/]");
 
                     await SaveHistoricalData();
