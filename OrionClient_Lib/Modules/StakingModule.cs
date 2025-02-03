@@ -910,7 +910,7 @@ namespace OrionClientLib.Modules
             if(_stakingTable == null || WindowSizeChange())
             {
                 _stakingTable = new Table();
-                _stakingTable.Title("Staking Information");
+                _stakingTable.Title($"Staking Information [[Ore: ${oreBoost.OreUSDValue:0.00}]]");
                 _stakingTable.AddColumns("LP", "Mult", "Stakers", "Total Stake", "Relative Yield", "User Stake", "Pending Stake", "Share", "Rewards", "Pending Rewards", "Global Rewards", "Next Checkpoint");
                 _stakingTable.ShowRowSeparators = true;
                 foreach(var column in _stakingTable.Columns)
