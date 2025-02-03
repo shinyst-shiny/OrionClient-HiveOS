@@ -35,6 +35,7 @@ using Microsoft.Extensions.Options;
 using System.Security.Cryptography.X509Certificates;
 using ILGPU.Runtime.OpenCL;
 using System.Buffers.Binary;
+using OrionClient.Commands;
 
 namespace OrionClient
 {
@@ -201,32 +202,6 @@ namespace OrionClient
 
             Console.CancelKeyPress += Console_CancelKeyPress;
 
-            if(args.Length > 0)
-            {
-                if (args[0] == "mine")
-                {
-                    _currentModule = _modules.FirstOrDefault(x => x is MinerModule);
-
-                    Data data = new Data(_hashers, _pools, _settings);
-                    (IHasher? cpuHasher, IHasher? gpuHasher) = data.GetChosenHasher();
-
-                    if((cpuHasher != null && cpuHasher is not DisabledHasher) || (gpuHasher != null && gpuHasher is not DisabledHasher))
-                    {
-                        var result = await _currentModule?.InitializeAsync(data);
-
-                        if(!result.success)
-                        {
-                            _message = $"[red]{result.errorMessage}[/]\n";
-                            _currentModule = null;
-                        }
-                    }
-                    else
-                    {
-                        _currentModule = null;
-                    }
-                }
-            }
-
             while (true)
             {
                 Data data = new Data(_hashers, _pools, _settings);
@@ -243,24 +218,66 @@ namespace OrionClient
             {
                 settings.AutoVersion = true;
                 settings.HelpWriter = Parser.Default.Settings.HelpWriter;
+                settings.IgnoreUnknownArguments = false;
             });
-            
-            var parsedOptions = parser.ParseArguments<CommandLineOptions>(args);
 
-            if(parsedOptions.Errors.Count() > 0)
+            return await parser.ParseArguments<DefaultCommandLineOptions, MineCommandLineOptions>(args).MapResult<DefaultCommandLineOptions, MineCommandLineOptions, Task<bool>>(
+                async (defaultOpts) =>
+                {
+                    return await HandleDefaultSettings(defaultOpts);
+                },
+                async (mineOpts) =>
+                {
+                    bool success = await HandleDefaultSettings(mineOpts);
+
+                    if (!success)
+                    {
+                        return success;
+                    }
+
+                    await InitializeModule<MinerModule>();
+
+                    return success;
+                },
+                async errs =>
+                {
+                    return false;
+                });
+
+
+            async Task InitializeModule<T>() where T : IModule
             {
-                return false;
+                _currentModule = _modules.FirstOrDefault(x => x is MinerModule);
+
+                Data data = new Data(_hashers, _pools, _settings);
+                (IHasher? cpuHasher, IHasher? gpuHasher) = data.GetChosenHasher();
+
+                if ((cpuHasher != null && cpuHasher is not DisabledHasher) || (gpuHasher != null && gpuHasher is not DisabledHasher))
+                {
+                    var result = await _currentModule?.InitializeAsync(data);
+
+                    if (!result.success)
+                    {
+                        _message = $"[red]{result.errorMessage}[/]\n";
+                        _currentModule = null;
+                    }
+                }
+                else
+                {
+                    _currentModule = null;
+                }
             }
+        }
 
-            CommandLineOptions cmdOptions = parsedOptions.Value;
-
+        private static async Task<bool> HandleDefaultSettings(CommandLineOptions cmdOptions)
+        {
             //Manually handle options
 
             #region Main
 
             if (!String.IsNullOrEmpty(cmdOptions.KeyFile))
             {
-                if(!String.IsNullOrEmpty(cmdOptions.PublicKey))
+                if (!String.IsNullOrEmpty(cmdOptions.PublicKey))
                 {
                     AnsiConsole.MarkupLine($"[red]Error: [green]--keypair[/] and [green]--key[/] options can't be used together[/]");
 
@@ -300,7 +317,7 @@ namespace OrionClient
             {
                 int threads = cmdOptions.CPUThreads.Value;
 
-                if(threads < 0 || threads > Environment.ProcessorCount)
+                if (threads < 0 || threads > Environment.ProcessorCount)
                 {
                     AnsiConsole.MarkupLine($"[red]Error: [green]--cpu-threads[/] value '[cyan]{cmdOptions.CPUThreads}[/]' is invalid. Valid (0-{Environment.ProcessorCount})[/]");
 
@@ -319,9 +336,9 @@ namespace OrionClient
 
             #region GPU
 
-            if(cmdOptions.EnableGPU)
+            if (cmdOptions.EnableGPU)
             {
-                if(_settings.GPUDevices == null || _settings.GPUDevices.Count == 0)
+                if (_settings.GPUDevices == null || _settings.GPUDevices.Count == 0)
                 {
                     _settings.GPUDevices = new List<int>();
 
@@ -334,20 +351,20 @@ namespace OrionClient
                     //Will assume we're using cuda
                     if (!cmdOptions.OpenCL && allDevices.Any(x => x is CudaDevice))
                     {
-                        for(int i = 0; i < allDevices.Count; i++)
+                        for (int i = 0; i < allDevices.Count; i++)
                         {
                             if (allDevices[i] is CudaDevice cudaDevice)
                             {
                                 _settings.GPUDevices.Add(i);
 
-                                if(cudaDevice.Name.Contains("RTX 4090"))
+                                if (cudaDevice.Name.Contains("RTX 4090"))
                                 {
                                     has4090 = true;
                                 }
                             }
                         }
 
-                        if(_settings.GPUSetting.GPUHasher == "Disabled" || !_hashers.Any(x => x.Name == _settings.GPUSetting.GPUHasher))
+                        if (_settings.GPUSetting.GPUHasher == "Disabled" || !_hashers.Any(x => x.Name == _settings.GPUSetting.GPUHasher))
                         {
                             _settings.GPUSetting.GPUHasher = _hashers.FirstOrDefault(x => x is CudaBaselineGPUHasher)?.Name ?? "Disabled";
 

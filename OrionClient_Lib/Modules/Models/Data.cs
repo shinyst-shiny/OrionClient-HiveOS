@@ -17,12 +17,14 @@ namespace OrionClientLib.Modules.Models
         public ReadOnlyCollection<IHasher> Hashers { get; }
         public ReadOnlyCollection<IPool> Pools { get; }
         public Settings Settings { get; }
+        public bool AutoStarted { get; }
 
-        public Data(IList<IHasher> hashers, IList<IPool> pools, Settings settings)
+        public Data(IList<IHasher> hashers, IList<IPool> pools, Settings settings, bool autoStarted = false)
         {
             Hashers = hashers.AsReadOnly();
             Pools = pools.AsReadOnly();
             Settings = settings;
+            AutoStarted = autoStarted;
         }
 
 
