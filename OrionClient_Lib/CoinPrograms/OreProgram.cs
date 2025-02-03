@@ -52,6 +52,8 @@ namespace OrionClientLib.CoinPrograms
         public static PublicKey ProgramId = new PublicKey("oreV2ZymfyeXgNgBdqMkumTqqAprVqgBWQfoYkrtKWQ");
         public static readonly PublicKey NoopId = new PublicKey("noop8ytexvkpCuqbf6FB89BSuNemHtPRqaNC31GWivW");
         public static readonly PublicKey BoostProgramId = new PublicKey("BoosTyJFPPtrqJTdi49nnztoEWDJXfDRhyb2fha6PPy");
+        public static readonly PublicKey BoostAuthority = new PublicKey("HBUh9g46wk2X89CvaNN15UmsznP59rh6od1h8JwYAopk");
+        public static readonly PublicKey BoostCheckpointId = new PublicKey("6qWtSWTmWRgzmLMMpPAgzckKy73BkzXWqoZun6usqdCM");
 
         public static readonly List<BoostInformation> Boosts = new List<BoostInformation>()
         {

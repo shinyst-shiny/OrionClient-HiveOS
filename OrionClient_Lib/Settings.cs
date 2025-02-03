@@ -113,9 +113,35 @@ namespace OrionClientLib
 
         public class RPCSettings
         {
-            [SettingDetails("RPC URL", "RPC URL to use for requests. Default: https://api.mainnet-beta.solana.com/")]
+            public enum RPCProvider { Unknown, Solana, Helius, Quicknode };
+
+            [JsonIgnore]
+            public RPCProvider Provider => GetProvider();
+
+            private RPCProvider GetProvider()
+            {
+                if (Url == DefaultRPC)
+                {
+                    return RPCProvider.Solana;
+                }
+
+                if(Url?.Contains("helius-rpc") == true)
+                {
+                    return RPCProvider.Helius;
+                }
+                else if (Url?.Contains("quiknode.pro") == true)
+                {
+                    return RPCProvider.Quicknode;
+                }
+
+                return RPCProvider.Unknown;
+            }
+
+            public const string DefaultRPC = "https://api.mainnet-beta.solana.com/";
+
+            [SettingDetails("RPC URL", $"RPC URL to use for requests. Default: {DefaultRPC}")]
             [UrlSettingValidation]
-            public string Url { get; set; } = "https://api.mainnet-beta.solana.com/";
+            public string Url { get; set; } = DefaultRPC;
         }
 
         public class StakingViewSettings

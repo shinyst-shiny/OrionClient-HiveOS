@@ -20,16 +20,20 @@ using Solnet.Programs.Utilities;
 using Solnet.Rpc;
 using Solnet.Rpc.Core.Http;
 using Solnet.Rpc.Core.Sockets;
+using Solnet.Rpc.Models;
 using Solnet.Wallet;
 using Solnet.Wallet.Bip39;
 using Solnet.Wallet.Utilities;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Configuration;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.WebSockets;
 using System.Reflection;
@@ -63,6 +67,7 @@ namespace OrionClientLib.Modules
         private List<StakeInformation> _stakeInfo;
         private (int Width, int Height) windowSize = (Console.WindowWidth, Console.WindowHeight);
         private Table _stakingTable;
+        private Table _historicalTable;
         private HistoricalStakingData _historicalData = new HistoricalStakingData();
 
         private string _historicalDataDirectory = Path.Combine(Utils.GetExecutableDirectory(), Settings.StakingViewSettings.Directory);
@@ -124,7 +129,11 @@ namespace OrionClientLib.Modules
                 catch
                 {
                     //Ignore
-                    _logger.Log(LogLevel.Warn, $"Failed to read historical data from cache. Cache will be deleted");
+                    _errorMessage = $"[red]Failed to read historical data from cache. Cache was deleted[/]";
+
+                    _logger.Log(LogLevel.Warn, $"Failed to read historical data from cache. Cache was deleted");
+
+                    _historicalData = null;
                 }
             }
 
@@ -135,10 +144,11 @@ namespace OrionClientLib.Modules
 
             foreach(var stake in _stakeInfo)
             {
-                _historicalData.BoostData.TryAdd(stake.Boost.Name, new List<HistoricalStakingData.HistoricalDay>());
+                _historicalData.BoostData.TryAdd(stake.Boost.Name, new HistoricalStakingData.BoostRewardData(stake.Boost.CheckpointAddress));
             }
 
             await SaveHistoricalData();
+            _historicalData.Calculate();
 
             try
             {
@@ -237,10 +247,12 @@ namespace OrionClientLib.Modules
             UpdateStakingTable();
 
             AnsiConsole.Write(_stakingTable);
+            AnsiConsole.Write(_historicalTable);
 
             const string refresh = "Refresh";
             const string liveView = "Live View";
-            const string historical = "Update Historical Rewards";
+            const string hourlyView = "Hourly Historical Rewards";
+            const string historical = "-- Update Historical Rewards";
             const string exit = "Exit";
 
             SelectionPrompt<string> displayPrompt = new SelectionPrompt<string>();
@@ -249,7 +261,13 @@ namespace OrionClientLib.Modules
 
             displayPrompt.AddChoice(refresh);
             displayPrompt.AddChoice(liveView);
-            //displayPrompt.AddChoice(historical);
+
+            if (_historicalData.TotalTransactions > 0)
+            {
+                displayPrompt.AddChoice(hourlyView);
+            }
+
+            displayPrompt.AddChoice(historical);
             displayPrompt.AddChoice(exit);
 
             string result = await displayPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
@@ -261,6 +279,9 @@ namespace OrionClientLib.Modules
                 case liveView:
                     await LiveView();
                     return true;
+                case hourlyView:
+                    await HistoricalHourlyView();
+                    return true;
                 case historical:
                     await UpdateHistoricalView();
                     return true;
@@ -271,9 +292,376 @@ namespace OrionClientLib.Modules
             return false;
         }
 
+        private async Task HistoricalHourlyView()
+        {
+            StakeInformation stakeChoice = null;
+
+            while (true)
+            {
+                AnsiConsole.Clear();
+
+                if(stakeChoice != null)
+                {
+                    GenerateTable(stakeChoice);
+                }
+
+                SelectionPrompt<StakeInformation> selectionPrompt = new SelectionPrompt<StakeInformation>();
+                selectionPrompt.Title("\nSelect boost to view hourly data");
+
+                selectionPrompt.UseConverter((stakeInfo) =>
+                {
+                    if(stakeInfo == null)
+                    {
+                        return $"Exit";
+                    }
+
+                    return stakeInfo.Boost.Name;
+                });
+
+                selectionPrompt.AddChoices(_stakeInfo);
+                selectionPrompt.AddChoice(null);
+
+                stakeChoice = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
+
+                if(stakeChoice == null)
+                {
+                    return;
+                }
+            }
+
+            void GenerateTable(StakeInformation stakeInformation)
+            {
+                if (!_historicalData.BoostData.TryGetValue(stakeInformation.Boost.Name, out var rewardData))
+                {
+                    return;
+                }
+
+                var allCheckpoints = rewardData.Days.SelectMany(x => x.Checkpoints).OrderByDescending(x => x.CheckpointStart).ToList();
+                int totalColumns = 4;
+
+                int rowsPerColumn = (int)Math.Ceiling(allCheckpoints.Count / (double)totalColumns);
+
+                List<Table> tableColumns = new List<Table>();
+
+                for (int i = 0; i < totalColumns; i++)
+                {
+                    Table table = new Table();
+                    table.Title($"Hourly Profit For {stakeInformation.Boost.Name} {i+1}/{totalColumns}");
+                    table.AddColumns("Date", "Rewards", "Time", "Lock Time");
+
+                    foreach (var checkpoint in allCheckpoints.Skip(i * rowsPerColumn).Take(rowsPerColumn ))
+                    {
+                        var date = DateTimeOffset.FromUnixTimeSeconds(checkpoint.CheckpointStart).LocalDateTime;
+
+                        table.AddRow($"{date:M/dd HH:mm:ss}",
+                            $"{checkpoint.RewardAmount / OreProgram.OreDecimals:n11}",
+                            $"{WrapBooleanColor(PrettyFormatTime(TimeSpan.FromSeconds(checkpoint.TotalTime)), checkpoint.TotalTime < 3720, Color.Green, Color.Red)}",
+                            WrapBooleanColor(PrettyFormatTime(TimeSpan.FromSeconds(checkpoint.LockTime)), checkpoint.LockTime < 60, Color.Green, Color.Red));
+                    }
+
+                    tableColumns.Add(table);
+
+                    //layout[splitName].Update(panel);;
+                }
+
+                Columns columns = new Columns(tableColumns.ToArray());
+
+                AnsiConsole.Write(columns);
+            }
+        }
+
         private async Task<bool> UpdateHistoricalView()
         {
-            return false;
+            DateTimeOffset currentDate = new DateTimeOffset(DateTime.Today.ToUniversalTime());
+            long endTimeUTC = currentDate.AddDays(-_settings.StakingViewSetting.TotalHistoricalDays).ToUnixTimeSeconds();
+
+            await AnsiConsole.Status().StartAsync("Starting signature pulling...", async (context) =>
+            {
+                ulong limit = 1000;
+
+                #region Signature pulling
+
+                foreach (var boostKvp in _historicalData.BoostData)
+                {
+                    List<StakeCheckpointTransaction> checkpointTransactions = new List<StakeCheckpointTransaction>();
+                    context.Status($"Grabbing transaction signatures for [cyan]{boostKvp.Key}[/] boost. Total: {checkpointTransactions.Count}");
+
+                    var boost = boostKvp.Value;
+                    string recentHash = boost.MostRecentHash;
+                    string beforeHash = null;
+                    bool keepPulling = true;
+
+                    while (keepPulling)
+                    {
+                        if(_cts.IsCancellationRequested)
+                        {
+                            return;
+                        }
+
+                        var transactions = await SendWithRetry(() => _client.GetSignaturesForAddressAsync(boost.Boost, limit: limit, before: beforeHash, until: recentHash), rateLimitDelay: 5000);
+
+                        if (transactions == null || !transactions.WasSuccessful)
+                        {
+                            _errorMessage = $"Fail to pull signature information for historical values for [cyan]{boostKvp.Key}[/] boost. Message: {transactions?.Reason}";
+
+                            break;
+                        }
+
+                        int totalTransactions = checkpointTransactions.Count;
+
+                        transactions.Result.ForEach(x =>
+                        {
+                            long time = (long)(x.BlockTime ?? 0);
+
+                            if (time != 0 && time < endTimeUTC)
+                            {
+                                return;
+                            }
+
+                            checkpointTransactions.Add(new StakeCheckpointTransaction
+                            {
+                                Signature = x.Signature,
+                                Timestamp = time
+                            });
+                        });
+
+                        int increasedTransactions = checkpointTransactions.Count - totalTransactions;
+
+                        context.Status($"Grabbing transaction signatures for [cyan]{boostKvp.Key}[/] boost. Total: {checkpointTransactions.Count}");
+
+                        if (increasedTransactions < (int)limit)
+                        {
+                            AnsiConsole.MarkupLine($"[green]Finished pulling transaction signature for [cyan]{boostKvp.Key}[/] boost. Total: {checkpointTransactions.Count}[/]");
+
+                            keepPulling = false;
+                            continue;
+                        }
+
+                        beforeHash = checkpointTransactions.Last().Signature;
+
+                        //Delay Requests by 1s due to rate limits
+                        if (_settings.RPCSetting.Provider == Settings.RPCSettings.RPCProvider.Solana)
+                        {
+                            await Task.Delay(1000);
+                        }
+                    }
+
+                    // Only keep last x days of data
+                    checkpointTransactions.AddRange(boost.TransactionCache.Where(x => x.Timestamp > endTimeUTC));
+
+                    boost.TransactionCache.Clear();
+                    boost.TransactionCache.AddRange(checkpointTransactions);
+
+                    //Save current cache
+                    await SaveHistoricalData();
+                }
+
+                #endregion
+
+            });
+
+            var totalTransactions = _historicalData.TotalTransactionsToPull;
+            var archivalTransactions = _historicalData.GetArchivalTransactions(DateTimeOffset.UtcNow.AddDays(-2));
+            var normalTransactions = totalTransactions - archivalTransactions;
+
+            switch (_settings.RPCSetting.Provider)
+            {
+                case Settings.RPCSettings.RPCProvider.Solana:
+                    AnsiConsole.MarkupLine($"\nDefault solana RPC has heavy rate limits resulting in slow transaction pulling. Transactions: {totalTransactions}. Over 2 days old: {archivalTransactions}");
+                    break;
+                case Settings.RPCSettings.RPCProvider.Helius:
+                    AnsiConsole.MarkupLine($"\nHelius will use ~{normalTransactions + archivalTransactions * 10} credits. Grabbing archival transactions start at around 2 days old with 10x cost of normal transactions. Norma; {normalTransactions}. Archival: {archivalTransactions}");
+                    break;
+                case Settings.RPCSettings.RPCProvider.Quicknode:
+                    AnsiConsole.MarkupLine($"\nQuicknode will use ~{totalTransactions * 30} credits");
+                    break;
+                case Settings.RPCSettings.RPCProvider.Unknown:
+                    AnsiConsole.MarkupLine($"\nUnknown RPC provider found. No credit estimates are possible. Total Transactions: {totalTransactions}. Over 2 days old: {archivalTransactions}");
+                    break;
+            }
+
+            if(totalTransactions == 0)
+            {
+                return true;
+            }
+
+            if(await AnsiConsole.AskAsync($"Continue (y/n)?", "y", _cts.Token) != "y")
+            {
+                return false;
+            }
+
+            bool hasFailures = false;
+
+            await AnsiConsole.Status().StartAsync("Starting transaction pulling...", async (context) =>
+            {
+                #region Transaction pulling
+
+                foreach (var boostKvp in _historicalData.BoostData)
+                {
+                    var boost = boostKvp.Value;
+                    int failedTransactions = 0;
+
+                    Stopwatch sw = Stopwatch.StartNew();
+                    TimeSpan lastSave = sw.Elapsed;
+
+                    int counter = 0;
+
+                    for (int i = 0; i < boost.TransactionCache.Count; i++)
+                    {
+                        if (_cts.IsCancellationRequested)
+                        {
+                            return;
+                        }
+
+                        TimeSpan eta = TimeSpan.Zero;
+
+                        if(counter > 0)
+                        {
+                            int remainingTransactions = totalTransactions - counter;
+
+                            //Calculating remaining time based on transaction pulls
+                            double remaining = remainingTransactions / (double)counter;
+
+                            eta = TimeSpan.FromSeconds(sw.Elapsed.TotalSeconds * remaining);
+                        }
+
+                        context.Status($"Pulling transaction data for [cyan]{boostKvp.Key}[/]. This can take awhile. Complete: {i}/{totalTransactions}. Failed: {WrapBooleanColor(failedTransactions.ToString(), failedTransactions > 0, Color.Red, null)}. " +
+                            $"ETA: {PrettyFormatTime(eta)}. Last Save: {PrettyFormatTime(sw.Elapsed - lastSave)} ago");
+
+                        StakeCheckpointTransaction transaction = boost.TransactionCache[i];
+
+                        if (transaction.DataPulled)
+                        {
+                            continue;
+                        }
+
+                        var transactionResult = await SendWithRetry(() => _client.GetTransactionAsync(transaction.Signature), rateLimitDelay: _settings.RPCSetting.Provider == Settings.RPCSettings.RPCProvider.Solana ? 5000 : 1000);
+
+                        if (!transactionResult.WasSuccessful)
+                        {
+                            //Only show 10 failed to keep things clean
+                            if (failedTransactions < 10)
+                            {
+                                AnsiConsole.MarkupLine($"[yellow]Failed to pull transaction '{transaction.Signature}'. Reason: {transactionResult.Reason}[/]");
+                            }
+                            hasFailures = true;
+                            ++failedTransactions;
+                            continue;
+                        }
+
+                        TransactionInfo transactionInfo = transactionResult.Result.Transaction;
+                        List<PublicKey> accountKeys = transactionInfo.Message.AccountKeys.Select(x => new PublicKey(x)).ToList();
+
+                        //Transaction failed, so safe to ignore
+                        if(transactionResult.Result.Meta.Error != null)
+                        {
+                            transaction.DataPulled = true;
+                            continue;
+                        }
+
+                        Base58Encoder encoder = new Base58Encoder();
+
+                        bool isCheckpointTransaction = false;
+
+                        for (int x = 0; x < transactionInfo.Message.Instructions.Length; x++)
+                        {
+                            InstructionInfo instruction = transactionInfo.Message.Instructions[x];
+
+                            //No need to continue checking
+                            if (isCheckpointTransaction)
+                            {
+                                break;
+                            }
+
+                            PublicKey key = accountKeys[instruction.ProgramIdIndex];
+
+                            //Not boost instruction
+                            if (!key.Equals(OreProgram.BoostProgramId))
+                            {
+                                continue;
+                            }
+
+                            //Data is empty
+                            if (instruction.Data.Length == 0)
+                            {
+                                continue;
+                            }
+
+                            byte[] data = encoder.DecodeData(instruction.Data);
+
+                            //Not a boost rebase
+                            if (data[0] != 0x3)
+                            {
+                                continue;
+                            }
+
+                            isCheckpointTransaction = true;
+
+                            InnerInstruction innerInstruction = transactionResult.Result.Meta.InnerInstructions.FirstOrDefault(z => z.Index == x);
+
+                            if (innerInstruction != null)
+                            {
+                                //Parse out reward
+                                foreach(InstructionInfo innerInstructionInfo in innerInstruction.Instructions)
+                                {
+                                    PublicKey innerProgramId = accountKeys[innerInstructionInfo.ProgramIdIndex];
+
+                                    //Ore program
+                                    if(innerProgramId.Equals(OreProgram.ProgramId))
+                                    {
+                                        if(innerInstructionInfo.Data.Length > 0)
+                                        {
+                                            byte[] innerData = encoder.DecodeData(innerInstructionInfo.Data);
+
+                                            //Claim command
+                                            if (innerData.Length == 9 && innerData[0] == 0x00)
+                                            {
+                                                transaction.RewardAmount = BinaryPrimitives.ReadUInt64LittleEndian(innerData[1..]);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            transaction.DataPulled = true;
+                        }
+
+                        counter++;
+
+                        if ((sw.Elapsed - lastSave).TotalSeconds > 10)
+                        {
+                            await SaveHistoricalData();
+                            lastSave = sw.Elapsed;
+                        }
+
+                        //Delay Requests by 1s due to rate limits
+                        if (_settings.RPCSetting.Provider == Settings.RPCSettings.RPCProvider.Solana)
+                        {
+                            await Task.Delay(1000);
+                        }
+                    }
+
+                    AnsiConsole.MarkupLine($"[green]Pulling transaction data for [cyan]{boostKvp.Key}[/] finished. Complete: {totalTransactions}. Failed: {WrapBooleanColor(failedTransactions.ToString(), failedTransactions > 0, Color.Red, null)}. " +
+                            $"Time: {PrettyFormatTime(sw.Elapsed)}[/]");
+
+                    await SaveHistoricalData();
+                }
+                #endregion
+            });
+
+            _historicalData.Calculate();
+
+            if (_cts.IsCancellationRequested)
+            {
+                return false;
+            }
+
+            if(hasFailures)
+            {
+                await AnsiConsole.AskAsync<string>($"Press enter to continue", "", _cts.Token);
+            }
+
+            return true;
         }
 
         private async Task<bool> SaveHistoricalData()
@@ -476,7 +864,7 @@ namespace OrionClientLib.Modules
                     ++i;
                 }
 
-                AddMessage($"[green]Live updates for boosts you have staked in has started ({String.Join(", ", boostsWatching)})[/]");
+                AddMessage($"[green]Live updates for boosts{String.Join(", ", boostsWatching)} has started[/]");
 
                 return true;
             }
@@ -578,6 +966,32 @@ namespace OrionClientLib.Modules
                 }
             }
 
+            //Lazy, recreate very time
+            _historicalTable = new Table();
+            _historicalTable.Title("Historical Data");
+            _historicalTable.AddColumn("Date (remaining time)");
+            _historicalTable.AddColumns(_stakeInfo.Select(x => $"{x.Boost.Name} [[lock time]]").ToArray());
+
+            //Add rows
+            foreach(var day in _historicalData.BoostData.SelectMany(x => x.Value.Days).GroupBy(x => x.DayStart).OrderByDescending(x => x.Key))
+            {
+                var currentDay = DateTime.UtcNow.Date;
+                var firstDay = DateTimeOffset.FromUnixTimeSeconds(day.Key).LocalDateTime;
+
+                var remainingTime = currentDay.AddDays(1) - DateTime.UtcNow;
+
+                List<string> rowData = new List<string> { $"{firstDay:M/d}{(currentDay == firstDay ? $" ({PrettyFormatTime(remainingTime)} left)" : String.Empty)}" };
+
+                foreach(var stakeInfo in _stakeInfo)
+                {
+                    //Find day information
+                    var dayInfo = day.FirstOrDefault(x => x.BoostName == stakeInfo.Boost.CheckpointAddress);
+
+                    rowData.Add(dayInfo == null ? "N/A" : $"{dayInfo.TotalRewards / OreProgram.OreDecimals:n11} ore [red][[{PrettyFormatTime(TimeSpan.FromSeconds(dayInfo.TotalLockTime))}]][/]");
+                }
+
+                _historicalTable.AddRow(rowData.ToArray());
+            }
         }
 
         private string PrettyFormatTime(TimeSpan span)
@@ -723,6 +1137,47 @@ namespace OrionClientLib.Modules
                 return false;
             }
 
+            List<AccountInfo> accountInfoList = new List<AccountInfo>();
+
+            if (result.WasSuccessful)
+            {
+                accountInfoList.AddRange(result.Result.Value);
+            }
+            else if (result.HttpStatusCode == HttpStatusCode.RequestEntityTooLarge)
+            {
+                //Quicknode free tier only allows 5 per call
+                const int limitPerCall = 5;
+
+                for (int x = 0; x <= accounts.Count / limitPerCall; x++)
+                {
+                    var ll = accounts.Skip(x * limitPerCall).Take(limitPerCall).ToList();
+
+                    //Easier
+                    if(ll.Count == 0)
+                    {
+                        break;
+                    }
+
+                    var quickNodeResult = await SendWithRetry(() => _client.GetMultipleAccountsAsync(ll, Solnet.Rpc.Types.Commitment.Confirmed));
+
+                    if (quickNodeResult.WasSuccessful)
+                    {
+                        accountInfoList.AddRange(quickNodeResult.Result.Value);
+                    }
+                    else
+                    {
+                        _errorMessage = $"[red]Failed to pull account information. Reason: {quickNodeResult.Reason}[/]";
+
+                        return false;
+                    }
+                }
+            }
+            else
+            {
+                _errorMessage = $"[red]Failed to pull account information. Reason: {result.Reason}[/]";
+                return false;
+            }
+
             int accountCount = 0;
             int i = 0;
 
@@ -732,7 +1187,7 @@ namespace OrionClientLib.Modules
 
                 int totalAccountsToRead = baseAccountSize + (stakeInfo.Boost.ExtraData == null ? 0 : BoostInformation.MeteoraExtraData.TotalAccounts);
 
-                var tAccounts = result.Result.Value.Skip(accountCount).Take(totalAccountsToRead).ToList();
+                var tAccounts = accountInfoList.Skip(accountCount).Take(totalAccountsToRead).ToList();
 
                 accountCount += totalAccountsToRead;
 
@@ -908,21 +1363,35 @@ namespace OrionClientLib.Modules
             return true;
         }
 
-        private async Task<RequestResult<T>> SendWithRetry<T>(Func<Task<RequestResult<T>>> request, int retryCount = 5)
+        private async Task<RequestResult<T>> SendWithRetry<T>(Func<Task<RequestResult<T>>> request, int retryCount = 5, int rateLimitDelay = 1000)
         {
-            for(int i =0; i < retryCount; i++)
-            {
-                RequestResult<T> result = await request();
+            RequestResult<T> lastResult = default;
 
-                if(result.WasSuccessful)
+            for (int i =0; i < retryCount; i++)
+            {
+                if(_cts.IsCancellationRequested)
                 {
-                    return result;
+                    return lastResult;
                 }
 
-                await Task.Delay(1000);
+                lastResult = await request();
+
+                if(lastResult.WasSuccessful)
+                {
+                    return lastResult;
+                }
+
+                if(lastResult.HttpStatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                {
+                    await Task.Delay(rateLimitDelay, _cts.Token);
+
+                    continue;
+                }
+
+                return lastResult;
             }
 
-            return default;
+            return lastResult;
         }
 
         private bool WindowSizeChange()
