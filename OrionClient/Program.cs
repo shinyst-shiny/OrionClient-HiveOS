@@ -198,7 +198,7 @@ namespace OrionClient
             Console.WriteLine("Checking for updates ...");
 
             _updateData = await GithubApi.CheckForUpdates(_version);
-            _eventHandler = new OrionEventHandler(_settings.EventWebsocketSetting.Enable, _settings.EventWebsocketSetting.ReconnectTimeMs);
+            _eventHandler = new OrionEventHandler(_settings.EventWebsocketSetting.Enable, _settings.EventWebsocketSetting.ReconnectTimeMs, _settings.EventWebsocketSetting.Serialization);
 
             AnsiConsole.Clear();
 

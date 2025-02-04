@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Serialization.Json;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -27,5 +28,15 @@ namespace OrionEventLib.Events
         /// Unix timestamp of event time
         /// </summary>
         public virtual long Timestamp => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+        public virtual ArraySegment<byte> Serialize(EventSerializer eventSerializer)
+        {
+            eventSerializer.WriteByte((byte)EventType);
+            eventSerializer.WriteByte((byte)SubEventType);
+            eventSerializer.WriteString(Id);
+            eventSerializer.WriteS64(Timestamp);
+
+            return eventSerializer.GetData();
+        }
     }
 }

@@ -14,5 +14,17 @@ namespace OrionEventLib.Events.Mining
 
         public bool IsCPU => DeviceId == -1;
         public required int DeviceId { get; set; } = -1;
+
+        public override ArraySegment<byte> Serialize(EventSerializer eventSerializer)
+        {
+            base.Serialize(eventSerializer);
+
+            eventSerializer.WriteS32(Difficulty);
+            eventSerializer.WriteU64(Nonce);
+            eventSerializer.WriteBool(IsCPU);
+            eventSerializer.WriteS32(DeviceId);
+
+            return eventSerializer.GetData();
+        }
     }
 }

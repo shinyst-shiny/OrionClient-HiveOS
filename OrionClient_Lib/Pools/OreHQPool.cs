@@ -42,7 +42,7 @@ namespace OrionClientLib.Pools
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         public override event EventHandler<NewChallengeInfo> OnChallengeUpdate;
-        public override event EventHandler<(string[] columns, object data)> OnMinerUpdate;
+        public override event EventHandler<(string[] columns, byte[] data)> OnMinerUpdate;
         public override event EventHandler PauseMining;
         public override event EventHandler ResumeMining;
 
@@ -974,7 +974,7 @@ namespace OrionClientLib.Pools
                 $"{submissionResponse.TotalRewards:0.00000000000}",
                 $"{_minerInformation.TotalMiningRewards[Coins]:0.00000000000}",
                 $"{_minerInformation.TotalStakeRewards[Coins]:0.00000000000}",
-            ], submissionResponse));
+            ], buffer.ToArray()));
         }
 
         protected virtual int GenerateChallengeId(byte[] data)

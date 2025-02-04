@@ -11,8 +11,17 @@ namespace OrionEventLib.Events.Mining
         public override SubEventTypes SubEventType => SubEventTypes.NewChallenge;
 
         /// <summary>
-        /// Value depends on the pool
+        /// Byte data of submission response
         /// </summary>
-        public required object SubmissionResult { get; set; }
+        public required byte[] SubmissionResult { get; set; }
+
+        public override ArraySegment<byte> Serialize(EventSerializer eventSerializer)
+        {
+            base.Serialize(eventSerializer);
+
+            eventSerializer.WriteBytes(SubmissionResult);
+
+            return eventSerializer.GetData();
+        }
     }
 }

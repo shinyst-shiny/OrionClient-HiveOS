@@ -2,6 +2,7 @@
 using NLog;
 using OrionEventLib.Events;
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,10 +27,12 @@ namespace OrionEventLib
         private System.Timers.Timer _sendTimer;
         private ConcurrentQueue<OrionEvent> _events = new ConcurrentQueue<OrionEvent>();
         private bool _enabled = false;
+        private SerializationType _serializationType;
 
-        public OrionEventHandler(bool enabled, int reconnectTime)
+        public OrionEventHandler(bool enabled, int reconnectTime, SerializationType serialization)
         {
             _enabled = enabled;
+            _serializationType = serialization;
 
             _connectTimer  = new System.Timers.Timer(TimeSpan.FromSeconds(reconnectTime));
             _connectTimer.Elapsed += _connectTimer_Elapsed;
@@ -138,6 +141,8 @@ namespace OrionEventLib
 
         private async Task<bool> SendData(OrionEvent orionEvent)
         {
+            byte[] sharedData = ArrayPool<byte>.Shared.Rent(4096);
+
             try
             {
                 if(_socket.State != WebSocketState.Open)
@@ -145,7 +150,16 @@ namespace OrionEventLib
                     return false;
                 }
 
-                byte[] data = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(orionEvent));
+                ArraySegment<byte> data = null;
+
+                if(_serializationType == SerializationType.Binary)
+                {
+                    data = orionEvent.Serialize(new EventSerializer(new ArraySegment<byte>(sharedData)));
+                }
+                else
+                {
+                    data = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(orionEvent));
+                }
 
                 await _socket.SendAsync(data, WebSocketMessageType.Text, true, CancellationToken.None);
 
@@ -156,6 +170,10 @@ namespace OrionEventLib
                 _logger.Log(LogLevel.Error, ex, $"Failed to send data to server");
 
                 return false;
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(sharedData);
             }
         }
     }

@@ -3,6 +3,7 @@ using OrionClientLib.Hashers;
 using OrionClientLib.Modules.Models;
 using OrionClientLib.Modules.SettingsData;
 using OrionClientLib.Pools;
+using OrionEventLib;
 using Solnet.Wallet;
 using Solnet.Wallet.Utilities;
 using System;
@@ -11,6 +12,8 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using static OrionClientLib.Settings.GPUSettings;
+using static OrionClientLib.Settings.VanitySettings;
 
 namespace OrionClientLib
 {
@@ -67,6 +70,7 @@ namespace OrionClientLib
 
         public class GPUSettings
         {
+
             [SettingDetails("Hasher", "Change GPU hasher implementation")]
             [TypeValidator<BaseGPUHasher>()]
             public string GPUHasher { get; set; } = "Disabled";
@@ -85,6 +89,7 @@ namespace OrionClientLib
 
             [SettingDetails("Enable Experimental Hashers", "Enables/Disables displaying experimental hashers")]
             public bool EnableExperimentalHashers { get; set; } = false;
+
         }
 
         public class VanitySettings
@@ -173,6 +178,10 @@ namespace OrionClientLib
 
             [SettingDetails("Reconnect Time", "How often, in milliseconds, to try connecting to server")]
             public int ReconnectTimeMs { get; set; } = 5000;
+
+            [SettingDetails("Serialization Type", "Type of serialization to use for event messages . (0 = Binary, 1 = Json)")]
+            [OptionSettingValidation<SerializationType>(SerializationType.Binary, SerializationType.Json)]
+            public SerializationType Serialization { get; set; } = SerializationType.Binary;
         }
 
         public static async Task<Settings> LoadAsync()

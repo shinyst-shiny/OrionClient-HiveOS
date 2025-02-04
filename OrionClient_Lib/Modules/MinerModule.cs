@@ -295,7 +295,7 @@ namespace OrionClientLib.Modules
             gpu?.ResumeMining();
         }
 
-        private void Pool_OnMinerUpdate(object? sender, (string[] columns, object data) ev)
+        private void Pool_OnMinerUpdate(object? sender, (string[] columns, byte[] data) ev)
         {
             var e = ev.columns;
 

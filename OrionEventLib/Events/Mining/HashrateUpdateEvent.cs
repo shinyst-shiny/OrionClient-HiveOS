@@ -18,5 +18,17 @@ namespace OrionEventLib.Events.Mining
         /// Is true when the CPU is taking longer to generate new programs than the GPU took to execute
         /// </summary>
         public required bool CPUStruggling { get; set; }
+
+        public override ArraySegment<byte> Serialize(EventSerializer eventSerializer)
+        {
+            base.Serialize(eventSerializer);
+
+            eventSerializer.WriteBool(IsCPU);
+            eventSerializer.WriteS32(DeviceId);
+            eventSerializer.WriteDouble(CurrentHashesPerSecond);
+            eventSerializer.WriteDouble(AverageHashesPerSecond);
+
+            return eventSerializer.GetData();
+        }
     }
 }

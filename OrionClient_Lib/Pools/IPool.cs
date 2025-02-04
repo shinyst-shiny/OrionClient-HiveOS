@@ -23,7 +23,7 @@ namespace OrionClientLib.Pools
         public bool RequiresKeypair { get; }
 
         public event EventHandler<NewChallengeInfo> OnChallengeUpdate;
-        public event EventHandler<(string[] columns, object data)> OnMinerUpdate;
+        public event EventHandler<(string[] columns, byte[] data)> OnMinerUpdate;
         public event EventHandler PauseMining;
         public event EventHandler ResumeMining;
 
@@ -51,7 +51,7 @@ namespace OrionClientLib.Pools
         public abstract bool RequiresKeypair { get; }
 
         public abstract event EventHandler<NewChallengeInfo> OnChallengeUpdate;
-        public abstract event EventHandler<(string[] columns, object data)> OnMinerUpdate;
+        public abstract event EventHandler<(string[] columns, byte[] data)> OnMinerUpdate;
         public abstract event EventHandler PauseMining;
         public abstract event EventHandler ResumeMining;
 

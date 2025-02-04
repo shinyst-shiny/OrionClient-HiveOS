@@ -21,7 +21,7 @@ namespace OrionClientLib.Pools
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-        public override event EventHandler<(string[] columns, object data)> OnMinerUpdate;
+        public override event EventHandler<(string[] columns, byte[] data)> OnMinerUpdate;
         public override string Name { get; } = "Excalivator Pool";
         public override string DisplayName => Name;
         public override bool DisplaySetting => true;
@@ -239,7 +239,7 @@ namespace OrionClientLib.Pools
                 $"[cyan]{submissionResponse.CoalDetail.RewardDetails.TotalRewards:0.00000000000}[/]\n[green]{submissionResponse.OreDetail.RewardDetails.TotalRewards:0.00000000000}[/]",
                 $"[cyan]{_minerInformation.TotalMiningRewards[Coin.Coal]:0.00000000000}[/]\n[green]{_minerInformation.TotalMiningRewards[Coin.Ore]:0.00000000000}[/]",
                 //$"{_minerInformation.TotalStakeRewards:0.00000000000}",
-            ], submissionResponse));
+            ], buffer.ToArray()));
         }
 
         public override string[] TableHeaders()

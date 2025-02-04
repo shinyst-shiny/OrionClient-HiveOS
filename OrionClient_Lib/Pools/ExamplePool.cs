@@ -46,7 +46,7 @@ namespace OrionClientLib.Pools
         public override bool RequiresKeypair => false;
 
         public override event EventHandler<NewChallengeInfo> OnChallengeUpdate;
-        public override event EventHandler<(string[] columns, object data)> OnMinerUpdate;
+        public override event EventHandler<(string[] columns, byte[] data)> OnMinerUpdate;
         public override event EventHandler PauseMining;
         public override event EventHandler ResumeMining;
 
