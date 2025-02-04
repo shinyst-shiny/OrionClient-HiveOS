@@ -130,7 +130,7 @@ namespace OrionEventLib
 
         private async Task HandleEventSend()
         {
-            while(_socket.State == WebSocketState.Open && _events.TryDequeue(out OrionEvent orionEvent))
+            while(_socket?.State == WebSocketState.Open && _events.TryDequeue(out OrionEvent orionEvent))
             {
                 await SendData(orionEvent);
             }
