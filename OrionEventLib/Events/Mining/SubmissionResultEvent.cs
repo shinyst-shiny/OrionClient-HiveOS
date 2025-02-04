@@ -6,13 +6,13 @@ using System.Threading.Tasks;
 
 namespace OrionEventLib.Events.Mining
 {
-    public class SubmissionResultEvent<T> : MiningEvent
+    public class SubmissionResultEvent : MiningEvent
     {
         public override SubEventTypes SubEventType => SubEventTypes.NewChallenge;
 
         /// <summary>
         /// Value depends on the pool
         /// </summary>
-        public required T SubmissionResult { get; set; }
+        public required object SubmissionResult { get; set; }
     }
 }

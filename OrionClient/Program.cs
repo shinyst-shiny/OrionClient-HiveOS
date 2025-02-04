@@ -59,7 +59,7 @@ namespace OrionClient
         private static string _version = "1.3.1.1";
         private static GithubApi.Data _updateData;
         private static string _cudaLocation = String.Empty;
-        private static OrionEventHandler _eventHandler = new OrionEventHandler();
+        private static OrionEventHandler _eventHandler;
 
         private static IntPtr DllImportResolver(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
         {
@@ -198,15 +198,10 @@ namespace OrionClient
             Console.WriteLine("Checking for updates ...");
 
             _updateData = await GithubApi.CheckForUpdates(_version);
-
-            if(_settings.EventWebsocketSetting.Enable)
-            {
-
-            }
+            _eventHandler = new OrionEventHandler(_settings.EventWebsocketSetting.Enable, _settings.EventWebsocketSetting.ReconnectTimeMs);
 
             AnsiConsole.Clear();
 
-            
             Console.CancelKeyPress += Console_CancelKeyPress;
 
             while (true)

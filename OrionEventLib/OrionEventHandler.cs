@@ -2,6 +2,7 @@
 using NLog;
 using OrionEventLib.Events;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.WebSockets;
@@ -22,11 +23,38 @@ namespace OrionEventLib
         private int _lastPort = 0;
         private SemaphoreSlim _connectLock = new SemaphoreSlim(1, 1);
         private System.Timers.Timer _connectTimer;
+        private System.Timers.Timer _sendTimer;
+        private ConcurrentQueue<OrionEvent> _events = new ConcurrentQueue<OrionEvent>();
+        private bool _enabled = false;
 
-        public OrionEventHandler(int reconnectTime)
+        public OrionEventHandler(bool enabled, int reconnectTime)
         {
+            _enabled = enabled;
+
             _connectTimer  = new System.Timers.Timer(TimeSpan.FromSeconds(reconnectTime));
             _connectTimer.Elapsed += _connectTimer_Elapsed;
+            _sendTimer = new System.Timers.Timer(TimeSpan.FromSeconds(1));
+            _sendTimer.Elapsed += _sendTimer_Elapsed;
+
+            if(_enabled)
+            {
+                _connectTimer.Start();
+                _sendTimer.Start();
+            }
+        }
+
+        private async void _sendTimer_Elapsed(object? sender, System.Timers.ElapsedEventArgs e)
+        {
+            try
+            {
+                _sendTimer.Stop();
+
+                await HandleEventSend();
+            }
+            finally
+            {
+                _sendTimer.Start();
+            }
         }
 
         private async void _connectTimer_Elapsed(object? sender, System.Timers.ElapsedEventArgs e)
@@ -89,7 +117,26 @@ namespace OrionEventLib
             return false;
         }
 
-        public async Task<bool> SendData(OrionEvent orionEvent)
+        public void AddEvent(OrionEvent orionEvent)
+        {
+            //Prevents memory usage of queuing messages
+            if(!_enabled)
+            {
+                return;
+            }
+
+            _events.Enqueue(orionEvent);
+        }
+
+        private async Task HandleEventSend()
+        {
+            while(_socket.State == WebSocketState.Open && _events.TryDequeue(out OrionEvent orionEvent))
+            {
+                await SendData(orionEvent);
+            }
+        }
+
+        private async Task<bool> SendData(OrionEvent orionEvent)
         {
             try
             {

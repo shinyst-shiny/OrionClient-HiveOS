@@ -27,6 +27,7 @@ namespace OrionClientLib.Hashers
         public IHasher.Hardware HardwareType => IHasher.Hardware.CPU;
         public bool Initialized => _taskRunner?.IsCompleted == false;
         public TimeSpan CurrentChallengeTime => _sw.Elapsed - _challengeStartTime;
+        public int Threads => _threads;
 
         public event EventHandler<HashrateInfo> OnHashrateUpdate;
         public abstract string Name { get; }

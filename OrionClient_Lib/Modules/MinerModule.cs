@@ -1,10 +1,12 @@
-﻿using Equix;
+﻿using Blake2Sharp;
+using Equix;
 using ILGPU.Runtime;
 using NLog;
 using OrionClientLib.Hashers;
 using OrionClientLib.Modules.Models;
 using OrionClientLib.Pools;
 using OrionClientLib.Pools.Models;
+using OrionEventLib.Events.Mining;
 using Solnet.Wallet;
 using Spectre.Console;
 using Spectre.Console.Rendering;
@@ -197,7 +199,6 @@ namespace OrionClientLib.Modules
                 }
             }
 
-
             if (cpuEnabled)
             {
                 _logger.Log(LogLevel.Debug, $"Initializing {cpuHasher.Name} {cpuHasher.HardwareType} hasher");
@@ -224,13 +225,48 @@ namespace OrionClientLib.Modules
 
             _logger.Log(LogLevel.Debug, $"Connecting to pool '{pool.Name}'");
 
-            await pool.ConnectAsync(_cts.Token);
+            if(await pool.ConnectAsync(_cts.Token))
+            {
+                MiningStartEvent miningStartEvent = new MiningStartEvent
+                {
+                    Id = _currentData.Settings.EventWebsocketSetting.Id,
+                    CPUEnabled = cpuEnabled,
+                    CPUHasher = cpuHasher.Name,
+                    CPUThreads = ((BaseCPUHasher)cpuHasher).Threads,
+                    GPUBatchSize = ((BaseGPUHasher)gpuHasher).BatchSize,
+                    GPUBlockSize = _currentData.Settings.GPUSetting.GPUBlockSize,
+                    GPUHasher = gpuHasher.Name,
+                    Pool = pool.Name,
+                    ProgramGenerationThreads = _currentData.Settings.GPUSetting.ProgramGenerationThreads <= 0 ? Environment.ProcessorCount : _currentData.Settings.GPUSetting.ProgramGenerationThreads,
+                };
+
+                var devices = GetDevicesInUse((IGPUHasher)gpuHasher);
+
+                for(int i =0; i < devices.Count; i++)
+                {
+                    miningStartEvent.Devices.Add(new MiningStartEvent.DeviceInformation
+                    {
+                        Id = i,
+                        Name = devices[i].Name
+                    });
+                }
+
+                _currentData.EventHandler.AddEvent(miningStartEvent);
+            }
 
             return (true, String.Empty);
         }
 
         private void Pool_OnChallengeUpdate(object? sender, NewChallengeInfo e)
         {
+            _currentData.EventHandler.AddEvent(new NewChallengeEvent
+            {
+                Id = _currentData.Settings.EventWebsocketSetting.Id,
+                Challenge = e.Challenge,
+                ChallengeId = e.ChallengeId,
+                StartNonce = e.StartNonce,
+                EndNonce = e.EndNonce
+            });
         }
 
         private void Pool_PauseMining(object? sender, EventArgs e)
@@ -244,6 +280,11 @@ namespace OrionClientLib.Modules
             {
                 _hashrateTable.UpdateCell(i, 3, "[yellow]Paused[/]");
             }
+
+            _currentData.EventHandler.AddEvent(new MiningPauseEvent
+            {
+                Id = _currentData.Settings.EventWebsocketSetting.Id
+            });
         }
 
         private void Pool_ResumeMining(object? sender, EventArgs e)
@@ -254,8 +295,10 @@ namespace OrionClientLib.Modules
             gpu?.ResumeMining();
         }
 
-        private void Pool_OnMinerUpdate(object? sender, string[] e)
+        private void Pool_OnMinerUpdate(object? sender, (string[] columns, object data) ev)
         {
+            var e = ev.columns;
+
             if (e.Length != _poolInfoTable.Columns.Count)
             {
                 _logger.Log(LogLevel.Warn, $"Pool info table expects {_poolInfoTable.Columns.Count} columns. Received: {e.Length}");
@@ -276,8 +319,11 @@ namespace OrionClientLib.Modules
 
             _uiLayout["poolInfo"].Update(_poolInfoTable);
 
-            //Output to log
-
+            _currentData.EventHandler.AddEvent(new SubmissionResultEvent
+            {
+                Id = _currentData.Settings.EventWebsocketSetting.Id,
+                SubmissionResult = ev.data
+            });
         }
 
         private void Hasher_OnHashrateUpdate(object? sender, Hashers.Models.HashrateInfo e)
@@ -301,6 +347,15 @@ namespace OrionClientLib.Modules
             _hashrateTable.UpdateCell(index, 6, e.HighestDifficulty.ToString());
             _hashrateTable.UpdateCell(index, 7, e.ChallengeId.ToString());
             //_hashrateTable.UpdateCell(index, 8, $"{e.TotalTime.TotalSeconds:0.00}s");
+
+            _currentData.EventHandler.AddEvent(new HashrateUpdateEvent
+            {
+                Id = _currentData.Settings.EventWebsocketSetting.Id,
+                AverageHashesPerSecond = e.ChallengeSolutionsPerSecond.Speed,
+                CurrentHashesPerSecond = e.SolutionsPerSecond.Speed,
+                CPUStruggling = hasher.HardwareType == IHasher.Hardware.GPU && e.ProgramGenerationTooLong,
+                DeviceId = e.Index
+            });
         }
 
         private void GenerateUI()
@@ -354,25 +409,10 @@ namespace OrionClientLib.Modules
             {
                 IGPUHasher gHasher = (IGPUHasher)gpuHasher;
 
-                //Grab all devices that are being used
-                List<Device> devicesToUse = new List<Device>();
-                List<Device> devices = gHasher.GetDevices(false); //All devices
-                HashSet<Device> supportedDevices = new HashSet<Device>(gHasher.GetDevices(true)); //Only supported
-
-                //The setting is the full list of GPU devices
-                foreach (var d in _currentData.Settings.GPUDevices)
-                {
-                    if (d >= 0 && d < devices.Count)
-                    {
-                        if (supportedDevices.Contains(devices[d]))
-                        {
-                            devicesToUse.Add(devices[d]);
-                        }
-                    }
-                }
+                
 
                 //Will need to add a row for each GPU
-                foreach(var device in devicesToUse)
+                foreach(var device in GetDevicesInUse(gHasher))
                 {
                     string gpuName = device.Name.Replace("NVIDIA ", "").Replace("GeForce ", "");
 
@@ -381,5 +421,26 @@ namespace OrionClientLib.Modules
             }
         }
 
+        private List<Device> GetDevicesInUse(IGPUHasher gHasher)
+        {
+            //Grab all devices that are being used
+            List<Device> devicesToUse = new List<Device>();
+            List<Device> devices = gHasher.GetDevices(false); //All devices
+            HashSet<Device> supportedDevices = new HashSet<Device>(gHasher.GetDevices(true)); //Only supported
+
+            //The setting is the full list of GPU devices
+            foreach (var d in _currentData.Settings.GPUDevices)
+            {
+                if (d >= 0 && d < devices.Count)
+                {
+                    if (supportedDevices.Contains(devices[d]))
+                    {
+                        devicesToUse.Add(devices[d]);
+                    }
+                }
+            }
+
+            return devicesToUse;
+        }
     }
 }

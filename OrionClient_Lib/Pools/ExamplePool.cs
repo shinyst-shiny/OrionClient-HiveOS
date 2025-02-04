@@ -46,7 +46,7 @@ namespace OrionClientLib.Pools
         public override bool RequiresKeypair => false;
 
         public override event EventHandler<NewChallengeInfo> OnChallengeUpdate;
-        public override event EventHandler<string[]> OnMinerUpdate;
+        public override event EventHandler<(string[] columns, object data)> OnMinerUpdate;
         public override event EventHandler PauseMining;
         public override event EventHandler ResumeMining;
 
@@ -92,11 +92,11 @@ namespace OrionClientLib.Pools
             {
                 //Array item length must be the same as the table header length
                 OnMinerUpdate?.Invoke(this, 
-                    [
+                    ([
                         DateTime.Now.ToShortTimeString(), 
                         _bestDifficulty?.BestDifficulty.ToString() ?? "0", 
                         (RandomNumberGenerator.GetInt32(0, 1000000000) / 1000000000.0).ToString()
-                    ]);
+                    ], null));
 
                 _bestDifficulty = null;
                 SetRandomChallenge();

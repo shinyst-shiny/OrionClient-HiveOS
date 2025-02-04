@@ -21,7 +21,7 @@ namespace OrionClientLib.Pools
     {
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-        public override event EventHandler<string[]> OnMinerUpdate;
+        public override event EventHandler<(string[] columns, object data)> OnMinerUpdate;
         public override string Name { get; } = "Excalivator Pool";
         public override string DisplayName => Name;
         public override bool DisplaySetting => true;
@@ -230,7 +230,7 @@ namespace OrionClientLib.Pools
             //This data takes ~20s to update properly, so everything is off by 1 update
             await RefreshStakeBalancesAsync(false, cts.Token);
 
-            OnMinerUpdate?.Invoke(this, [
+            OnMinerUpdate?.Invoke(this, ([
                 DateTime.Now.ToShortTimeString(),
                 GenerateChallengeId(submissionResponse.Challenge).ToString(),
                 $"{submissionResponse.CoalDetail.RewardDetails.MinerSuppliedDifficulty}/{submissionResponse.Difficulty}",
@@ -239,7 +239,7 @@ namespace OrionClientLib.Pools
                 $"[cyan]{submissionResponse.CoalDetail.RewardDetails.TotalRewards:0.00000000000}[/]\n[green]{submissionResponse.OreDetail.RewardDetails.TotalRewards:0.00000000000}[/]",
                 $"[cyan]{_minerInformation.TotalMiningRewards[Coin.Coal]:0.00000000000}[/]\n[green]{_minerInformation.TotalMiningRewards[Coin.Ore]:0.00000000000}[/]",
                 //$"{_minerInformation.TotalStakeRewards:0.00000000000}",
-            ]);
+            ], submissionResponse));
         }
 
         public override string[] TableHeaders()

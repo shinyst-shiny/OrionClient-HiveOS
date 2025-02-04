@@ -42,7 +42,7 @@ namespace OrionClientLib.Pools
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         public override event EventHandler<NewChallengeInfo> OnChallengeUpdate;
-        public override event EventHandler<string[]> OnMinerUpdate;
+        public override event EventHandler<(string[] columns, object data)> OnMinerUpdate;
         public override event EventHandler PauseMining;
         public override event EventHandler ResumeMining;
 
@@ -965,7 +965,7 @@ namespace OrionClientLib.Pools
             //This data takes ~20s to update properly, so everything is off by 1 update
             await RefreshStakeBalancesAsync(false, cts.Token);
 
-            OnMinerUpdate?.Invoke(this, [
+            OnMinerUpdate?.Invoke(this, ([
                 DateTime.Now.ToShortTimeString(), 
                 GenerateChallengeId(submissionResponse.Challenge).ToString(),
                 $"{submissionResponse.MinerSuppliedDifficulty}/{submissionResponse.Difficulty}",
@@ -974,7 +974,7 @@ namespace OrionClientLib.Pools
                 $"{submissionResponse.TotalRewards:0.00000000000}",
                 $"{_minerInformation.TotalMiningRewards[Coins]:0.00000000000}",
                 $"{_minerInformation.TotalStakeRewards[Coins]:0.00000000000}",
-            ]);
+            ], submissionResponse));
         }
 
         protected virtual int GenerateChallengeId(byte[] data)
