@@ -1,4 +1,6 @@
 ﻿using CommandLine;
+using OrionClientLib.Modules.SettingsData;
+using OrionEventLib;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -39,6 +41,25 @@ namespace OrionClient.Commands
         public int? BlockSize { get; set; }
         [Option("gpu-gen-threads", HelpText = "CPU threads to use to generation program for GPU (0 = all threads)")]
         public int? ProgramGenerationThreads { get; set; }
+
+        #endregion
+
+        #region Event Server Settings
+
+        [Option("event-server", HelpText = "Event server url/IP to send event updates")]
+        public string? WebsocketUrl { get; set; }
+
+        [Option("event-port", HelpText = "Event server Port to send event updates")]
+        public int? Port { get; set; }
+
+        [Option("event-id", HelpText = "Arbitrary id for that's sent in all event messages")]
+        public string? Id { get; set; }
+
+        [Option("event-reconnect", HelpText = "How often, in milliseconds, to try connecting to server")]
+        public int? ReconnectTimeMs { get; set; }
+
+        [Option("event-serialization", HelpText = "Type of serialization to use for event messages. Allow values: Binary, Json")]
+        public SerializationType? Serialization { get; set; }
 
         #endregion
     }

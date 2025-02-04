@@ -250,6 +250,7 @@ namespace OrionClient
             async Task InitializeModule<T>() where T : IModule
             {
                 _currentModule = _modules.FirstOrDefault(x => x is MinerModule);
+                _eventHandler = new OrionEventHandler(_settings.EventWebsocketSetting.Enable, _settings.EventWebsocketSetting.ReconnectTimeMs, _settings.EventWebsocketSetting.Serialization);
 
                 Data data = new Data(_hashers, _pools, _settings, _eventHandler);
                 (IHasher? cpuHasher, IHasher? gpuHasher) = data.GetChosenHasher();
@@ -438,6 +439,35 @@ namespace OrionClient
                 }
 
                 _settings.GPUSetting.ProgramGenerationThreads = threads;
+            }
+
+            #endregion
+
+            #region Events
+
+            if(!String.IsNullOrEmpty(cmdOptions.WebsocketUrl))
+            {
+                _settings.EventWebsocketSetting.WebsocketUrl = cmdOptions.WebsocketUrl;
+            }
+
+            if(cmdOptions.Port.HasValue)
+            {
+                _settings.EventWebsocketSetting.Port = cmdOptions.Port.Value;
+            }
+
+            if (!String.IsNullOrEmpty(cmdOptions.Id))
+            {
+                _settings.EventWebsocketSetting.Id = cmdOptions.Id;
+            }
+
+            if (cmdOptions.ReconnectTimeMs.HasValue)
+            {
+                _settings.EventWebsocketSetting.ReconnectTimeMs = cmdOptions.ReconnectTimeMs.Value;
+            }
+
+            if(cmdOptions.Serialization.HasValue)
+            {
+                _settings.EventWebsocketSetting.Serialization = cmdOptions.Serialization.Value;
             }
 
             #endregion
