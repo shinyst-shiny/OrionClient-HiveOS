@@ -13,6 +13,7 @@ namespace OrionEventLib.Events.Mining
         public required int DeviceId { get; set; } = -1;
         public required double CurrentHashesPerSecond { get; set; }
         public required double AverageHashesPerSecond { get; set; }
+        public byte HighestDeviceDifficulty { get; set; }
 
         /// <summary>
         /// Is true when the CPU is taking longer to generate new programs than the GPU took to execute
@@ -27,6 +28,7 @@ namespace OrionEventLib.Events.Mining
             eventSerializer.WriteS32(DeviceId);
             eventSerializer.WriteDouble(CurrentHashesPerSecond);
             eventSerializer.WriteDouble(AverageHashesPerSecond);
+            eventSerializer.WriteByte(HighestDeviceDifficulty);
 
             return eventSerializer.GetData();
         }

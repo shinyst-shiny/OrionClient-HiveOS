@@ -11,7 +11,7 @@ namespace OrionEventLib
 
     public class EventSerializer
     {
-        public ArraySegment<byte> Data => GetData();
+        public ArraySegment<byte> Data => _data;
         public int BytesWritten { get; private set; }
         private ArraySegment<byte> _data;
         private int _index => BytesWritten + 2; //2 bytes for size

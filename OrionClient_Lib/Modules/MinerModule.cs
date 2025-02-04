@@ -354,7 +354,8 @@ namespace OrionClientLib.Modules
                 AverageHashesPerSecond = e.ChallengeSolutionsPerSecond.Speed,
                 CurrentHashesPerSecond = e.SolutionsPerSecond.Speed,
                 CPUStruggling = hasher.HardwareType == IHasher.Hardware.GPU && e.ProgramGenerationTooLong,
-                DeviceId = e.Index
+                DeviceId = e.Index,
+                HighestDeviceDifficulty = (byte)e.HighestDifficulty
             });
         }
 

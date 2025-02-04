@@ -145,7 +145,7 @@ namespace OrionEventLib
 
             try
             {
-                if(_socket.State != WebSocketState.Open)
+                if(_socket?.State != WebSocketState.Open)
                 {
                     return false;
                 }
@@ -167,7 +167,7 @@ namespace OrionEventLib
             }
             catch(Exception ex)
             {
-                _logger.Log(LogLevel.Error, ex, $"Failed to send data to server");
+                _logger.Log(LogLevel.Error, ex, $"Failed to send data to event server");
 
                 return false;
             }
