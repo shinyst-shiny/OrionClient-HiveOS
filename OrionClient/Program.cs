@@ -36,6 +36,7 @@ using System.Security.Cryptography.X509Certificates;
 using ILGPU.Runtime.OpenCL;
 using System.Buffers.Binary;
 using OrionClient.Commands;
+using OrionEventLib;
 
 namespace OrionClient
 {
@@ -58,6 +59,7 @@ namespace OrionClient
         private static string _version = "1.3.1.1";
         private static GithubApi.Data _updateData;
         private static string _cudaLocation = String.Empty;
+        private static OrionEventHandler _eventHandler = new OrionEventHandler();
 
         private static IntPtr DllImportResolver(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
         {
@@ -183,7 +185,6 @@ namespace OrionClient
 
             #endregion
 
-
             _settings = await Settings.LoadAsync();
             await _settings.SaveAsync();
 
@@ -198,13 +199,19 @@ namespace OrionClient
 
             _updateData = await GithubApi.CheckForUpdates(_version);
 
+            if(_settings.EventWebsocketSetting.Enable)
+            {
+
+            }
+
             AnsiConsole.Clear();
 
+            
             Console.CancelKeyPress += Console_CancelKeyPress;
 
             while (true)
             {
-                Data data = new Data(_hashers, _pools, _settings);
+                Data data = new Data(_hashers, _pools, _settings, _eventHandler);
 
                 await DisplayMenu(data);
 
@@ -249,7 +256,7 @@ namespace OrionClient
             {
                 _currentModule = _modules.FirstOrDefault(x => x is MinerModule);
 
-                Data data = new Data(_hashers, _pools, _settings);
+                Data data = new Data(_hashers, _pools, _settings, _eventHandler);
                 (IHasher? cpuHasher, IHasher? gpuHasher) = data.GetChosenHasher();
 
                 if ((cpuHasher != null && cpuHasher is not DisabledHasher) || (gpuHasher != null && gpuHasher is not DisabledHasher))

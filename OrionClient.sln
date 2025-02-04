@@ -13,6 +13,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tmds.LibC", "Tmds.LibC\src\
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Spectre.Console", "spectre.console\src\Spectre.Console\Spectre.Console.csproj", "{4A5A1189-C518-4466-A272-DE3FFCE49F36}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrionEventLib", "OrionEventLib\OrionEventLib.csproj", "{6D3D1940-8729-462E-90F5-FEF0BF997947}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +41,10 @@ Global
 		{4A5A1189-C518-4466-A272-DE3FFCE49F36}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4A5A1189-C518-4466-A272-DE3FFCE49F36}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4A5A1189-C518-4466-A272-DE3FFCE49F36}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6D3D1940-8729-462E-90F5-FEF0BF997947}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6D3D1940-8729-462E-90F5-FEF0BF997947}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6D3D1940-8729-462E-90F5-FEF0BF997947}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6D3D1940-8729-462E-90F5-FEF0BF997947}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -18,11 +18,11 @@
     <PackageReference Include="Solnet.Rpc" Version="6.1.0" />
     <PackageReference Include="Solnet.Wallet" Version="6.1.0" />
     <PackageReference Include="Hardware.Info" Version="101.0.0.0" />
-    <PackageReference Include="WebSocketSharp-netstandard" Version="1.0.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Equix\Equix.csproj" />
+    <ProjectReference Include="..\OrionEventLib\OrionEventLib.csproj" />
     <ProjectReference Include="..\spectre.console\src\Spectre.Console\Spectre.Console.csproj" />
     <TrimmerRootAssembly Include="System.Management" />
   </ItemGroup>

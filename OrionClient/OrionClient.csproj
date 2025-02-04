@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\OrionClient_Lib\OrionClientLib.csproj" />
+    <ProjectReference Include="..\OrionEventLib\OrionEventLib.csproj" />
     <ProjectReference Include="..\spectre.console\src\Spectre.Console\Spectre.Console.csproj" />
   </ItemGroup>
 

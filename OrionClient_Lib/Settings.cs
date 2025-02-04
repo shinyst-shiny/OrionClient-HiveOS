@@ -47,6 +47,8 @@ namespace OrionClientLib
         public RPCSettings RPCSetting { get; set; } = new RPCSettings();
         [SettingDetails("View Staking View Settings", "Configure Staking View settings")]
         public StakingViewSettings StakingViewSetting { get; set; } = new StakingViewSettings();
+        [SettingDetails("View Event Settings", "Configure Event settings that handle sending events to an external server")]
+        public EventWebsocketSettings EventWebsocketSetting { get; set; } = new EventWebsocketSettings();
 
         public class CPUSettings
         {
@@ -152,6 +154,25 @@ namespace OrionClientLib
 
             [SettingDetails("Historical Days", "Total days of history to keep for daily boost rewards")]
             public int TotalHistoricalDays { get; set; } = 7;
+        }
+
+        public class EventWebsocketSettings
+        {
+            [SettingDetails("Enable", "Enable/Disable sending event data to external server")]
+            public bool Enable { get; set; }
+
+            [SettingDetails("Host", "URL to send event data")]
+            [UrlSettingValidation]
+            public string WebsocketUrl { get; set; } = "localhost";
+
+            [SettingDetails("Port", "Port number")]
+            public int Port { get; set; } = 54321;
+
+            [SettingDetails("Id", "Arbitrary id that's sent in all events")]
+            public string Id { get; set; } = String.Empty;
+
+            [SettingDetails("Reconnect Time", "How often, in milliseconds, to try connecting to server")]
+            public int ReconnectTimeMs { get; set; } = 5000;
         }
 
         public static async Task<Settings> LoadAsync()

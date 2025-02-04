@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Linq;
+using System.Net;
 using System.Numerics;
 using System.Reflection;
 using System.Text;
@@ -86,7 +87,19 @@ namespace OrionClientLib.Modules.SettingsData
                 return false;
             }
 
+            if(data.ToString() == "localhost")
+            {
+                return true;
+            }
+
+            //Check url
             if(Uri.TryCreate(data.ToString(), UriKind.Absolute, out Uri result))
+            {
+                return true;
+            }
+
+            //Check IP
+            if(IPAddress.TryParse(data.ToString(), out IPAddress addres))
             {
                 return true;
             }

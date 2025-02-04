@@ -1,6 +1,7 @@
 ﻿using OrionClientLib;
 using OrionClientLib.Hashers;
 using OrionClientLib.Pools;
+using OrionEventLib;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -18,13 +19,15 @@ namespace OrionClientLib.Modules.Models
         public ReadOnlyCollection<IPool> Pools { get; }
         public Settings Settings { get; }
         public bool AutoStarted { get; }
+        public OrionEventHandler EventHandler { get; }
 
-        public Data(IList<IHasher> hashers, IList<IPool> pools, Settings settings, bool autoStarted = false)
+        public Data(IList<IHasher> hashers, IList<IPool> pools, Settings settings, OrionEventHandler eventHandler, bool autoStarted = false)
         {
             Hashers = hashers.AsReadOnly();
             Pools = pools.AsReadOnly();
             Settings = settings;
             AutoStarted = autoStarted;
+            EventHandler = eventHandler;
         }
 
 
