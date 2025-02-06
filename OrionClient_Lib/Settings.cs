@@ -163,7 +163,7 @@ namespace OrionClientLib
 
         public class EventWebsocketSettings
         {
-            [SettingDetails("Enable", "Enable/Disable sending event data to external server")]
+            [SettingDetails("Enable", "Enable/Disable sending event data to external server (Requires restart)")]
             public bool Enable { get; set; }
 
             [SettingDetails("Host", "URL to send event data")]

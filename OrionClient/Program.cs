@@ -1,5 +1,4 @@
 ﻿using Equix;
-using Hardware.Info;
 using ILGPU;
 using ILGPU.IR;
 using NLog;
@@ -199,6 +198,7 @@ namespace OrionClient
 
             _updateData = await GithubApi.CheckForUpdates(_version);
             _eventHandler = new OrionEventHandler(_settings.EventWebsocketSetting.Enable, _settings.EventWebsocketSetting.ReconnectTimeMs, _settings.EventWebsocketSetting.Serialization);
+            await _eventHandler.Connect(_settings.EventWebsocketSetting.WebsocketUrl, _settings.EventWebsocketSetting.Port);
 
             AnsiConsole.Clear();
 

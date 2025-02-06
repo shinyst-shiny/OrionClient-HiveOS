@@ -1,6 +1,5 @@
 ﻿using Blake2Sharp;
 using Equix;
-using Hardware.Info;
 using ILGPU.Runtime;
 using ILGPU.Runtime.Cuda;
 using ILGPU.Runtime.OpenCL;

@@ -96,10 +96,18 @@ namespace OrionEventLib
                     return true;
                 }
 
-                CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(5));
+                CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
                 _socket = new ClientWebSocket();
-                await _socket.ConnectAsync(new Uri($"{url}:{port}", UriKind.RelativeOrAbsolute), cts.Token);
+
+                string wsUrl = $"{url}:{port}";
+
+                if(!wsUrl.StartsWith("ws"))
+                {
+                    wsUrl = $"ws://{wsUrl}";
+                }
+
+                await _socket.ConnectAsync(new Uri(wsUrl, UriKind.RelativeOrAbsolute), cts.Token);
 
                 if(!firstConnect)
                 {

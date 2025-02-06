@@ -1,29 +1,14 @@
-﻿using Blake2Sharp;
-using Equix;
-using Hardware.Info;
-using ILGPU.Runtime;
-using ILGPU.Runtime.Cuda;
-using ILGPU.Runtime.OpenCL;
-using Newtonsoft.Json;
-using Org.BouncyCastle.Asn1.X509.Qualified;
+﻿using Newtonsoft.Json;
 using OrionClientLib.Hashers;
 using OrionClientLib.Modules.Models;
 using OrionClientLib.Modules.SettingsData;
-using OrionClientLib.Pools;
 using OrionClientLib.Utilities;
 using Solnet.Wallet;
 using Solnet.Wallet.Bip39;
 using Solnet.Wallet.Utilities;
 using Spectre.Console;
-using Spectre.Console.Rendering;
-using System;
-using System.Collections.Generic;
-using System.Configuration;
-using System.Linq;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace OrionClientLib.Modules
 {

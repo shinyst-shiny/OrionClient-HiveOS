@@ -17,7 +17,6 @@
     <PackageReference Include="Solnet.Programs" Version="6.1.0" />
     <PackageReference Include="Solnet.Rpc" Version="6.1.0" />
     <PackageReference Include="Solnet.Wallet" Version="6.1.0" />
-    <PackageReference Include="Hardware.Info" Version="101.0.0.0" />
   </ItemGroup>
 
   <ItemGroup>
