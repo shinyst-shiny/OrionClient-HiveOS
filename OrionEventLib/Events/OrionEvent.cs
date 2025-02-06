@@ -27,7 +27,7 @@ namespace OrionEventLib.Events
         /// <summary>
         /// Unix timestamp of event time
         /// </summary>
-        public virtual long Timestamp => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        public virtual long Timestamp { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
         public virtual ArraySegment<byte> Serialize(EventSerializer eventSerializer)
         {
@@ -37,6 +37,21 @@ namespace OrionEventLib.Events
             eventSerializer.WriteS64(Timestamp);
 
             return eventSerializer.GetData();
+        }
+
+        public virtual void Deserialize(EventDeserializer eventDeserializer)
+        {
+            eventDeserializer.Seek(4); //Beginning of data
+            Id = eventDeserializer.ReadString();
+            Timestamp = eventDeserializer.ReadS64();
+        }
+
+        public override string ToString()
+        {
+            StringBuilder builder = new StringBuilder();
+            builder.AppendLine($"Event: {EventType}. Subtype: {SubEventType}");
+
+            return builder.ToString();
         }
     }
 }

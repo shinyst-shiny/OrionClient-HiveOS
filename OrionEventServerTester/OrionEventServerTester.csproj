@@ -11,4 +11,8 @@
     <PackageReference Include="websocketsharp.core" Version="1.0.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\OrionEventLib\OrionEventLib.csproj" />
+  </ItemGroup>
+
 </Project>

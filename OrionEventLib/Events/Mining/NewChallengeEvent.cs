@@ -25,5 +25,25 @@ namespace OrionEventLib.Events.Mining
 
             return eventSerializer.GetData();
         }
+
+        public override void Deserialize(EventDeserializer eventDeserializer)
+        {
+            base.Deserialize(eventDeserializer);
+
+            Challenge = eventDeserializer.ReadBytes();
+            StartNonce = eventDeserializer.ReadU64();
+            EndNonce = eventDeserializer.ReadU64();
+            ChallengeId = eventDeserializer.ReadS32();
+        }
+
+
+        public override string ToString()
+        {
+            StringBuilder builder = new StringBuilder();
+            builder.AppendLine($"Event: {EventType}. Subtype: {SubEventType}. Time: {DateTimeOffset.FromUnixTimeSeconds(Timestamp).ToLocalTime().DateTime.ToLongTimeString()}");
+            builder.AppendLine($"Start nonce: {StartNonce}. End nonce: {EndNonce}. Challenge Id: {ChallengeId}");
+
+            return builder.ToString();
+        }
     }
 }

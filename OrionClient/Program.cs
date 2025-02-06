@@ -198,7 +198,12 @@ namespace OrionClient
 
             _updateData = await GithubApi.CheckForUpdates(_version);
             _eventHandler = new OrionEventHandler(_settings.EventWebsocketSetting.Enable, _settings.EventWebsocketSetting.ReconnectTimeMs, _settings.EventWebsocketSetting.Serialization);
-            await _eventHandler.Connect(_settings.EventWebsocketSetting.WebsocketUrl, _settings.EventWebsocketSetting.Port);
+
+            if (_settings.EventWebsocketSetting.Enable)
+            {
+                Console.WriteLine("Connecting to event server ...");
+                await _eventHandler.Connect(_settings.EventWebsocketSetting.WebsocketUrl, _settings.EventWebsocketSetting.Port);
+            }
 
             AnsiConsole.Clear();
 
@@ -592,9 +597,23 @@ namespace OrionClient
 
             string newVersion = _updateData == null ? String.Empty : $" -- New Version {_updateData.TagName} {(_updateData.Prerelease ? $"[[Prerelease]]" : String.Empty)}";
 
-            prompt.Title($"         [lime]Orion Client v{_version}[/]{newVersion}\n\nWallet: {publicKey ?? "N/A"}\nHasher: CPU - {cpuHasher?.Name ?? "N/A"} ({(_settings.CPUSetting.CPUThreads > 0 ? _settings.CPUSetting.CPUThreads : Environment.ProcessorCount)} threads), GPU - {gpuHasher?.Name ?? "N/A"}\nPool: {pool?.DisplayName ?? "N/A"}" +
+            prompt.Title($"         [lime]Orion Client v{_version}[/]{newVersion}\n\nWallet: {publicKey ?? "N/A"}\n" +
+                $"Hasher: CPU - {cpuHasher?.Name ?? "N/A"} ({(_settings.CPUSetting.CPUThreads > 0 ? _settings.CPUSetting.CPUThreads : Environment.ProcessorCount)} threads), GPU - {gpuHasher?.Name ?? "N/A"}\n" +
+                $"Pool: {pool?.DisplayName ?? "N/A"}" +
+                $"{(_settings.EventWebsocketSetting.Enable ? $"\nEvent Server Status: {GetEventServerStatus()}" : String.Empty) }" +
                 $"{(!String.IsNullOrEmpty(_message) ? $"\n\n[red]Error: {_message}[/]" : String.Empty)}");
             _message = String.Empty;
+
+            string GetEventServerStatus()
+            {
+                if(_eventHandler.Connected)
+                {
+                    return $"[green]Connected[/]";
+                }
+
+                return $"[red]Disconnected[/]";
+            }
+
 
             prompt.UseConverter((module) =>
             {

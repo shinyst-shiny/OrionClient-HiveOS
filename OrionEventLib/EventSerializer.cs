@@ -48,6 +48,7 @@ namespace OrionEventLib
 
         public void WriteBytes(ReadOnlySpan<byte> v)
         {
+            WriteU16((ushort)v.Length);
             v.CopyTo(Data.Slice(_index, v.Length));
             BytesWritten += v.Length;
         }
@@ -89,15 +90,7 @@ namespace OrionEventLib
 
         public void WriteString(string v)
         {
-            if (String.IsNullOrEmpty(v))
-            {
-                WriteU16(0);
-            }
-            else
-            {
-                WriteU16((ushort)v.Length);
-                WriteBytes(Encoding.UTF8.GetBytes(v));
-            }
+            WriteBytes(Encoding.UTF8.GetBytes(v));
         }
     }
 }

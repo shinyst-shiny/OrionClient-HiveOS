@@ -16,6 +16,7 @@ namespace OrionEventLib
     public class OrionEventHandler
     {
         public event EventHandler OnReconnect;
+        public bool Connected => _socket?.State == WebSocketState.Open;
 
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private ClientWebSocket _socket;
@@ -34,7 +35,7 @@ namespace OrionEventLib
             _enabled = enabled;
             _serializationType = serialization;
 
-            _connectTimer  = new System.Timers.Timer(TimeSpan.FromSeconds(reconnectTime));
+            _connectTimer  = new System.Timers.Timer(TimeSpan.FromMilliseconds(reconnectTime));
             _connectTimer.Elapsed += _connectTimer_Elapsed;
             _sendTimer = new System.Timers.Timer(TimeSpan.FromSeconds(1));
             _sendTimer.Elapsed += _sendTimer_Elapsed;
@@ -151,6 +152,8 @@ namespace OrionEventLib
         {
             byte[] sharedData = ArrayPool<byte>.Shared.Rent(4096);
 
+            bool close = false;
+
             try
             {
                 if(_socket?.State != WebSocketState.Open)
@@ -173,9 +176,13 @@ namespace OrionEventLib
 
                 return true;
             }
+            catch(WebSocketException ex)
+            {
+                close = true;
+            }
             catch(Exception ex)
             {
-                _logger.Log(LogLevel.Error, ex, $"Failed to send data to event server");
+                _logger.Log(LogLevel.Error, ex, $"Failed to send data to event server. Message: {ex.Message}");
 
                 return false;
             }
@@ -183,6 +190,26 @@ namespace OrionEventLib
             {
                 ArrayPool<byte>.Shared.Return(sharedData);
             }
+
+            if(close)
+            {
+                _logger.Log(LogLevel.Warn, $"Failed to send data to event server. Waiting for reconnect");
+
+                if (_socket != null)
+                {
+                    try
+                    {
+                        _socket.Dispose();
+                        _socket = null;
+                    }
+                    catch(Exception eX)
+                    {
+                        _logger.Log(LogLevel.Warn, $"Blah. {eX}");
+                    }
+                }
+            }
+
+            return false;
         }
     }
 }
