@@ -277,13 +277,13 @@ namespace OrionClientLib.Hashers
                     //Modify batch size to be between 750ms-2000ms long
                     if (_running)
                     {
-                        if (hashingTime.TotalSeconds < 1)
+                        if (hashingTime.TotalSeconds < 2)
                         {
                             _info.BatchSize *= 2;
 
                             //_info.BatchSize = Math.Min(8192, _info.BatchSize);
                         }
-                        else if (hashingTime.TotalSeconds > 3)
+                        else if (hashingTime.TotalSeconds > 5)
                         {
                             _info.BatchSize /= 2;
 
