@@ -74,6 +74,7 @@ namespace OrionClientLib.Hashers.CPU
                     int solutionCount = solver.Solve_FullC_Avx2(program, solutions, solver.Heap, solver.ComputeSolutions);
 
                     program.DestroyCompiler();
+                    program = null;
 
                     //Calculate difficulty
                     for (int z = 0; z < solutionCount; z++)
