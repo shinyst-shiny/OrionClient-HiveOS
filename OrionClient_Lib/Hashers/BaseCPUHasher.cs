@@ -281,7 +281,7 @@ namespace OrionClientLib.Hashers
                         {
                             _info.BatchSize *= 2;
 
-                            _info.BatchSize = Math.Min(8192, _info.BatchSize);
+                            //_info.BatchSize = Math.Min(8192, _info.BatchSize);
                         }
                         else if (hashingTime.TotalSeconds > 10)
                         {
