@@ -108,9 +108,28 @@ namespace OrionClientLib.Modules.SettingsData
         }
     }
 
+    public class MinMaxSettingValidation<T> : SettingValidatorAttribute where T : INumber<T>
+    {
+        public T Min { get; private set; }
+        public T Max { get; private set; }
+
+        public MinMaxSettingValidation(T min, T max)
+        {
+            Min = min;
+            Max = max;
+        }
+
+        public override bool Validate(object data)
+        {
+            T v = (T)data;
+
+            return v >= Min && v <= Max;
+        }
+    }
+
     public class OptionSettingValidation<T> : SettingValidatorAttribute
     {
-        public T[] Options;
+        public T[] Options { get; private set; }
 
         public OptionSettingValidation(params T[] options)
         {

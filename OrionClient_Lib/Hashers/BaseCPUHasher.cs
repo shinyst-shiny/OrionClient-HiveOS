@@ -49,6 +49,7 @@ namespace OrionClientLib.Hashers
         protected bool ResettingChallenge => !_newChallengeWait.WaitOne(0);
 
         protected ConcurrentQueue<Solver> _solverQueue = new ConcurrentQueue<Solver>();
+        protected Settings _settings;
 
         private int _threads = Environment.ProcessorCount;
         private Task _taskRunner;
@@ -63,8 +64,9 @@ namespace OrionClientLib.Hashers
             _pool = pool;
             _running = true;
             _threads = settings.CPUSetting.CPUThreads;
+            _settings = settings;
 
-            if(_threads == 0)
+            if (_threads == 0)
             {
                 _threads = Environment.ProcessorCount;
             }
@@ -277,11 +279,11 @@ namespace OrionClientLib.Hashers
                     //Modify batch size to be between 750ms-2000ms long
                     if (_running)
                     {
-                        if (hashingTime.TotalSeconds < 3)
+                        double hashTime = Math.Clamp(_settings.CPUSetting.MinimumHashTime, 0.5, 10);
+
+                        if (hashingTime.TotalSeconds < _settings.CPUSetting.MinimumHashTime)
                         {
                             _info.BatchSize *= 2;
-
-                            //_info.BatchSize = Math.Min(8192, _info.BatchSize);
                         }
                         else if (hashingTime.TotalSeconds > 10)
                         {

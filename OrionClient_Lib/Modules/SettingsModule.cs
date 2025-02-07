@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using Org.BouncyCastle.Asn1.X509.Qualified;
 using OrionClientLib.Hashers;
 using OrionClientLib.Modules.Models;
 using OrionClientLib.Modules.SettingsData;
@@ -124,9 +125,16 @@ namespace OrionClientLib.Modules
 
                 details.Property.SetValue(details.Obj, newValue);
             }
-            else if (details.Type == typeof(int))
+            else if (details.Type.IsPrimitive)
             {
-                details.Property.SetValue(details.Obj, await HandleInt($"Set '{details.Attribute.Name}'", (int)details.Property.GetValue(details.Obj), details.Validator));
+                if (details.Type == typeof(int))
+                {
+                    details.Property.SetValue(details.Obj, await HandlePrimitive($"Set '{details.Attribute.Name}'", (int)details.Property.GetValue(details.Obj), details.Validator));
+                }
+                else if (details.Type == typeof(double))
+                {
+                    details.Property.SetValue(details.Obj, await HandlePrimitive($"Set '{details.Attribute.Name}'", (double)details.Property.GetValue(details.Obj), details.Validator));
+                }
             }
             else if (details.Type == typeof(string))
             {
@@ -195,16 +203,16 @@ namespace OrionClientLib.Modules
                 return await confirmationPrompt.ShowAsync(AnsiConsole.Console, token);
             }
 
-            async Task<int> HandleInt(string message, int defaultOption, SettingValidatorAttribute validation)
+            async Task<T> HandlePrimitive<T>(string message, T defaultOption, SettingValidatorAttribute validation) where T : struct
             {
-                if(validation is OptionSettingValidation<int> optionValidation)
+                if(validation is OptionSettingValidation<T> optionValidation)
                 {
-                    SelectionPrompt<int> selectionPrompt = new SelectionPrompt<int>();
+                    SelectionPrompt<T> selectionPrompt = new SelectionPrompt<T>();
                     selectionPrompt.Title(message);
-                    selectionPrompt.AddChoices(optionValidation.Options.OrderByDescending(x => x == defaultOption));
+                    selectionPrompt.AddChoices(optionValidation.Options.OrderByDescending(x => x.Equals(defaultOption)));
                     selectionPrompt.UseConverter((v) =>
                     {
-                        if(v == defaultOption)
+                        if(v.Equals(defaultOption))
                         {
                             return $"{v} [[Current]]";
                         }
@@ -214,7 +222,7 @@ namespace OrionClientLib.Modules
                     return await selectionPrompt.ShowAsync(AnsiConsole.Console, token);
                 }
 
-                TextPrompt<int> textPrompt = new TextPrompt<int>(message);
+                TextPrompt<T> textPrompt = new TextPrompt<T>(message);
                 textPrompt.DefaultValue(defaultOption);
                 textPrompt.Validate((i) =>
                 {

@@ -66,6 +66,10 @@ namespace OrionClientLib
             [SettingDetails("Auto Set CPU Affinity", "Automatically sets CPU affinity when only CPU mining is enabled and only using physical thread count (windows only)")]
             public bool AutoSetCPUAffinity { get; set; } = true;
 
+            [SettingDetails("Min Hash Time", "Minimum time, in seconds, CPU will hash before updating UI. High core count CPUs should change this to about 3")]
+            [MinMaxSettingValidation<double>(0.5, 10)]
+            public double MinimumHashTime { get; set; } = 1.75;
+
         }
 
         public class GPUSettings
