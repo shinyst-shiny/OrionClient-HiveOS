@@ -55,7 +55,7 @@ namespace OrionClient
         private static Table _logTable;
 
         private static string _message = String.Empty;
-        private static string _version = "1.3.1.1";
+        private static string _version = "1.4.0.0";
         private static GithubApi.Data _updateData;
         private static string _cudaLocation = String.Empty;
         private static OrionEventHandler _eventHandler;
@@ -112,6 +112,9 @@ namespace OrionClient
 
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Settings))]
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Program))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(CommandLineOptions))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(DefaultCommandLineOptions))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(MineCommandLineOptions))]
         static async Task Main(string[] args)
         {
             if (!IsSupported())
