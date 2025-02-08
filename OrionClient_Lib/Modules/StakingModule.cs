@@ -951,6 +951,8 @@ namespace OrionClientLib.Modules
             }
             else
             {
+                _stakingTable.Title($"Staking Information [[Ore: ${oreBoost.OreUSDValue:0.00}]]");
+                
                 for(int i = 0; i < _stakeInfo.Count; i++)
                 {
                     var stakeInfo = _stakeInfo[i];
