@@ -508,6 +508,8 @@ namespace OrionClientLib.Modules
                 {
                     var boost = boostKvp.Value;
                     int failedTransactions = 0;
+                    int consecutiveFailures = 0;
+
                     var boostTotalTransactions = boostKvp.Value.TransactionCache.Count(x => !x.DataPulled);
                     Stopwatch sw = Stopwatch.StartNew();
                     TimeSpan lastSave = sw.Elapsed;
@@ -554,8 +556,19 @@ namespace OrionClientLib.Modules
                             }
                             hasFailures = true;
                             ++failedTransactions;
+                            ++consecutiveFailures;
+
+                            if(consecutiveFailures > 10)
+                            {
+                                AnsiConsole.MarkupLine($"[yellow]Constant failures. Most likely RPC does not have historical transactions[/]");
+
+                                break;
+                            }
+
                             continue;
                         }
+
+                        consecutiveFailures = 0;
 
                         TransactionInfo transactionInfo = transactionResult.Result.Transaction;
                         List<PublicKey> accountKeys = transactionInfo.Message.AccountKeys.Select(x => new PublicKey(x)).ToList();
