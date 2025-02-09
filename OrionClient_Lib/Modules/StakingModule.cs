@@ -786,6 +786,11 @@ namespace OrionClientLib.Modules
                     //Stake Account
                     states.Add(await _streamingClient.SubscribeAccountInfoAsync(stakingInfo.StakeAccount, (state, info) =>
                     {
+                        if (info == null)
+                        {
+                            return;
+                        }
+
                         Stake stake = Stake.Deserialize(Convert.FromBase64String(info.Value.Data[0]));
 
                         double oldUserStake = stakingInfo.UserStake;
@@ -805,6 +810,11 @@ namespace OrionClientLib.Modules
                     //Checkpoint account
                     states.Add(await _streamingClient.SubscribeAccountInfoAsync(stakingInfo.Boost.CheckpointAddress, (state, info) =>
                     {
+                        if (info == null)
+                        {
+                            return;
+                        }
+
                         CheckPoint checkpoint = CheckPoint.Deserialize(Convert.FromBase64String(info.Value.Data[0]));
 
                         stakingInfo.LastPayout = checkpoint.LastCheckPoint.UtcDateTime;
@@ -814,6 +824,11 @@ namespace OrionClientLib.Modules
                     //Proof account for pending
                     states.Add(await _streamingClient.SubscribeAccountInfoAsync(stakingInfo.Boost.BoostProof, (state, info) =>
                     {
+                        if (info == null)
+                        {
+                            return;
+                        }
+
                         Proof proof = Proof.Deserialize(Convert.FromBase64String(info.Value.Data[0]));
 
                         double oldUserPendingRewards = stakingInfo.UserPendingRewards;
@@ -831,6 +846,11 @@ namespace OrionClientLib.Modules
                     //Boost account
                     states.Add(await _streamingClient.SubscribeAccountInfoAsync(stakingInfo.Boost.BoostAddress, (state, info) =>
                     {
+                        if (info == null)
+                        {
+                            return;
+                        }
+
                         Boost boost = Boost.Deserialize(Convert.FromBase64String(info.Value.Data[0]));
 
                         double oldMultiplier = Math.Round(stakingInfo.Multiplier, 2);
