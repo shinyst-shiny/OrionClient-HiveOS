@@ -322,6 +322,23 @@ namespace OrionClient
 
             #endregion
 
+            #region Pool Settings
+
+            if(!String.IsNullOrEmpty(cmdOptions.Pool))
+            {
+                IPool chosenPool = _pools.FirstOrDefault(x => x.ArgName == cmdOptions.Pool.ToLower());
+
+                if(chosenPool == null)
+                {
+                    AnsiConsole.MarkupLine($"[red]Error: [green]--pool[/] value '[cyan]{cmdOptions.Pool}[/]' is invalid. Valid values: {String.Join(", ", _pools.Select(x => x.ArgName))}[/]");
+
+                    return false;
+                }
+
+                _settings.Pool = chosenPool.Name;
+            }
+
+            #endregion
             #region CPU
 
             if (cmdOptions.CPUThreads.HasValue)

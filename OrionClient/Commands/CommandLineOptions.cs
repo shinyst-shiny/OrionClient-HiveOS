@@ -26,6 +26,13 @@ namespace OrionClient.Commands
         [Option("key", HelpText = "Public key for pools that don't require a keypair")]
         public string? PublicKey { get; set; }
 
+        #region Pool Settings
+
+        [Option("pool", HelpText = "Selects pool (Values: ec1ipse, excalivator)")]
+        public string? Pool { get; set; }
+
+        #endregion
+
         #region CPU Settings
 
         [Option('t', "cpu-threads", HelpText = "Total threads to use for mining (0 = all threads)")]

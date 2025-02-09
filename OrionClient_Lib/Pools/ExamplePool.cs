@@ -29,6 +29,7 @@ namespace OrionClientLib.Pools
         public override bool DisplaySetting => false;
 
         public override string Description => "Example pool sample";
+        public override string ArgName => "example";
 
         //Features displayed on pool list
         //Currently not displayed anywhere

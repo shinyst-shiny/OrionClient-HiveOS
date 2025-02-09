@@ -15,6 +15,7 @@ namespace OrionClientLib.Pools
         public override string Description => $"Custom pool using Ore-HQ pool implementation";
         public override bool DisplaySetting => true;
         public override Coin Coins { get; } = Coin.Ore;
+        public override string ArgName => "custom";
 
         public override Dictionary<string, string> Features { get; } = new Dictionary<string, string>();
 

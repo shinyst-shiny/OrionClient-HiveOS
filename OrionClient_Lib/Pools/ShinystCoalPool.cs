@@ -26,6 +26,8 @@ namespace OrionClientLib.Pools
         public override string DisplayName => Name;
         public override bool DisplaySetting => true;
         public override string Description => $"[Cyan]{Coin.Coal}[/]/[green]{Coin.Ore}[/] pool using Ore-HQ implementation. Operator (discord): Shinyst";
+        public override string ArgName => "excalivator";
+
         public override Uri WebsocketUrl => new Uri($"wss://{HostName}/v2/ws-pubkey?pubkey={_publicKey}&timestamp={_timestamp}");
         public override Coin Coins { get; } = Coin.Coal | Coin.Ore | Coin.Chromium;
         public override bool RequiresKeypair => false;

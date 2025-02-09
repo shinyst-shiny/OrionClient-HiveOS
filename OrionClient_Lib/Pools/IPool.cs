@@ -17,6 +17,7 @@ namespace OrionClientLib.Pools
         public string Name { get; }
         public string DisplayName { get; }
         public string Description { get; }
+        public string ArgName { get; }
         public Dictionary<string, string> Features { get; }
         public bool HideOnPoolList { get; }
         public Coin Coins { get; }
@@ -44,6 +45,7 @@ namespace OrionClientLib.Pools
         public abstract string Name { get; }
         public abstract string DisplayName { get; }
         public abstract bool DisplaySetting { get; }
+        public abstract string ArgName { get; }
         public abstract string Description { get; }
         public abstract Dictionary<string, string> Features { get; }
         public abstract bool HideOnPoolList { get; }
