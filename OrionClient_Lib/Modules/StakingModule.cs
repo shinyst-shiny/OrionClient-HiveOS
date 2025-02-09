@@ -885,7 +885,7 @@ namespace OrionClientLib.Modules
                     ++i;
                 }
 
-                AddMessage($"[green]Live updates for boosts{String.Join(", ", boostsWatching)} has started[/]");
+                AddMessage($"[green]Live updates for boosts {String.Join(", ", boostsWatching)} has started[/]");
 
                 return true;
             }
