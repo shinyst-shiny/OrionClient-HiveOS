@@ -18,7 +18,8 @@ namespace OrionEventLib
         public event EventHandler OnReconnect;
         public bool Connected => _socket?.State == WebSocketState.Open;
 
-        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private static readonly Logger _logger = LogManager.GetLogger("Main");
+        private static readonly Logger _eventLogger = LogManager.GetLogger("Events");
         private ClientWebSocket _socket;
 
         private string _lastUrl = String.Empty;
@@ -26,7 +27,7 @@ namespace OrionEventLib
         private SemaphoreSlim _connectLock = new SemaphoreSlim(1, 1);
         private System.Timers.Timer _connectTimer;
         private System.Timers.Timer _sendTimer;
-        private ConcurrentQueue<OrionEvent> _events = new ConcurrentQueue<OrionEvent>();
+        private ConcurrentQueue<ArraySegment<byte>> _events = new ConcurrentQueue<ArraySegment<byte>>();
         private bool _enabled = false;
         private SerializationType _serializationType;
 
@@ -131,26 +132,46 @@ namespace OrionEventLib
 
         public void AddEvent(OrionEvent orionEvent)
         {
-            //Prevents memory usage of queuing messages
-            if(!_enabled)
+            byte[] sharedData = ArrayPool<byte>.Shared.Rent(4096);
+            ArraySegment<byte> data = null;
+
+            if (_serializationType == SerializationType.Binary)
             {
+                data = orionEvent.Serialize(new EventSerializer(new ArraySegment<byte>(sharedData)));
+
+                _eventLogger.Log(LogLevel.Debug, Convert.ToBase64String(data));
+            }
+            else
+            {
+                var json = JsonConvert.SerializeObject(orionEvent);
+
+                data = Encoding.UTF8.GetBytes(json);
+
+                _eventLogger.Log(LogLevel.Debug, json);
+            }
+
+            //Prevents memory usage of queuing messages
+            if (!_enabled)
+            {
+                //Return now rather than later
+                ArrayPool<byte>.Shared.Return(sharedData);
+
                 return;
             }
 
-            _events.Enqueue(orionEvent);
+            _events.Enqueue(data);
         }
 
         private async Task HandleEventSend()
         {
-            while(_socket?.State == WebSocketState.Open && _events.TryDequeue(out OrionEvent orionEvent))
+            while(_socket?.State == WebSocketState.Open && _events.TryDequeue(out var orionEventArray))
             {
-                await SendData(orionEvent);
+                await SendData(orionEventArray);
             }
         }
 
-        private async Task<bool> SendData(OrionEvent orionEvent)
+        private async Task<bool> SendData(ArraySegment<byte> orionEventArray)
         {
-            byte[] sharedData = ArrayPool<byte>.Shared.Rent(4096);
 
             bool close = false;
 
@@ -161,18 +182,7 @@ namespace OrionEventLib
                     return false;
                 }
 
-                ArraySegment<byte> data = null;
-
-                if(_serializationType == SerializationType.Binary)
-                {
-                    data = orionEvent.Serialize(new EventSerializer(new ArraySegment<byte>(sharedData)));
-                }
-                else
-                {
-                    data = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(orionEvent));
-                }
-
-                await _socket.SendAsync(data, WebSocketMessageType.Text, true, CancellationToken.None);
+                await _socket.SendAsync(orionEventArray, WebSocketMessageType.Text, true, CancellationToken.None);
 
                 return true;
             }
@@ -188,7 +198,10 @@ namespace OrionEventLib
             }
             finally
             {
-                ArrayPool<byte>.Shared.Return(sharedData);
+                if (orionEventArray.Array != null)
+                {
+                    ArrayPool<byte>.Shared.Return(orionEventArray.Array);
+                }
             }
 
             if(close)

@@ -19,7 +19,7 @@ namespace OrionClientLib.Modules
 {
     public class BenchmarkerModule : IModule
     {
-        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private static readonly Logger _logger = LogManager.GetLogger("Main");
 
         private enum Step { Initial, Benchmarking };
 

@@ -12,7 +12,7 @@ namespace OrionClientLib.Utilities
 {
     public class GithubApi
     {
-        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private static readonly Logger _logger = LogManager.GetLogger("Main");
 
         private static HttpClient _client = new HttpClient
         {

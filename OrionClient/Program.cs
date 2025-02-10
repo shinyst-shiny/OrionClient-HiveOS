@@ -41,7 +41,7 @@ namespace OrionClient
 {
     public class Program
     {
-        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private static readonly Logger _logger = LogManager.GetLogger("Main");
         private static (int Width, int Height) windowSize = (Console.WindowWidth, Console.WindowHeight);
         private static ConcurrentQueue<LogInformation> _logQueue = new ConcurrentQueue<LogInformation>();
         private static List<IPool> _pools;

@@ -14,7 +14,7 @@ namespace OrionClientLib.Pools
 {
     public abstract class WebsocketPool : BasePool
     {
-        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private static readonly Logger _logger = LogManager.GetLogger("Main");
 
 
 

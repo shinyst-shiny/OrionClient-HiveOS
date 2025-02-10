@@ -22,7 +22,7 @@ namespace OrionClientLib.Modules
 {
     public class MinerModule : IModule
     {
-        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private static readonly Logger _logger = LogManager.GetLogger("Main");
 
         public string Name { get; } = "Start Mining";
 

@@ -19,7 +19,7 @@ namespace OrionClientLib.Pools
 {
     public class ShinystCoalPool : OreHQPool
     {
-        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private static readonly Logger _logger = LogManager.GetLogger("Main");
 
         public override event EventHandler<(string[] columns, byte[] data)> OnMinerUpdate;
         public override string Name { get; } = "Excalivator Pool";

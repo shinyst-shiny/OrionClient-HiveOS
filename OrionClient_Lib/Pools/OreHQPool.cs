@@ -39,7 +39,7 @@ namespace OrionClientLib.Pools
 
     public abstract class OreHQPool : WebsocketPool
     {
-        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private static readonly Logger _logger = LogManager.GetLogger("Main");
 
         public override event EventHandler<NewChallengeInfo> OnChallengeUpdate;
         public override event EventHandler<(string[] columns, byte[] data)> OnMinerUpdate;

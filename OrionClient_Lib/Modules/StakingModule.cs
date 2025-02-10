@@ -48,7 +48,7 @@ namespace OrionClientLib.Modules
         private static readonly string MeteroaPoolUrl = "https://app.meteora.ag/amm/pools?address={0}";
         private static readonly PublicKey _solMint = new PublicKey("So11111111111111111111111111111111111111111");
 
-        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private static readonly Logger _logger = LogManager.GetLogger("Main");
         private const int PoolUpdateDelayMin = 60;
 
         public string Name { get; } = "Ore Staking";

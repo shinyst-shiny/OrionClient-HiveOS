@@ -16,7 +16,7 @@ namespace OrionClientLib.CoinPrograms
 {
     public class OreProgram
     {
-        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private static readonly Logger _logger = LogManager.GetLogger("Main");
         private static readonly PublicKey SlotHashesKey = new("SysvarS1otHashes111111111111111111111111111");
         private static readonly PublicKey Instructions = new("Sysvar1nstructions1111111111111111111111111");
 

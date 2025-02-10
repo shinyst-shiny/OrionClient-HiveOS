@@ -22,7 +22,7 @@ namespace OrionClientLib.Hashers
 {
     public abstract class BaseCPUHasher : IHasher, ISettingInfo
     {
-        protected static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        protected static readonly Logger _logger = LogManager.GetLogger("Main");
 
         public IHasher.Hardware HardwareType => IHasher.Hardware.CPU;
         public bool Initialized => _taskRunner?.IsCompleted == false;

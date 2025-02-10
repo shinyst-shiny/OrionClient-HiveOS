@@ -17,7 +17,7 @@ namespace OrionClientLib.Hashers
 {
     public class VanityGPU
     {
-        protected static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        protected static readonly Logger _logger = LogManager.GetLogger("Main");
 
         private const int _maxQueueSize = 2;
         private static VanityFinder _vanityFinder = new VanityFinder();

@@ -16,7 +16,7 @@ namespace OrionClientLib.Modules.Vanity
 {
     internal class VanityFinder
     {
-        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private static readonly Logger _logger = LogManager.GetLogger("Main");
 
         public int TotalWallets => VanitiesByLength.Sum(x => x.Value.Total);
         public int TotalUniqueWallets => VanitiesByLength.Sum(x => x.Value.UniqueCount);

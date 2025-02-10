@@ -37,7 +37,7 @@ namespace OrionClientLib.Hashers
 {
     public abstract class BaseGPUHasher : IHasher, IGPUHasher, ISettingInfo
     {
-        protected static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        protected static readonly Logger _logger = LogManager.GetLogger("Main");
 
         private const int _maxNonces = 2048;
         private const int _maxQueueSize = 2;

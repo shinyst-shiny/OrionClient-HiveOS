@@ -20,7 +20,7 @@ namespace OrionClientLib.Pools
     //UI lib: https://spectreconsole.net/
     public class ExamplePool : BasePool
     {
-        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private static readonly Logger _logger = LogManager.GetLogger("Main");
 
         public override string Name => "Example Pool";
 
