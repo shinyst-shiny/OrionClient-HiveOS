@@ -1,3 +1,6 @@
 [submodule "spectre.console"]
 	path = spectre.console
 	url = https://github.com/SL-x-TnT/spectre.console.git
+[submodule "Solnet"]
+	path = Solnet
+	url = https://github.com/SL-x-TnT/Solnet.git
