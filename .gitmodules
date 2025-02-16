@@ -4,6 +4,3 @@
 [submodule "Solnet"]
 	path = Solnet
 	url = https://github.com/SL-x-TnT/Solnet.git
-[submodule "ILGPU"]
-	path = ILGPU
-	url = https://github.com/SL-x-TnT/ILGPU.git
