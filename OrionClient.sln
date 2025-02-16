@@ -13,17 +13,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tmds.LibC", "Tmds.LibC\src\
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Spectre.Console", "spectre.console\src\Spectre.Console\Spectre.Console.csproj", "{4A5A1189-C518-4466-A272-DE3FFCE49F36}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OrionEventLib", "OrionEventLib\OrionEventLib.csproj", "{6D3D1940-8729-462E-90F5-FEF0BF997947}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrionEventLib", "OrionEventLib\OrionEventLib.csproj", "{6D3D1940-8729-462E-90F5-FEF0BF997947}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OrionEventServerTester", "OrionEventServerTester\OrionEventServerTester.csproj", "{47B692ED-3D89-4CAF-BB87-AE6B31E1B6F3}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Solnet.Wallet", "Solnet\src\Solnet.Wallet\Solnet.Wallet.csproj", "{8EDB2A37-16D3-44DE-AEE4-317C568D7972}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Solnet.Rpc", "Solnet\src\Solnet.Rpc\Solnet.Rpc.csproj", "{A3A70DCA-A9E6-437C-A108-7DC198BDC50A}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Solnet.Programs", "Solnet\src\Solnet.Programs\Solnet.Programs.csproj", "{7B0B74D8-E3BB-4482-8960-FD7FC78137A8}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ILGPU", "ILGPU\Src\ILGPU\ILGPU.csproj", "{80069D10-15AE-46F8-B60D-E3C7DD343CBA}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrionEventServerTester", "OrionEventServerTester\OrionEventServerTester.csproj", "{47B692ED-3D89-4CAF-BB87-AE6B31E1B6F3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -59,22 +51,6 @@ Global
 		{47B692ED-3D89-4CAF-BB87-AE6B31E1B6F3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{47B692ED-3D89-4CAF-BB87-AE6B31E1B6F3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{47B692ED-3D89-4CAF-BB87-AE6B31E1B6F3}.Release|Any CPU.Build.0 = Release|Any CPU
-		{8EDB2A37-16D3-44DE-AEE4-317C568D7972}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{8EDB2A37-16D3-44DE-AEE4-317C568D7972}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{8EDB2A37-16D3-44DE-AEE4-317C568D7972}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{8EDB2A37-16D3-44DE-AEE4-317C568D7972}.Release|Any CPU.Build.0 = Release|Any CPU
-		{A3A70DCA-A9E6-437C-A108-7DC198BDC50A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A3A70DCA-A9E6-437C-A108-7DC198BDC50A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{A3A70DCA-A9E6-437C-A108-7DC198BDC50A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A3A70DCA-A9E6-437C-A108-7DC198BDC50A}.Release|Any CPU.Build.0 = Release|Any CPU
-		{7B0B74D8-E3BB-4482-8960-FD7FC78137A8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{7B0B74D8-E3BB-4482-8960-FD7FC78137A8}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{7B0B74D8-E3BB-4482-8960-FD7FC78137A8}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{7B0B74D8-E3BB-4482-8960-FD7FC78137A8}.Release|Any CPU.Build.0 = Release|Any CPU
-		{80069D10-15AE-46F8-B60D-E3C7DD343CBA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{80069D10-15AE-46F8-B60D-E3C7DD343CBA}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{80069D10-15AE-46F8-B60D-E3C7DD343CBA}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{80069D10-15AE-46F8-B60D-E3C7DD343CBA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

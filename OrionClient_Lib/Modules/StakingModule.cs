@@ -5,6 +5,7 @@ using ILGPU.Runtime.Cuda;
 using ILGPU.Runtime.OpenCL;
 using Newtonsoft.Json;
 using NLog;
+using Org.BouncyCastle.Asn1.X509.Qualified;
 using OrionClientLib.CoinPrograms;
 using OrionClientLib.CoinPrograms.Ore;
 using OrionClientLib.Hashers;

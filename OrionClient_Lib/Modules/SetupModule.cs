@@ -4,6 +4,7 @@ using ILGPU.Runtime;
 using ILGPU.Runtime.Cuda;
 using ILGPU.Runtime.OpenCL;
 using Newtonsoft.Json;
+using Org.BouncyCastle.Ocsp;
 using OrionClientLib.Hashers;
 using OrionClientLib.Modules.Models;
 using OrionClientLib.Pools;

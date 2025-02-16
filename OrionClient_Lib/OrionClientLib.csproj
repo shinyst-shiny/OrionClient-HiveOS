@@ -10,18 +10,21 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Chaos.NaCl.Standard" Version="1.0.0" />
+    <PackageReference Include="ILGPU" Version="1.5.1" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="NLog" Version="5.3.4" />
+    <PackageReference Include="Solnet.Extensions" Version="6.1.0" />
+    <PackageReference Include="Solnet.Programs" Version="6.1.0" />
+    <PackageReference Include="Solnet.Rpc" Version="6.1.0">
+      <IsTrimmable>false</IsTrimmable>
+    </PackageReference>
+    <PackageReference Include="Solnet.Wallet" Version="6.1.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Equix\Equix.csproj" />
     <ProjectReference Include="..\ILGPU\Src\ILGPU\ILGPU.csproj" />
     <ProjectReference Include="..\OrionEventLib\OrionEventLib.csproj" />
-    <ProjectReference Include="..\Solnet\src\Solnet.Programs\Solnet.Programs.csproj" />
-    <ProjectReference Include="..\Solnet\src\Solnet.Rpc\Solnet.Rpc.csproj" />
-    <ProjectReference Include="..\Solnet\src\Solnet.Wallet\Solnet.Wallet.csproj" />
     <ProjectReference Include="..\spectre.console\src\Spectre.Console\Spectre.Console.csproj" />
     <TrimmerRootAssembly Include="System.Management" />
   </ItemGroup>

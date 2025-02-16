@@ -1,4 +1,5 @@
 ﻿using NLog;
+using Org.BouncyCastle.Asn1;
 using OrionClientLib.Hashers.Models;
 using OrionClientLib.Pools.Models;
 using Solnet.Rpc;

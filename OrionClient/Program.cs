@@ -2,6 +2,7 @@
 using ILGPU;
 using ILGPU.IR;
 using NLog;
+using Org.BouncyCastle.Crypto.Signers;
 using OrionClientLib;
 using OrionClientLib.Hashers;
 using OrionClientLib.Hashers.CPU;
