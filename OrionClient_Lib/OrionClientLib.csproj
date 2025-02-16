@@ -23,7 +23,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Equix\Equix.csproj" />
-    <ProjectReference Include="..\ILGPU\Src\ILGPU\ILGPU.csproj" />
     <ProjectReference Include="..\OrionEventLib\OrionEventLib.csproj" />
     <ProjectReference Include="..\spectre.console\src\Spectre.Console\Spectre.Console.csproj" />
     <TrimmerRootAssembly Include="System.Management" />
