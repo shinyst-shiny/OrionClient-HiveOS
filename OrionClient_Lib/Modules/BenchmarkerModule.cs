@@ -255,12 +255,6 @@ namespace OrionClientLib.Modules
 
         void CurrentHasher_OnHashrateUpdate(object? sender, HashrateInfo e)
         {
-            //Ignore first iteration due to slow jit compilation
-            if (e.ChallengeSolutions == e.NumSolutions)
-            {
-                return;
-            }
-
             HasherInfo currentInfo = _chosenHashers[_hasherIndex];
             currentInfo.MinRate ??= e;
             currentInfo.MaxRate ??= e;
