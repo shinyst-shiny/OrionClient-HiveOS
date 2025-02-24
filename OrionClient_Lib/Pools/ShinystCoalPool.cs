@@ -205,11 +205,15 @@ namespace OrionClientLib.Pools
 
                 string data = await response.Content.ReadAsStringAsync();
 
-                var coinValues = JsonConvert.DeserializeObject<Dictionary<Coin, double>>(data);
+                var coinValues = JsonConvert.DeserializeObject<Dictionary<string, double>>(data);
 
                 foreach(var kvp in coinValues)
                 {
-                    balanceData.Add((kvp.Key, kvp.Value));
+                    if(Enum.TryParse(kvp.Key, ignoreCase: true, out Coin result))
+                    {
+                        balanceData.Add((result, kvp.Value));
+                    }
+
                 }
 
                 return (balanceData, true);
