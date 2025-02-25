@@ -2,7 +2,6 @@
 using DrillX.Compiler;
 using DrillX.Solver;
 using Equix;
-using Org.BouncyCastle.Crypto.Signers;
 using Solnet.Wallet;
 using System;
 using System.Buffers.Binary;

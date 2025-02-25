@@ -13,9 +13,15 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tmds.LibC", "Tmds.LibC\src\
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Spectre.Console", "spectre.console\src\Spectre.Console\Spectre.Console.csproj", "{4A5A1189-C518-4466-A272-DE3FFCE49F36}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrionEventLib", "OrionEventLib\OrionEventLib.csproj", "{6D3D1940-8729-462E-90F5-FEF0BF997947}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OrionEventLib", "OrionEventLib\OrionEventLib.csproj", "{6D3D1940-8729-462E-90F5-FEF0BF997947}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrionEventServerTester", "OrionEventServerTester\OrionEventServerTester.csproj", "{47B692ED-3D89-4CAF-BB87-AE6B31E1B6F3}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OrionEventServerTester", "OrionEventServerTester\OrionEventServerTester.csproj", "{47B692ED-3D89-4CAF-BB87-AE6B31E1B6F3}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Solnet.Wallet", "..\OreCheckpoint\Solnet\src\Solnet.Wallet\Solnet.Wallet.csproj", "{ADF775D2-0865-4E4B-9EEA-5A177586DFA3}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Solnet.Rpc", "..\OreCheckpoint\Solnet\src\Solnet.Rpc\Solnet.Rpc.csproj", "{A9608CDF-F12C-4F69-8A44-982717860D0B}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Solnet.Programs", "..\OreCheckpoint\Solnet\src\Solnet.Programs\Solnet.Programs.csproj", "{51F88F67-444A-4C6E-B4C5-AE02F67CD988}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -51,6 +57,18 @@ Global
 		{47B692ED-3D89-4CAF-BB87-AE6B31E1B6F3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{47B692ED-3D89-4CAF-BB87-AE6B31E1B6F3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{47B692ED-3D89-4CAF-BB87-AE6B31E1B6F3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ADF775D2-0865-4E4B-9EEA-5A177586DFA3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ADF775D2-0865-4E4B-9EEA-5A177586DFA3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ADF775D2-0865-4E4B-9EEA-5A177586DFA3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ADF775D2-0865-4E4B-9EEA-5A177586DFA3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A9608CDF-F12C-4F69-8A44-982717860D0B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A9608CDF-F12C-4F69-8A44-982717860D0B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A9608CDF-F12C-4F69-8A44-982717860D0B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A9608CDF-F12C-4F69-8A44-982717860D0B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{51F88F67-444A-4C6E-B4C5-AE02F67CD988}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{51F88F67-444A-4C6E-B4C5-AE02F67CD988}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{51F88F67-444A-4C6E-B4C5-AE02F67CD988}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{51F88F67-444A-4C6E-B4C5-AE02F67CD988}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

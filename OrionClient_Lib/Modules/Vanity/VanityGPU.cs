@@ -10,7 +10,6 @@ using OrionClientLib.Modules.Vanity;
 using System.Security.Cryptography;
 using NLog;
 using OrionClientLib.Utilities;
-using Chaos.NaCl;
 using System.IO;
 
 namespace OrionClientLib.Hashers
