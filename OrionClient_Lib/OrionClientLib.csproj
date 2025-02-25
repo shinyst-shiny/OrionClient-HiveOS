@@ -17,11 +17,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\OreCheckpoint\Solnet\src\Solnet.Programs\Solnet.Programs.csproj" />
-    <ProjectReference Include="..\..\OreCheckpoint\Solnet\src\Solnet.Rpc\Solnet.Rpc.csproj" />
-    <ProjectReference Include="..\..\OreCheckpoint\Solnet\src\Solnet.Wallet\Solnet.Wallet.csproj" />
     <ProjectReference Include="..\Equix\Equix.csproj" />
     <ProjectReference Include="..\OrionEventLib\OrionEventLib.csproj" />
+    <ProjectReference Include="..\Solnet\src\Solnet.Programs\Solnet.Programs.csproj" />
+    <ProjectReference Include="..\Solnet\src\Solnet.Rpc\Solnet.Rpc.csproj" />
+    <ProjectReference Include="..\Solnet\src\Solnet.Wallet\Solnet.Wallet.csproj" />
     <ProjectReference Include="..\spectre.console\src\Spectre.Console\Spectre.Console.csproj" />
     <TrimmerRootAssembly Include="System.Management" />
   </ItemGroup>
