@@ -197,7 +197,7 @@ namespace OrionClientLib.Hashers.GPU.RTX4090Opt
                 Store(ref registers, instruction.Dst, LoadRegister(ref registers, instruction.Src) * LoadRegister(ref registers, instruction.Dst));
 
                 //Branch
-                if (allowBranch && (branchOp & mulhResult) == 0)
+                if ((branchOp & mulhResult) == 0 && allowBranch)
                 {
                     allowBranch = false;
 
