@@ -79,6 +79,7 @@ namespace OrionClientLib.Hashers
 
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Interlocked))] //Needed for GPU
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(CudaBaselineGPUHasher))] //Need to add for each GPU to run on linux
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(CudaBaseline2GPUHasher))] //Need to add for each GPU to run on linux
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Cuda4090OptGPUHasher))] //Need to add for each GPU to run on linux
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(OpenCLBaselineGPUHasher))] //Need to add for each GPU to run on linux
         public async Task<(bool success, string message)> InitializeAsync(IPool pool, Settings settings)
@@ -113,7 +114,8 @@ namespace OrionClientLib.Hashers
             _context = Context.Create(builder => builder.AllAccelerators().Profiling()//.IOOperations()
             .Inlining(InliningMode.Aggressive)
             .Optimize(OptimizationLevel.O0)
-            .DebugConfig(false, false, DebugSymbolsMode.Disabled, false, false));
+            .DebugConfig(false, false, DebugSymbolsMode.Disabled, false, false)
+            );
 
             IntrinsicsLoader.Load(this.GetType(), _context);
 
