@@ -208,7 +208,7 @@ namespace OrionClientLib.Hashers.GPU.Baseline
                     goto target;
                 }
 
-                Group.Barrier();
+                //Group.Barrier();
 
                 //Multiply
                 instruction = LoadMultInstruction(ref startInstruction, BranchInstruction.Size + MultIntruction.Size * 6 + HiMultInstruction.Size * 1 + BasicInstruction.Size * 9);

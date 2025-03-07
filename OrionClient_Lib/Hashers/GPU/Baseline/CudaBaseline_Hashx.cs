@@ -199,14 +199,14 @@ namespace OrionClientLib.Hashers.GPU.Baseline
 
                 //Branch
 
-                if (allowBranch && (branchOp & mulhResult) == 0)
+                if ((branchOp & mulhResult) == 0 && allowBranch)
                 {
                     allowBranch = false;
 
                     goto target;
                 }
 
-                Group.Barrier();
+                //Group.Barrier();
 
                 //Multiply
                 instruction = LoadMultInstruction(ref startInstruction, BranchInstruction.Size + MultIntruction.Size * 6 + HiMultInstruction.Size * 1 + BasicInstruction.Size * 9);
