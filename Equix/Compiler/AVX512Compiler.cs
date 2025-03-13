@@ -203,111 +203,72 @@ namespace DrillX.Compiler
 
                         break;
                     case OpCode.UMulH:
-                        // Initialize constants and load inputs - can run in parallel
-                        code = EmitBytes(code, 0x62, 0x53, 0x3D, 0x48, 0x25, 0xC0, 0xFF); //vpternlogd zmm8,zmm8,zmm8,0xff //Sets zmm8 to all set bits
+                        code = EmitBytes(code, 0x62, 0x53, 0x3D, 0x48, 0x25, 0xC0, 0xFF); //vpternlogd zmm8,zmm8,zmm8,0xff -- Sets to all 1s
+                        code = EmitBytes(code, 0x62, 0xD1, 0xBD, 0x48, 0x73, 0xD0, 0x20); //vpsrlq zmm8,zmm8,0x20 
+
+
+
                         code = EmitBytes(code, 0x62, 0x71, 0xfd, (byte)(0x48 | maskRegister), 0x6f, (byte)(0xE8 | (instruction.Dst))); //vmovdqa64 zmm13,dst
                         code = EmitBytes(code, 0x62, 0x71, 0xfd, (byte)(0x48 | maskRegister), 0x6f, (byte)(0xF0 | (instruction.Src))); //vmovdqa64 zmm14,src
 
-
-                        // Prepare shuffled inputs for cross multiplication (can run in parallel with sign extraction)
                         code = EmitBytes(code,
-                            0x62, 0x51, 0x7D, 0x48, 0x70, 0xCD, 0xB1, //vpshufd zmm9, zmm13, 0xb1 //var a_hi = Avx512BW.Shuffle(a32, 0b10_11_00_01);
-                            0x62, 0x51, 0x7D, 0x48, 0x70, 0xD6, 0xB1  //vpshufd zmm10, zmm14, 0xb1 //var b_hi = Avx512BW.Shuffle(b32, 0b10_11_00_01);
-                        );
+                            0x62, 0x51, 0x7D, 0x48, 0x70, 0xCD, 0xB1, //vpshufd zmm9, zmm13, 0xb1
+                            0x62, 0x51, 0x7D, 0x48, 0x70, 0xD6, 0xB1, //vpshufd zmm10, zmm14 0xb1
+                            0x62, 0x51, 0x95, 0x48, 0xF4, 0xDE, //vpmuludq zmm11, zmm13, zmm14
+                            0x62, 0x51, 0xB5, 0x48, 0xF4, 0xE2, //vpmuludq zmm12, zmm9, zmm10
 
-                        // First wave of multiplications (can execute on multiple ports)
-                        code = EmitBytes(code,
-                            0x62, 0x51, 0x95, 0x48, 0xF4, 0xDE, //vpmuludq zmm11, zmm13, zmm14 (low * low) //var lo = Avx512BW.Multiply(a32, b32);
-                            0x62, 0x51, 0xB5, 0x48, 0xF4, 0xE2  //vpmuludq zmm12, zmm9, zmm10 (high * high) //var hi = Avx512BW.Multiply(a_hi, b_hi);
-                        );
+                            0x62, 0x51, 0x95, 0x48, 0xF4, 0xEA, //vpmuludq zmm13, zmm13, zmm10
+                            0x62, 0x51, 0x8D, 0x48, 0xF4, 0xF1, //vpmuludq zmm14 zmm14 zmm9
+                            0x62, 0xD1, 0xB5, 0x48, 0x73, 0xD3, 0x20, //vpsrlq zmm9, zmm11, 0x20
+                            0x62, 0x51, 0xB5, 0x48, 0xD4, 0xF6, //vpaddq zmm14 zmm9, zmm14
 
-                        // Cross products (while first wave processes)
-                        code = EmitBytes(code,
-                            0x62, 0xC1, 0x95, 0x48, 0xF4, 0xD2, //vpmuludq zmm18, zmm13, zmm10 (low * high) //var mid2 = Avx512BW.Multiply(a32, b_hi);
-                            0x62, 0xC1, 0x8D, 0x48, 0xF4, 0xD9  //vpmuludq zmm19, zmm14, zmm9 (high * low) //var mid1 = Avx512BW.Multiply(a_hi, b32);
-                        );
+                            0x62, 0x51, 0x8D, 0x48, 0xDB, 0xC8, //vpandq zmm9, zmm14, zmm8
+                            0x62, 0x51, 0xB5, 0x48, 0xD4, 0xED, //vpaddq zmm13, zmm9, zmm13
+                            0x62, 0xD1, 0x95, 0x48, 0x73, 0xD5, 0x20, //vpsrlq zmm13, zmm13, 0x20
+                            0x62, 0xD1, 0x8D, 0x48, 0x73, 0xD6, 0x20, //vpsrlq zmm14 zmm14 0x20
+                            0x62, 0x51, 0x95, 0x48, 0xD4, 0xEE, //vpaddq zmm13, zmm13, zmm14
+                            0x62, 0x51, 0x95, 0x48, 0xD4, 0xEC, //vpaddq zmm13, zmm13, zmm12
+                            0x62, 0x51, 0x95, 0x48, 0xDB, 0xF8 //vpandq zmm15, zmm13, zmm8 //mulHiResult
+                            );
 
-                        //Carry
-                        code = EmitBytes(code,
-                           0x62, 0xD1, 0xD5, 0x40, 0x73, 0xD3, 0x20 //vpsrlq zmm21, zmm11, 0x20 //var carry = Avx512BW.ShiftRightLogical(lo, 32);
-                        );
-
-                        //Right shifts mask
-                        code = EmitBytes(code, 0x62, 0xD1, 0xBD, 0x48, 0x73, 0xD0, 0x20); //vpsrlq zmm8,zmm8,0x20
-
-                        code = EmitBytes(code, 0x62, 0xA1, 0xE5, 0x40, 0xD4, 0xED); //vpaddq zmm21, zmm19, zmm21 //mid1WithCarry = Avx512BW.Add(mid1, carry);
-                        code = EmitBytes(code, 0x62, 0xC1, 0xD5, 0x40, 0xDB, 0xF8); //vpandq zmm23, zmm21, zmm8 //mid1Masked = Avx512BW.And(mid1WithCarry, mask32);
-                        code = EmitBytes(code, 0x62, 0xA1, 0xED, 0x40, 0xD4, 0xF7); //vpaddq zmm22, zmm18, zmm23  //mid2WithMasked = Avx512BW.Add(mid2, mid1Masked);
-
-                        code = EmitBytes(code, 0x62, 0xB1, 0xD5, 0x40, 0x73, 0xD5, 0x20); //vpsrlq zmm21, zmm21, 0x20 //var mid1Shifted = Avx512BW.ShiftRightLogical(mid1WithCarry, 32);
-                        code = EmitBytes(code, 0x62, 0xB1, 0xCD, 0x40, 0x73, 0xD6, 0x20); //vpsrlq zmm22, zmm22, 0x20 //var mid2Shifted = Avx512BW.ShiftRightLogical(mid2WithMasked, 32);
-
-                        //Final combination
-                        code = EmitBytes(code, 0x62, 0x31, 0xD5, 0x40, 0xD4, 0xDE); //vpaddq zmm11, zmm21, zmm22 //Avx512BW.Add(mid1Shifted, mid2Shifted)
-                        code = EmitBytes(code, 0x62, 0x51, 0xA5, 0x48, 0xD4, 0xEC); //vpaddq zmm13, zmm11, zmm12 //Avx512BW.Add(hi, ^)
-                        code = EmitBytes(code, 0x62, 0x51, 0x95, 0x48, 0xDB, 0xF8); //vpandq zmm15, zmm13, zmm8 //mulHiResult = Avx512BW.And(result, mask32);
-
-                        // Store result
                         code = EmitBytes(code, 0x62, 0xd1, 0xfd, (byte)(0x48 | maskRegister), 0x6f, (byte)(0xC5 | (instruction.Dst << 3))); //vmovdqa64 dst,zmm13
                         break;
                     case OpCode.SMulH:
-                        // Initialize constants and load inputs - can run in parallel
-                        code = EmitBytes(code, 0x62, 0x53, 0x3D, 0x48, 0x25, 0xC0, 0xFF); //vpternlogd zmm8,zmm8,zmm8,0xff //Sets zmm8 to all set bits
+                        code = EmitBytes(code, 0x62, 0x53, 0x3D, 0x48, 0x25, 0xC0, 0xFF); //vpternlogd zmm8,zmm8,zmm8,0xff -- Sets to all 1s
+                        code = EmitBytes(code, 0x62, 0xD1, 0xBD, 0x48, 0x73, 0xD0, 0x20); //vpsrlq zmm8,zmm8,0x20 
+
                         code = EmitBytes(code, 0x62, 0x71, 0xfd, (byte)(0x48 | maskRegister), 0x6f, (byte)(0xE8 | (instruction.Dst))); //vmovdqa64 zmm13,dst
                         code = EmitBytes(code, 0x62, 0x71, 0xfd, (byte)(0x48 | maskRegister), 0x6f, (byte)(0xF0 | (instruction.Src))); //vmovdqa64 zmm14,src
 
-                        // Extract sign bits early (can run while shuffles are preparing)
-                        code = EmitBytes(code, 0x62, 0xF1, 0xFD, 0x40, 0x72, (byte)(0xE0 | (instruction.Dst)), 0x3F); //vpsraq zmm16, dst, 0x3f //var t0 = Avx512BW.ShiftRightArithmetic(_a.AsInt64(), 63);
-                        code = EmitBytes(code, 0x62, 0xF1, 0xF5, 0x40, 0x72, (byte)(0xE0 | (instruction.Src)), 0x3F); //vpsraq zmm17, src, 0x3f //var r0 = Avx512BW.ShiftRightArithmetic(_b.AsInt64(), 63);
-
-                        // Prepare shuffled inputs for cross multiplication (can run in parallel with sign extraction)
                         code = EmitBytes(code,
-                            0x62, 0x51, 0x7D, 0x48, 0x70, 0xCD, 0xB1, //vpshufd zmm9, zmm13, 0xb1 //var a_hi = Avx512BW.Shuffle(a32, 0b10_11_00_01);
-                            0x62, 0x51, 0x7D, 0x48, 0x70, 0xD6, 0xB1  //vpshufd zmm10, zmm14, 0xb1 //var b_hi = Avx512BW.Shuffle(b32, 0b10_11_00_01);
-                        );
+                            0x62, 0x51, 0x7D, 0x48, 0x70, 0xCD, 0xB1, //vpshufd zmm9, zmm13, 0xb1
+                            0x62, 0x51, 0x7D, 0x48, 0x70, 0xD6, 0xB1, //vpshufd zmm10, zmm14 0xb1
+                            0x62, 0x51, 0x95, 0x48, 0xF4, 0xDE, //vpmuludq zmm11, zmm13, zmm14
+                            0x62, 0x51, 0xB5, 0x48, 0xF4, 0xE2, //vpmuludq zmm12, zmm9, zmm10
+                            0x62, 0x51, 0x8D, 0x48, 0xF4, 0xF1, //vpmuludq zmm14 zmm14 zmm9
 
-                        // First wave of multiplications (can execute on multiple ports)
-                        code = EmitBytes(code,
-                            0x62, 0x51, 0x95, 0x48, 0xF4, 0xDE, //vpmuludq zmm11, zmm13, zmm14 (low * low) //var lo = Avx512BW.Multiply(a32, b32);
-                            0x62, 0x51, 0xB5, 0x48, 0xF4, 0xE2  //vpmuludq zmm12, zmm9, zmm10 (high * high) //var hi = Avx512BW.Multiply(a_hi, b_hi);
-                        );
-
-                        // Cross products (while first wave processes)
-                        code = EmitBytes(code,
-                            0x62, 0xC1, 0x95, 0x48, 0xF4, 0xD2, //vpmuludq zmm18, zmm13, zmm10 (low * high) //var mid2 = Avx512BW.Multiply(a32, b_hi);
-                            0x62, 0xC1, 0x8D, 0x48, 0xF4, 0xD9  //vpmuludq zmm19, zmm14, zmm9 (high * low) //var mid1 = Avx512BW.Multiply(a_hi, b32);
-                        );
-
-                        //Carry
-                        code = EmitBytes(code,
-                           0x62, 0xD1, 0xD5, 0x40, 0x73, 0xD3, 0x20 //vpsrlq zmm21, zmm11, 0x20 //var carry = Avx512BW.ShiftRightLogical(lo, 32);
-                        );
-
-                        //Right shifts mask
-                        code = EmitBytes(code, 0x62, 0xD1, 0xBD, 0x48, 0x73, 0xD0, 0x20); //vpsrlq zmm8,zmm8,0x20
-
-                        code = EmitBytes(code, 0x62, 0xA1, 0xE5, 0x40, 0xD4, 0xED); //vpaddq zmm21, zmm19, zmm21 //mid1WithCarry = Avx512BW.Add(mid1, carry);
-                        code = EmitBytes(code, 0x62, 0xC1, 0xD5, 0x40, 0xDB, 0xF8); //vpandq zmm23, zmm21, zmm8 //mid1Masked = Avx512BW.And(mid1WithCarry, mask32);
-                        code = EmitBytes(code, 0x62, 0xA1, 0xED, 0x40, 0xD4, 0xF7); //vpaddq zmm22, zmm18, zmm23  //mid2WithMasked = Avx512BW.Add(mid2, mid1Masked);
-
-                        code = EmitBytes(code, 0x62, 0xB1, 0xD5, 0x40, 0x73, 0xD5, 0x20); //vpsrlq zmm21, zmm21, 0x20 //var mid1Shifted = Avx512BW.ShiftRightLogical(mid1WithCarry, 32);
-                        code = EmitBytes(code, 0x62, 0xB1, 0xCD, 0x40, 0x73, 0xD6, 0x20); //vpsrlq zmm22, zmm22, 0x20 //var mid2Shifted = Avx512BW.ShiftRightLogical(mid2WithMasked, 32);
-
-                        //Sign correction
-                        code = EmitBytes(code, 0x62, 0xC1, 0xFD, 0x40, 0xDB, 0xC6); //vpandq zmm16, zmm16, zmm14 //t0 = Avx512BW.And(t0, _b.AsInt64());
-                        code = EmitBytes(code, 0x62, 0xC1, 0xF5, 0x40, 0xDB, 0xCD); //vpandq zmm17, zmm17, zmm13 //r0 = Avx512BW.And(r0, _a.AsInt64());
-
-                        //Final combination
-                        code = EmitBytes(code, 0x62, 0x31, 0xD5, 0x40, 0xD4, 0xDE); //vpaddq zmm11, zmm21, zmm22 //Avx512BW.Add(mid1Shifted, mid2Shifted)
-                        code = EmitBytes(code, 0x62, 0x51, 0xA5, 0x48, 0xD4, 0xEC); //vpaddq zmm13, zmm11, zmm12 //Avx512BW.Add(hi, ^)
-
-                        code = EmitBytes(code, 0x62, 0x31, 0x95, 0x48, 0xFB, 0xE8); //vpsubq zmm13, zmm13, zmm16 //t0 = Avx512BW.Subtract(result.AsInt64(), t0);
-                        code = EmitBytes(code, 0x62, 0x31, 0x95, 0x48, 0xFB, 0xE9); //vpsubq zmm13, zmm13, zmm17 //result = Avx512BW.Subtract(t0, r0).AsUInt64();
-                        code = EmitBytes(code, 0x62, 0x51, 0x95, 0x48, 0xDB, 0xF8); //vpandq zmm15, zmm13, zmm8 //mulHiResult = Avx512BW.And(result, mask32);
+                            0x62, 0xD1, 0xB5, 0x48, 0x73, 0xD3, 0x20, //vpsrlq zmm9, zmm11, 0x20
+                            0x62, 0x51, 0x95, 0x48, 0xF4, 0xEA, //vpmuludq zmm13, zmm13, zmm10
+                            0x62, 0xF1, 0xAD, 0x48, 0x72, (byte)(0xE0 | (instruction.Dst)), 0x3F, //vpsraq  zmm10, dst, 0x3f --
+                            0x62, 0x51, 0xB5, 0x48, 0xD4, 0xF6, //vpaddq zmm14 zmm9, zmm14
+                            0x62, 0x51, 0x8D, 0x48, 0xDB, 0xC8, //vpandq zmm9, zmm14, zmm8
+                            0x62, 0x51, 0xB5, 0x48, 0xD4, 0xED, //vpaddq zmm13, zmm9, zmm13
+                            0x62, 0xD1, 0x95, 0x48, 0x73, 0xD5, 0x20, //vpsrlq zmm13, zmm13, 0x20
+                            0x62, 0xD1, 0x8D, 0x48, 0x73, 0xD6, 0x20, //vpsrlq zmm14 zmm14 0x20
+                            0x62, 0x51, 0x95, 0x48, 0xD4, 0xEE, //vpaddq zmm13, zmm13, zmm14
+                            0x62, 0x51, 0x95, 0x48, 0xD4, 0xEC //vpaddq zmm13, zmm13, zmm12
+                            );
 
 
-                        // Store result
+                        code = EmitBytes(code, 0x62, 0x71, 0xAD, 0x48, 0xDB, (byte)(0xD0 | (instruction.Src))); //vpandq  zmm10, zmm10, src
+                        code = EmitBytes(code, 0x62, 0x51, 0x95, 0x48, 0xFB, 0xD2); //vpsubq  zmm10, zmm13, zmm10
+                        code = EmitBytes(code, 0x62, 0xF1, 0xA5, 0x48, 0x72, (byte)(0xE0 | (instruction.Src)), 0x3F); //vpsraq  zmm10, src, 0x3f
+                        code = EmitBytes(code, 0x62, 0x71, 0xA5, 0x48, 0xDB, (byte)(0xD8 | (instruction.Dst))); //vpandq  zmm10, zmm10, dst
+
+                        code = EmitBytes(code, 0x62, 0x51, 0xAD, 0x48, 0xFB, 0xEB); //vpsubq zmm13,zmm10,zmm11 
+                        code = EmitBytes(code, 0x62, 0x51, 0x95, 0x48, 0xDB, 0xF8); //vpandq zmm15, zmm13, zmm8 //mulHiResult
                         code = EmitBytes(code, 0x62, 0xd1, 0xfd, (byte)(0x48 | maskRegister), 0x6f, (byte)(0xC5 | (instruction.Dst << 3))); //vmovdqa64 dst,zmm13
+
                         break;
                     case OpCode.Mul:
                         // Perform 64-bit unsigned multiply: vpmullq zmm{dst}, zmm{dst}, zmm{src}
