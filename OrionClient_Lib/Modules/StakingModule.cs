@@ -111,7 +111,10 @@ namespace OrionClientLib.Modules
             _currentStep = 0;
             _data = data;
 
-            await Setup();
+            if(!await Setup())
+            {
+                return (false, "Failed to pull required information from RPC");
+            }
 
             Directory.CreateDirectory(_historicalDataDirectory);
             string file = Path.Combine(_historicalDataDirectory, _settings.StakingViewSetting.StakingViewCacheFile);
@@ -165,19 +168,24 @@ namespace OrionClientLib.Modules
             }
         }
 
-        private async Task Setup()
+        private async Task<bool> Setup()
         {
             List<BoostInformation> boosts = OreProgram.Boosts;
             (Wallet wallet, string pubKey) = await _settings.GetWalletAsync();
 
             if (wallet == null && String.IsNullOrEmpty(pubKey))
             {
-                return;
+                return false;
             }
 
             _stakeInfo = boosts.Select(x => new StakeInformation(x, wallet?.Account.PublicKey ?? new PublicKey(pubKey))).ToList();
 
             var result = await SendWithRetry(() => _client.GetAccountInfoAsync(OreProgram.BoostDirectoryId, Solnet.Rpc.Types.Commitment.Processed));
+
+            if(result == null || !result.WasSuccessful)
+            {
+                return false;
+            }
 
             if(result != null)
             {
@@ -232,6 +240,8 @@ namespace OrionClientLib.Modules
                     }
                 }
             }
+
+            return true;
         }
 
         private async Task<bool> DisplayOptions()
