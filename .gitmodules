@@ -6,4 +6,4 @@
 	url = https://github.com/SL-x-TnT/Solnet.git
 [submodule "ILGPU"]
 	path = ILGPU
-	url = https://github.com/m4rs-mt/ILGPU.git
+	url = https://github.com/SL-x-TnT/ILGPU.git
