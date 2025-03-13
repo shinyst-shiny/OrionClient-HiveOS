@@ -23,8 +23,8 @@ namespace DrillX.Compiler
         public static readonly uint CodeSize = (uint)AlignSize(HashxProgramMaxSize * CompAvgInstrSize + CompReserveSize, CompPageSize);
 
 		private const int HashxProgramMaxSize = 512;
-		private const int CompReserveSize = 1024;
-		private const int CompAvgInstrSize = 5;
+		private const int CompReserveSize = 1024 * 8;
+		private const int CompAvgInstrSize = 8;
 		private const int CompPageSize = 4096;
 
 		private static int AlignSize(int pos, int align)

@@ -100,6 +100,21 @@ namespace DrillX
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool InitAVX512Compiler(Span<Instruction> instructions, nint programMemory)
+        {
+            _compiledCode = programMemory.ToPointer();
+
+            if (_compiledCode == null)
+            {
+                return false;
+            }
+
+            _compiledFunction = AVX512Compiler.HashCompileAVX512(instructions, (byte*)_compiledCode);
+
+            return _compiledCode != null && _compiledFunction != null;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DestroyCompiler(bool release = false)
         {
             if (release)

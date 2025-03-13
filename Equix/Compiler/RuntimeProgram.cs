@@ -339,6 +339,7 @@ namespace DrillX.Compiler
         {
             var output = rrr;
             rrr += 8;
+            Vector512<ulong>* holder = (Vector512<ulong>*)(rrr);
 
             var vv0 = Vector512.Create(key.V0);
             var vv1 = Vector512.Create(key.V1);
@@ -363,110 +364,65 @@ namespace DrillX.Compiler
             SipRound();
             SipRound();
 
-            {
-                var r0 = s0;
-                var r1 = s1;
-                var r2 = s2;
-                var r3 = s3;
+            var r0 = s0;
+            var r1 = s1;
+            var r2 = s2;
+            var r3 = s3;
 
-                s1 = Avx512BW.Xor(s1, Vector512.Create((ulong)0xdd));
+            s1 = Avx512BW.Xor(s1, Vector512.Create((ulong)0xdd));
 
-                SipRound();
-                SipRound();
-                SipRound();
-                SipRound();
+            SipRound();
+            SipRound();
+            SipRound();
+            SipRound();
 
+            var r4 = s0;
+            var r5 = s1;
+            var r6 = s2;
+            var r7 = s3;
 
-                var a = Avx512DQ.UnpackLow(r0, r1);
-                var b = Avx512DQ.UnpackLow(r2, r3);
-                var c = Avx512DQ.UnpackLow(s0, s1);
-                var d = Avx512DQ.UnpackLow(s2, s3);
+            //FUNCTION HERE
+            var sss = rrr;
 
-                var tt = Vector512.Create(0ul, 1, 8, 9, 2, 3, 10, 11);
+            r0.Store(sss); sss += 8;
+            r1.Store(sss); sss += 8;
+            r2.Store(sss); sss += 8;
+            r3.Store(sss); sss += 8;
+            r4.Store(sss); sss += 8;
+            r5.Store(sss); sss += 8;
+            r6.Store(sss); sss += 8;
+            r7.Store(sss); sss += 8;
 
-                var a_ = Avx512DQ.PermuteVar8x64x2(a, tt, b);
-                var c_ = Avx512DQ.PermuteVar8x64x2(c, tt, d);
+            func((ulong*)rrr);
 
-                tt = Vector512.Create(4ul, 5, 12, 13, 6, 7, 14, 15);
-                var b_ = Avx512DQ.PermuteVar8x64x2(a, tt, b);
-                var d_ = Avx512DQ.PermuteVar8x64x2(c, tt, d);
+            sss = rrr;
 
-                tt = Vector512.Create(0ul, 1, 2, 3, 8, 9, 10, 11);
-                var f0 = Avx512DQ.PermuteVar8x64x2(a_, tt, c_);
-                var f4 = Avx512DQ.PermuteVar8x64x2(b_, tt, d_);
+            r0 = Avx512BW.LoadVector512(sss); sss += 8;
+            r1 = Avx512BW.LoadVector512(sss); sss += 8;
+            r2 = Avx512BW.LoadVector512(sss); sss += 8;
+            r3 = Avx512BW.LoadVector512(sss); sss += 8;
+            r4 = Avx512BW.LoadVector512(sss); sss += 8;
+            r5 = Avx512BW.LoadVector512(sss); sss += 8;
+            r6 = Avx512BW.LoadVector512(sss); sss += 8;
+            r7 = Avx512BW.LoadVector512(sss); sss += 8;
 
-                tt = Vector512.Create(4ul, 5, 6, 7, 12, 13, 14, 15);
-                var f2 = Avx512DQ.PermuteVar8x64x2(a_, tt, c_);
-                var f6 = Avx512DQ.PermuteVar8x64x2(b_, tt, d_);
+            s0 = Avx512BW.Add(r0, vv0);
+            s1 = Avx512BW.Add(r1, vv1);
+            s2 = r2;
+            s3 = r3;
 
-                Avx512BW.Store(rrr, f0);
-                Avx512BW.Store(rrr + 16, f2);
-                Avx512BW.Store(rrr + 32, f4);
-                Avx512BW.Store(rrr + 48, f6);
+            SipRound();
 
-                a = Avx512DQ.UnpackHigh(r0, r1);
-                b = Avx512DQ.UnpackHigh(r2, r3);
-                c = Avx512DQ.UnpackHigh(s0, s1);
-                d = Avx512DQ.UnpackHigh(s2, s3);
+            var x = s0;
 
-                tt = Vector512.Create(0ul, 1, 8, 9, 2, 3, 10, 11);
-                a_ = Avx512DQ.PermuteVar8x64x2(a, tt, b);
-                c_ = Avx512DQ.PermuteVar8x64x2(c, tt, d);
+            s0 = r4;
+            s1 = r5;
+            s2 = Avx512BW.Add(r6, vv2);
+            s3 = Avx512BW.Add(r7, vv3);
 
-                tt = Vector512.Create(4ul, 5, 12, 13, 6, 7, 14, 15);
-                b_ = Avx512DQ.PermuteVar8x64x2(a, tt, b);
-                d_ = Avx512DQ.PermuteVar8x64x2(c, tt, d);
+            SipRound();
 
-                tt = Vector512.Create(0ul, 1, 2, 3, 8, 9, 10, 11);
-                var f1 = Avx512DQ.PermuteVar8x64x2(a_, tt, c_);
-                var f5 = Avx512DQ.PermuteVar8x64x2(b_, tt, d_);
-
-
-                tt = Vector512.Create(4ul, 5, 6, 7, 12, 13, 14, 15);
-                var f3 = Avx512DQ.PermuteVar8x64x2(a_, tt, c_);
-                var f7 = Avx512DQ.PermuteVar8x64x2(b_, tt, d_);
-
-                Avx512BW.Store(rrr + 8, f1);
-                Avx512BW.Store(rrr + 24, f3);
-                Avx512BW.Store(rrr + 40, f5);
-                Avx512BW.Store(rrr + 56, f7);
-            }
-
-            for (int i = 0; i < 8; i++)
-            {
-                var temp = rrr + 8 * i;
-                func(temp);
-
-                var r0 = temp[0];
-                var r1 = temp[1];
-                var r2 = temp[2];
-                var r3 = temp[3];
-                var r4 = temp[4];
-                var r5 = temp[5];
-                var r6 = temp[6];
-                var r7 = temp[7];
-
-                r0 += key.V0;
-                r1 += key.V1;
-                r6 += key.V2;
-                r7 += key.V3;
-
-                r0 += r1;
-                r0 = r0.Rol(32);
-                r2 += r3;
-                r3 = r3.Rol(16);
-                r3 ^= r2;
-                r0 += r3;
-
-                r4 += r5;
-                r6 += r7;
-                r7 = r7.Rol(16);
-                r7 ^= r6;
-                r4 = r4.Rol(32);
-                r4 += r7;
-
-                output[i] = r0 ^ r4;
-            }
+            Avx512BW.Xor(x, s0).Store(output);
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             void SipRound()

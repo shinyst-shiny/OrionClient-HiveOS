@@ -79,6 +79,11 @@ namespace OrionClientLib.Modules.Staking
                     prevTransaction = transaction;
                 }
 
+                if(startTransaction == null)
+                {
+                    return;
+                }
+
                 //Final checkpoint
                 historicalCheckpoints.Add(new HistoricalCheckpoint
                 {
