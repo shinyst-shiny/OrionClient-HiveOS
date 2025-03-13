@@ -92,7 +92,7 @@ namespace OrionClientLib.Modules
                 List<CoreInfo> coreInformation = SystemInformation.GetCoreInformation();
 
                 //Only use physical cores
-                if(coreInformation.Count >= _currentData.Settings.CPUSetting.CPUThreads)
+                if(_currentData.Settings.CPUSetting.CPUThreads > 0 && coreInformation.Count >= _currentData.Settings.CPUSetting.CPUThreads)
                 {
                     nint processorMask = 0;
                     nint fullMask = 0;
@@ -179,7 +179,7 @@ namespace OrionClientLib.Modules
                 List<CoreInfo> coreInformation = SystemInformation.GetCoreInformation();
 
                 //Only use physical cores
-                if (coreInformation.Count >= _currentData.Settings.CPUSetting.CPUThreads)
+                if (_currentData.Settings.CPUSetting.CPUThreads > 0 && coreInformation.Count >= _currentData.Settings.CPUSetting.CPUThreads)
                 {
                     nint processorMask = 0;
                     nint fullMask = 0;

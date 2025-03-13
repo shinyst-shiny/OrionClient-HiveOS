@@ -17,7 +17,7 @@ namespace OrionClientLib.Hashers.CPU
     public unsafe class AVX512CPUHasher : BaseCPUHasher
     {
         public override string Name => "Full AVX512";
-        public override string Description => "C#/C Drillx implementation with full AVX512 optimizations";
+        public override string Description => "C#/C Drillx implementation with full AVX512 optimizations [[[green]Fastest[/]]]";
 
         protected override void ExecuteThread(Tuple<int, int> range, ParallelLoopState loopState, ConcurrentQueue<Exception> exceptions)
         {

@@ -205,7 +205,7 @@ namespace OrionClientLib.Modules
                     return;
                 }
 
-                if (data.Settings.CPUSetting.CPUThreads <= coreInformation.Count)
+                if (data.Settings.CPUSetting.CPUThreads > 0 && data.Settings.CPUSetting.CPUThreads <= coreInformation.Count)
                 {
                     nint processorMask = 0;
                     nint fullMask = 0;
@@ -232,7 +232,7 @@ namespace OrionClientLib.Modules
                     return;
                 }
 
-                if (data.Settings.CPUSetting.CPUThreads <= coreInformation.Count)
+                if (data.Settings.CPUSetting.CPUThreads > 0 && data.Settings.CPUSetting.CPUThreads <= coreInformation.Count)
                 {
                     nint processorMask = 0;
                     nint fullMask = 0;

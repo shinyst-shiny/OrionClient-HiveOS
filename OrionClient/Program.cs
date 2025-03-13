@@ -153,7 +153,7 @@ namespace OrionClient
             AddSupportedHasher(new ManagedCPUHasher());
             AddSupportedHasher(new HybridCPUHasher());
             AddSupportedHasher(new HybridCPUHasherAVX2());
-            AddSupportedHasher(new HybridCPUHasherAVX512());
+            //AddSupportedHasher(new HybridCPUHasherAVX512());
             AddSupportedHasher(new AVX512CPUHasher());
             AddSupportedHasher(new NativeCPUHasher());
             AddSupportedHasher(new NativeCPUHasherAVX2());
