@@ -196,7 +196,7 @@ namespace OrionClientLib.Pools
 
             try
             {
-                using var response = await _client.GetAsync($"/miner/{endpoint}?pubkey={_publicKey}", token);
+                using var response = await _client.GetAsync($"/miner/{endpoint}?pubkey={_publicKey}");
 
                 if (response.StatusCode == HttpStatusCode.BadRequest)
                 {
@@ -231,7 +231,8 @@ namespace OrionClientLib.Pools
             CoalHQPoolSubmissionResponse submissionResponse = new CoalHQPoolSubmissionResponse();
             submissionResponse.Deserialize(buffer);
 
-            CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            //Not using it right now
+            CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
             //This data takes ~20s to update properly, so everything is off by 1 update
             await RefreshStakeBalancesAsync(false, cts.Token);

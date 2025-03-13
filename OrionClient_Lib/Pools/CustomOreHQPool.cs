@@ -101,7 +101,8 @@ namespace OrionClientLib.Pools
                     //Initialize client
                     _client = new HttpClient
                     {
-                        BaseAddress = new Uri($"https://{WebsocketUrl.Host}")
+                        BaseAddress = new Uri($"https://{WebsocketUrl.Host}"),
+                        Timeout = TimeSpan.FromSeconds(5)
                     };
                 }
             }
