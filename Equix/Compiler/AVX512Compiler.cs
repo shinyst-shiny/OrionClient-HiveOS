@@ -162,7 +162,7 @@ namespace DrillX.Compiler
                 Instruction? nextInstruction = i < 510 ? instructions[i + 1] : null;
 
                 //Branches and Target is always surrounded with a multiply
-                if (nextInstruction?.Type == OpCode.AddShift)
+                if (nextInstruction?.Type == OpCode.AddShift && nextInstruction?.Operand != 0)
                 {
                     if (nextInstruction?.Src != instruction.Dst)
                     {
@@ -297,11 +297,18 @@ namespace DrillX.Compiler
                         }
                         else
                         {
-                            //zmm8 = src << operand
-                            code = EmitBytes(code, 0x62, 0xf1, 0xbd, (byte)(0x48 | maskRegister), 0x73, (byte)(0xF0 | instruction.Src), (byte)instruction.Operand);
+                            if (instruction.Operand == 0)
+                            {
+                                code = EmitBytes(code, 0x62, 0xF1, (byte)(0xFD - (instruction.Dst << 3)), (byte)(0x48 | maskRegister), 0xd4, (byte)(0xC0 | (instruction.Dst << 3 | instruction.Src)));
+                            }
+                            else
+                            {
+                                //zmm8 = src << operand
+                                code = EmitBytes(code, 0x62, 0xf1, 0xbd, (byte)(0x48 | maskRegister), 0x73, (byte)(0xF0 | instruction.Src), (byte)instruction.Operand);
 
-                            //dst = dst + zmm8
-                            code = EmitBytes(code, 0x62, 0xd1, (byte)(0xFD - (instruction.Dst << 3)), (byte)(0x48 | maskRegister), 0xd4, (byte)(0xC0 | (instruction.Dst << 3)));
+                                //dst = dst + zmm8
+                                code = EmitBytes(code, 0x62, 0xd1, (byte)(0xFD - (instruction.Dst << 3)), (byte)(0x48 | maskRegister), 0xd4, (byte)(0xC0 | (instruction.Dst << 3)));
+                            }
                         }
                         break;
                     case OpCode.Sub:
