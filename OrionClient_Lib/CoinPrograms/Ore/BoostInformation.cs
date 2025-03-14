@@ -96,10 +96,6 @@ namespace OrionClientLib.CoinPrograms.Ore
                 lockedProfit = lockedProfit * (1_000_000_000_000 - lockedFundRatio) / 1_000_000_000_000;
 
                 return (ulong)(new UInt128(0, tokenAmount) * new UInt128(0, vaultAmount) / (mintAmount - (ulong)lockedProfit));
-
-                //LP * Vault / tttt
-
-                return 0;
             }
         }
     }

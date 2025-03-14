@@ -65,13 +65,13 @@ namespace OrionClientLib.Modules.SettingsData
             return Options.Contains((T)data);
         }
 
-        private List<T> GetExtendedClasses<T>(params object[] constructorArgs) 
+        private List<C> GetExtendedClasses<C>(params object[] constructorArgs) 
         {
-            List<T> objects = new List<T>();
+            List<C> objects = new List<C>();
 
-            foreach (Type type in Assembly.GetAssembly(typeof(T)).GetTypes().Where(myType => myType.IsClass && !myType.IsAbstract && myType.IsSubclassOf(typeof(T))))
+            foreach (Type type in Assembly.GetAssembly(typeof(C)).GetTypes().Where(myType => myType.IsClass && !myType.IsAbstract && myType.IsSubclassOf(typeof(C))))
             {
-                objects.Add((T)Activator.CreateInstance(type, constructorArgs));
+                objects.Add((C)Activator.CreateInstance(type, constructorArgs));
             }
 
             return objects;

@@ -54,7 +54,7 @@ namespace OrionClient
         private static Table _logTable;
 
         private static string _message = String.Empty;
-        private static string _version = "1.4.1.0";
+        private static string _version = "1.5.0.0";
         private static GithubApi.Data _updateData;
         private static string _cudaLocation = String.Empty;
         private static OrionEventHandler _eventHandler;
@@ -255,7 +255,7 @@ namespace OrionClient
                 },
                 async errs =>
                 {
-                    return false;
+                    return await Task.FromResult(false);
                 });
 
 

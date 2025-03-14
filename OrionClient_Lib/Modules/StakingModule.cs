@@ -703,7 +703,7 @@ namespace OrionClientLib.Modules
 
                 return true;
             }
-            catch(Exception ex)
+            catch(Exception)
             {
                 _logger.Log(LogLevel.Warn, $"Failed to save historical data");
 
