@@ -1,30 +1,18 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
-using System.Runtime.CompilerServices;
-using System.Security;
+﻿using Equix.Compiler;
 using System.Diagnostics;
-using System.Runtime.Intrinsics.X86;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Security;
 
 namespace DrillX.Compiler
 {
-    public unsafe class AVX512Compiler
+    public unsafe class AVX512Compiler : BaseCompiler
     {
+        private const int VectorSize = sizeof(ulong) * 8;
+
         [SuppressUnmanagedCodeSecurity]
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void CompiledVectorHash(ulong* r);
-
-        public static readonly uint CodeSize = (uint)AlignSize(HashxProgramMaxSize * CompAvgInstrSize + CompReserveSize, CompPageSize);
-
-        private const int HashxProgramMaxSize = 512;
-        private const int CompReserveSize = 1024 * 8;
-        private const int CompAvgInstrSize = 8; // Increased due to AVX-512 instruction length
-        private const int CompPageSize = 4096;
-
-        private static int AlignSize(int pos, int align)
-        {
-            return ((((pos) - 1) / (align) + 1) * (align));
-        }
 
         // AVX-512 prologue for Windows - preserves registers and loads vectors
         public readonly static byte[] avx512Prologue_Windows = new byte[]
@@ -125,9 +113,41 @@ namespace DrillX.Compiler
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static byte* EmitU64(byte* p, ulong x) { *(ulong*)p = x; p += 8; return p; }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void EmitConstData(byte* p, ulong x)
+        {
+            *((ulong*)p + 0) = x;
+            *((ulong*)p + 1) = x;
+            *((ulong*)p + 2) = x;
+            *((ulong*)p + 3) = x;
+            *((ulong*)p + 4) = x;
+            *((ulong*)p + 5) = x;
+            *((ulong*)p + 6) = x;
+            *((ulong*)p + 7) = x;
+        }
+
         public static delegate* unmanaged[Cdecl]<ulong*, void> HashCompileAVX512(Span<Instruction> instructions, byte* code)
         {
+            //Add constant data
+            byte* constDataStart = code + CodeSize;
+            byte* constDataEnd = constDataStart;
+
+
+            for (int i = instructions.Length - 1; i >= 0; i--)
+            {
+                var instruction = instructions[i];
+
+                if (instruction.Type == OpCode.AddConst || instruction.Type == OpCode.XorConst || instruction.Type == OpCode.Branch)
+                {
+                    constDataStart -= VectorSize;
+
+                    //Emit 8 each
+                    EmitConstData(constDataStart, (ulong)instruction.Operand);
+                }
+            }
+
             byte* codeStart = code;
+            byte* constDataLoc = constDataStart;
 
             // Emit OS-specific prologue
             if (OperatingSystem.IsWindows())
@@ -143,8 +163,6 @@ namespace DrillX.Compiler
                 code += avx512Prologue_Linux.Length;
             }
 
-            byte* target = null;
-
             Debug.Assert(instructions.Length == 512);
             int isBreak = 0;
 
@@ -152,119 +170,121 @@ namespace DrillX.Compiler
             code = EmitBytes(code, 0xC5, 0xEC, 0x46, 0xD2); //Set k2 to 1s
             code = EmitBytes(code, 0x49, 0xC7, 0xC0, 0x00, 0x00, 0x00, 0x00); //Sets isBranched to 0
 
+            //zmm24 = 0xFFFFFFFF
+            code = EmitBytes(code, 0x62, 0x03, 0x3D, 0x40, 0x25, 0xC0, 0xFF); //vpternlogd zmm24,zmm24,zmm24,0xff -- Sets to all 1s
+            code = EmitBytes(code, 0x62, 0x91, 0xBD, 0x40, 0x73, 0xD0, 0x20); //vpsrlq zmm24,zmm24,0x20 
+            code = EmitBytes(code, 0x62, 0x01, 0xB5, 0x40, 0xEF, 0xC9); //vpxorq zmm25,zmm25,zmm25 
+
+
             byte maskRegister = 0;
+            byte* targetStart = default;
+            byte* targetConstDataLoc = default;
             int counter = 0;
-            bool earlyAddShift = false;
+            byte* tester = null;
 
             for (int i = 0; i < instructions.Length; i++)
             {
                 var instruction = instructions[i];
-                Instruction? nextInstruction = i < 510 ? instructions[i + 1] : null;
-
-                //Branches and Target is always surrounded with a multiply
-                if (nextInstruction?.Type == OpCode.AddShift && nextInstruction?.Operand != 0)
-                {
-                    if (nextInstruction?.Src != instruction.Dst)
-                    {
-                        earlyAddShift = true;
-
-                        //We can shift the source early
-                        code = EmitBytes(code, 0x62, 0xf1, 0x8d, (byte)(0x40 | maskRegister), 0x73, (byte)(0xF0 | nextInstruction.Value.Src), (byte)nextInstruction.Value.Operand); //vpsllq zmm30,src,operand 
-                    }
-                }
 
                 switch (instruction.Type)
                 {
                     case OpCode.Target:
-                        target = code;
-                        maskRegister = 1;
+                        maskRegister = 0;
+                        targetStart = code;
+                        targetConstDataLoc = constDataLoc;
                         break;
                     case OpCode.Branch:
-                        code = EmitBytes(code, 0x4D, 0x85, 0xC0); //test r8, r8 
-                        code = EmitBytes(code, 0x75, 0x3D); //We're already branched, so jump to mov r8, 0
+                        if (targetStart != default)
+                        {
+                            var branchSize = (int)(code - targetStart) - 6; //Minus 6 for the unneeded mulHiResult calculation
+                            //First time encountering branch
+                            targetStart = default;
 
+                            //Get branch mask
+                            code = EmitBytes(code, 0x62, 0x71, 0x85, 0x48, 0xDB, 0x05); //vpandq zmm8, zmm15, operand
+                            code = EmitU32(code, (uint)(constDataLoc - code - 4));
 
-                        code = EmitBytes(code, 0x48, 0xb8); //movabs rax, OPERAND
-                        code = EmitU64(code, (ulong)instruction.Operand);
+                            code = EmitBytes(code, 0x62, 0xD2, 0xBE, 0x48, 0x27, 0xD0); //vptestnmq k2,zmm8,zmm8 //Detect which values need to be branched (set to 1)
+                            code = EmitBytes(code, 0xC5, 0xED, 0x41, 0xD1); //kandb  k2,k2,k1 //Remove any that have already branched
+                            code = EmitBytes(code, 0xC5, 0xF9, 0x98, 0xD2); //kortestb k2, k2 //Check if we can fully skip this branch
+                            code = EmitBytes(code, 0x0F, 0x84); //je
+                            //335
+                            code = EmitU32(code, (uint)(branchSize + 100)); //Skip current instruction (4 bytes), branch size, and 48*2 for the store/restore
 
-                        code = EmitBytes(code, 0x62, 0x72, 0xFD, 0x48, 0x7C, 0xC8); //vpbroadcastq zmm9,rax
-                        code = EmitBytes(code, 0x62, 0x51, 0x85, 0x48, 0xDB, 0xC1); //vpandq zmm8, zmm15, zmm9
+                            tester = code;
 
-                        code = EmitBytes(code, 0x62, 0x51, 0xB5, 0x48, 0xEF, 0xC9); //vpxorq zmm9,zmm9,zmm9 
+                            //Store to temp variables
+                            code = EmitBytes(code,
+                                0x62, 0xE1, 0xFD, 0x48, 0x6F, 0xC0,
+                                0x62, 0xE1, 0xFD, 0x48, 0x6F, 0xC9,
+                                0x62, 0xE1, 0xFD, 0x48, 0x6F, 0xD2,
+                                0x62, 0xE1, 0xFD, 0x48, 0x6F, 0xDB,
+                                0x62, 0xE1, 0xFD, 0x48, 0x6F, 0xE4,
+                                0x62, 0xE1, 0xFD, 0x48, 0x6F, 0xED,
+                                0x62, 0xE1, 0xFD, 0x48, 0x6F, 0xF6,
+                                0x62, 0xE1, 0xFD, 0x48, 0x6F, 0xFF);
 
-
-                        code = EmitBytes(code, 0x62, 0xD3, 0xBD, 0x48, 0x1F, 0xC9, 0x00); //vpcmpeqq k1,zmm8,zmm9 
-
-                        code = EmitBytes(code, 0xC5, 0xF4, 0x41, 0xCA); //kandw k1, k1, k2 
-                        code = EmitBytes(code, 0xC5, 0xF8, 0x98, 0xC9); //kortestw k1, k1
-                        code = EmitBytes(code, 0x74, 0x17); //Skip branch
-
-
-
-                        code = EmitBytes(code, 0xC5, 0xF5, 0x42, 0xD2); //kandnb k2, k1, k2
-                        code = EmitBytes(code, 0x49, 0xC7, 0xC0, 0x01, 0x00, 0x00, 0x00); //mov r8, 1
-
-                        var offset = (uint)(target - code - 5);
-
-                        code = EmitByte(code, 0xE9); //jmp Offset
-                        code = EmitU32(code, offset);
-
-                        code = EmitBytes(code, 0x49, 0xC7, 0xC0, 0x00, 0x00, 0x00, 0x00); //mov r8, 0
-                        code = EmitBytes(code, 0xC5, 0xF4, 0x46, 0xC9); //Set k1 to 1s
+                            //Go back to target + 1
+                            i -= 16;
+                            constDataLoc = targetConstDataLoc;
+                        }
+                        else
+                        {
+                            constDataLoc += VectorSize;
+                            //Restore variables
+                            code = EmitBytes(code,
+                                0x62, 0xF2, 0xFD, 0x42, 0x64, 0xC0,
+                                0x62, 0xF2, 0xF5, 0x42, 0x64, 0xC9,
+                                0x62, 0xF2, 0xED, 0x42, 0x64, 0xD2,
+                                0x62, 0xF2, 0xE5, 0x42, 0x64, 0xDB,
+                                0x62, 0xF2, 0xDD, 0x42, 0x64, 0xE4,
+                                0x62, 0xF2, 0xD5, 0x42, 0x64, 0xED,
+                                0x62, 0xF2, 0xCD, 0x42, 0x64, 0xF6,
+                                0x62, 0xF2, 0xC5, 0x42, 0x64, 0xFF);
+                            code = EmitBytes(code, 0xC5, 0xED, 0x42, 0xC9); //kandnb k1, k2, k1
+                            var asdfadsf = (int)(code - tester);
+                        }
 
                         maskRegister = 0;
-
                         break;
                     case OpCode.UMulH:
-                        code = EmitBytes(code, 0x62, 0x53, 0x3D, 0x48, 0x25, 0xC0, 0xFF); //vpternlogd zmm8,zmm8,zmm8,0xff -- Sets to all 1s
-                        code = EmitBytes(code, 0x62, 0xD1, 0xBD, 0x48, 0x73, 0xD0, 0x20); //vpsrlq zmm8,zmm8,0x20 
-
-
-
-                        code = EmitBytes(code, 0x62, 0x71, 0xfd, (byte)(0x48 | maskRegister), 0x6f, (byte)(0xE8 | (instruction.Dst))); //vmovdqa64 zmm13,dst
-                        code = EmitBytes(code, 0x62, 0x71, 0xfd, (byte)(0x48 | maskRegister), 0x6f, (byte)(0xF0 | (instruction.Src))); //vmovdqa64 zmm14,src
-
                         code = EmitBytes(code,
-                            0x62, 0x51, 0x7D, 0x48, 0x70, 0xCD, 0xB1, //vpshufd zmm9, zmm13, 0xb1
-                            0x62, 0x51, 0x7D, 0x48, 0x70, 0xD6, 0xB1, //vpshufd zmm10, zmm14 0xb1
-                            0x62, 0x51, 0x95, 0x48, 0xF4, 0xDE, //vpmuludq zmm11, zmm13, zmm14
+                            0x62, 0x71, 0x7D, 0x48, 0x70, (byte)(0xC8 | instruction.Dst), 0xB1, //vpshufd zmm9, dst, 0xb1
+                            0x62, 0x71, 0x7D, 0x48, 0x70, (byte)(0xD0 | instruction.Src), 0xB1, //vpshufd zmm10, src 0xb1
+                            0x62, 0x71, (byte)(0xFD - (instruction.Dst << 3)), 0x48, 0xF4, (byte)(0xD8 | instruction.Src), //vpmuludq zmm11, dst, src
                             0x62, 0x51, 0xB5, 0x48, 0xF4, 0xE2, //vpmuludq zmm12, zmm9, zmm10
 
-                            0x62, 0x51, 0x95, 0x48, 0xF4, 0xEA, //vpmuludq zmm13, zmm13, zmm10
-                            0x62, 0x51, 0x8D, 0x48, 0xF4, 0xF1, //vpmuludq zmm14 zmm14 zmm9
+                            0x62, 0x51, (byte)(0xFD - (instruction.Dst << 3)), 0x48, 0xF4, 0xEA, //vpmuludq zmm13, dst, zmm10
+                            0x62, 0x51, (byte)(0xFD - (instruction.Src << 3)), 0x48, 0xF4, 0xF1, //vpmuludq zmm14, src, zmm9
                             0x62, 0xD1, 0xB5, 0x48, 0x73, 0xD3, 0x20, //vpsrlq zmm9, zmm11, 0x20
                             0x62, 0x51, 0xB5, 0x48, 0xD4, 0xF6, //vpaddq zmm14 zmm9, zmm14
 
-                            0x62, 0x51, 0x8D, 0x48, 0xDB, 0xC8, //vpandq zmm9, zmm14, zmm8
+                            0x62, 0x11, 0x8D, 0x48, 0xDB, 0xC8, //vpandq zmm9, zmm14, zmm24
                             0x62, 0x51, 0xB5, 0x48, 0xD4, 0xED, //vpaddq zmm13, zmm9, zmm13
                             0x62, 0xD1, 0x95, 0x48, 0x73, 0xD5, 0x20, //vpsrlq zmm13, zmm13, 0x20
                             0x62, 0xD1, 0x8D, 0x48, 0x73, 0xD6, 0x20, //vpsrlq zmm14 zmm14 0x20
                             0x62, 0x51, 0x95, 0x48, 0xD4, 0xEE, //vpaddq zmm13, zmm13, zmm14
-                            0x62, 0x51, 0x95, 0x48, 0xD4, 0xEC, //vpaddq zmm13, zmm13, zmm12
-                            0x62, 0x51, 0x95, 0x48, 0xDB, 0xF8 //vpandq zmm15, zmm13, zmm8 //mulHiResult
+                            0x62, 0xD1, 0x95, 0x48, 0xD4, (byte)(0xC4 | instruction.Dst << 3) //vpaddq dst, zmm13, zmm12
                             );
 
-                        code = EmitBytes(code, 0x62, 0xd1, 0xfd, (byte)(0x48 | maskRegister), 0x6f, (byte)(0xC5 | (instruction.Dst << 3))); //vmovdqa64 dst,zmm13
+                        if (targetStart != default)
+                        {
+                            code = EmitBytes(code, 0x62, 0x11, (byte)(0xFD - (instruction.Dst << 3)), 0x48, 0xDB, 0xF8); //vpandq zmm15, dst, zmm24 //mulHiResult
+                        }
                         break;
                     case OpCode.SMulH:
-                        code = EmitBytes(code, 0x62, 0x53, 0x3D, 0x48, 0x25, 0xC0, 0xFF); //vpternlogd zmm8,zmm8,zmm8,0xff -- Sets to all 1s
-                        code = EmitBytes(code, 0x62, 0xD1, 0xBD, 0x48, 0x73, 0xD0, 0x20); //vpsrlq zmm8,zmm8,0x20 
-
-                        code = EmitBytes(code, 0x62, 0x71, 0xfd, (byte)(0x48 | maskRegister), 0x6f, (byte)(0xE8 | (instruction.Dst))); //vmovdqa64 zmm13,dst
-                        code = EmitBytes(code, 0x62, 0x71, 0xfd, (byte)(0x48 | maskRegister), 0x6f, (byte)(0xF0 | (instruction.Src))); //vmovdqa64 zmm14,src
-
                         code = EmitBytes(code,
-                            0x62, 0x51, 0x7D, 0x48, 0x70, 0xCD, 0xB1, //vpshufd zmm9, zmm13, 0xb1
-                            0x62, 0x51, 0x7D, 0x48, 0x70, 0xD6, 0xB1, //vpshufd zmm10, zmm14 0xb1
-                            0x62, 0x51, 0x95, 0x48, 0xF4, 0xDE, //vpmuludq zmm11, zmm13, zmm14
+                            0x62, 0x71, 0x7D, 0x48, 0x70, (byte)(0xC8 | instruction.Dst), 0xB1, //vpshufd zmm9, dst, 0xb1
+                            0x62, 0x71, 0x7D, 0x48, 0x70, (byte)(0xD0 | instruction.Src), 0xB1, //vpshufd zmm10, src 0xb1
+                            0x62, 0x71, (byte)(0xFD - (instruction.Dst << 3)), 0x48, 0xF4, (byte)(0xD8 | instruction.Src), //vpmuludq zmm11, dst, src
                             0x62, 0x51, 0xB5, 0x48, 0xF4, 0xE2, //vpmuludq zmm12, zmm9, zmm10
-                            0x62, 0x51, 0x8D, 0x48, 0xF4, 0xF1, //vpmuludq zmm14 zmm14 zmm9
+                            0x62, 0x51, (byte)(0xFD - (instruction.Src << 3)), 0x48, 0xF4, 0xF1, //vpmuludq zmm14, src, zmm9
 
                             0x62, 0xD1, 0xB5, 0x48, 0x73, 0xD3, 0x20, //vpsrlq zmm9, zmm11, 0x20
-                            0x62, 0x51, 0x95, 0x48, 0xF4, 0xEA, //vpmuludq zmm13, zmm13, zmm10
+                            0x62, 0x51, (byte)(0xFD - (instruction.Dst << 3)), 0x48, 0xF4, 0xEA, //vpmuludq zmm13, dst, zmm10
                             0x62, 0xF1, 0xAD, 0x48, 0x72, (byte)(0xE0 | (instruction.Dst)), 0x3F, //vpsraq  zmm10, dst, 0x3f --
                             0x62, 0x51, 0xB5, 0x48, 0xD4, 0xF6, //vpaddq zmm14 zmm9, zmm14
-                            0x62, 0x51, 0x8D, 0x48, 0xDB, 0xC8, //vpandq zmm9, zmm14, zmm8
+                            0x62, 0x11, 0x8D, 0x48, 0xDB, 0xC8, //vpandq zmm9, zmm14, zmm24
                             0x62, 0x51, 0xB5, 0x48, 0xD4, 0xED, //vpaddq zmm13, zmm9, zmm13
                             0x62, 0xD1, 0x95, 0x48, 0x73, 0xD5, 0x20, //vpsrlq zmm13, zmm13, 0x20
                             0x62, 0xD1, 0x8D, 0x48, 0x73, 0xD6, 0x20, //vpsrlq zmm14 zmm14 0x20
@@ -278,9 +298,12 @@ namespace DrillX.Compiler
                         code = EmitBytes(code, 0x62, 0xF1, 0xA5, 0x48, 0x72, (byte)(0xE0 | (instruction.Src)), 0x3F); //vpsraq  zmm10, src, 0x3f
                         code = EmitBytes(code, 0x62, 0x71, 0xA5, 0x48, 0xDB, (byte)(0xD8 | (instruction.Dst))); //vpandq  zmm10, zmm10, dst
 
-                        code = EmitBytes(code, 0x62, 0x51, 0xAD, 0x48, 0xFB, 0xEB); //vpsubq zmm13,zmm10,zmm11 
-                        code = EmitBytes(code, 0x62, 0x51, 0x95, 0x48, 0xDB, 0xF8); //vpandq zmm15, zmm13, zmm8 //mulHiResult
-                        code = EmitBytes(code, 0x62, 0xd1, 0xfd, (byte)(0x48 | maskRegister), 0x6f, (byte)(0xC5 | (instruction.Dst << 3))); //vmovdqa64 dst,zmm13
+                        code = EmitBytes(code, 0x62, 0xD1, 0xAD, 0x48, 0xFB, (byte)(0xC3 | instruction.Dst << 3)); //vpsubq zmm13,zmm10,zmm11
+
+                        if (targetStart != default)
+                        {
+                            code = EmitBytes(code, 0x62, 0x11, (byte)(0xFD - (instruction.Dst << 3)), 0x48, 0xDB, 0xF8); //vpandq zmm15, dst, zmm24 //mulHiResult
+                        }
 
                         break;
                     case OpCode.Mul:
@@ -290,25 +313,17 @@ namespace DrillX.Compiler
                         //isBreak = true;
                         break;
                     case OpCode.AddShift:
-                        if (earlyAddShift)
+                        if (instruction.Operand == 0)
                         {
-                            earlyAddShift = false;
-                            code = EmitBytes(code, 0x62, 0x91, (byte)(0xFD - (instruction.Dst << 3)), (byte)(0x48 | maskRegister), 0xd4, (byte)(0xC6 | (instruction.Dst << 3)));
+                            code = EmitBytes(code, 0x62, 0xF1, (byte)(0xFD - (instruction.Dst << 3)), (byte)(0x48 | maskRegister), 0xd4, (byte)(0xC0 | (instruction.Dst << 3 | instruction.Src)));
                         }
                         else
                         {
-                            if (instruction.Operand == 0)
-                            {
-                                code = EmitBytes(code, 0x62, 0xF1, (byte)(0xFD - (instruction.Dst << 3)), (byte)(0x48 | maskRegister), 0xd4, (byte)(0xC0 | (instruction.Dst << 3 | instruction.Src)));
-                            }
-                            else
-                            {
-                                //zmm8 = src << operand
-                                code = EmitBytes(code, 0x62, 0xf1, 0xbd, (byte)(0x48 | maskRegister), 0x73, (byte)(0xF0 | instruction.Src), (byte)instruction.Operand);
+                            //zmm8 = src << operand
+                            code = EmitBytes(code, 0x62, 0xf1, 0xbd, (byte)(0x48 | maskRegister), 0x73, (byte)(0xF0 | instruction.Src), (byte)instruction.Operand);
 
-                                //dst = dst + zmm8
-                                code = EmitBytes(code, 0x62, 0xd1, (byte)(0xFD - (instruction.Dst << 3)), (byte)(0x48 | maskRegister), 0xd4, (byte)(0xC0 | (instruction.Dst << 3)));
-                            }
+                            //dst = dst + zmm8
+                            code = EmitBytes(code, 0x62, 0xd1, (byte)(0xFD - (instruction.Dst << 3)), (byte)(0x48 | maskRegister), 0xd4, (byte)(0xC0 | (instruction.Dst << 3)));
                         }
                         break;
                     case OpCode.Sub:
@@ -324,75 +339,29 @@ namespace DrillX.Compiler
                         break;
                     case OpCode.AddConst:
                         {
-                            if (nextInstruction?.Type == OpCode.XorConst)
-                            {
-                                //movabs rax, operand
-                                code = EmitBytes(code, 0x48, 0xb8);
-                                code = EmitU64(code, (ulong)instruction.Operand);
+                            code = EmitBytes(code, 0x62, 0xf1, (byte)(0xFD - (instruction.Dst << 3)), (byte)(0x48 | maskRegister), 0xd4, (byte)(0x05 | (instruction.Dst << 3)));
+                            code = EmitU32(code, (uint)(constDataLoc - code - 4));
 
-                                code = EmitBytes(code, 0x48, 0xba);
-                                code = EmitU64(code, (ulong)nextInstruction.Value.Operand);
-
-                                code = EmitBytes(code, 0x62, 0x72, 0xfd, (byte)(0x48 | maskRegister), 0x7c, 0xc0); //vpbroadcastq zmm8,rax
-                                code = EmitBytes(code, 0x62, 0x72, 0xFD, (byte)(0x48 | maskRegister), 0x7C, 0xCA); //vpbroadcastq zmm9,rdx
-
-                                code = EmitBytes(code, 0x62, 0xd1, (byte)(0xFD - (instruction.Dst << 3)), (byte)(0x48 | maskRegister), 0xd4, (byte)(0xC0 | (instruction.Dst << 3)));
-
-                                code = EmitBytes(code, 0x62, 0xd1, (byte)(0xFD - (nextInstruction.Value.Dst << 3)), (byte)(0x48 | maskRegister), 0xef, (byte)(0xC1 | (nextInstruction.Value.Dst << 3))); //vpaddq dst, dst, rdx
-
-                                i++;
-                            }
-                            else
-                            {
-                                //movabs rax, operand
-                                code = EmitBytes(code, 0x48, 0xb8);
-                                code = EmitU64(code, (ulong)instruction.Operand);
-
-                                code = EmitBytes(code, 0x62, 0x72, 0xfd, (byte)(0x48 | maskRegister), 0x7c, 0xc0); //vpbroadcastq zmm8,rax
-                                code = EmitBytes(code, 0x62, 0xd1, (byte)(0xFD - (instruction.Dst << 3)), (byte)(0x48 | maskRegister), 0xd4, (byte)(0xC0 | (instruction.Dst << 3)));
-                            }
-
+                            constDataLoc += VectorSize;
                         }
                         break;
                     case OpCode.XorConst:
                         {
-                            if (nextInstruction?.Type == OpCode.AddConst)
-                            {
-                                //movabs rax, operand
-                                code = EmitBytes(code, 0x48, 0xb8);
-                                code = EmitU64(code, (ulong)instruction.Operand);
+                            code = EmitBytes(code, 0x62, 0xf1, (byte)(0xFD - (instruction.Dst << 3)), (byte)(0x48 | maskRegister), 0xef, (byte)(0x05 | (instruction.Dst << 3)));
+                            code = EmitU32(code, (uint)(constDataLoc - code - 4));
 
-                                code = EmitBytes(code, 0x48, 0xba);
-                                code = EmitU64(code, (ulong)nextInstruction.Value.Operand);
-
-
-                                code = EmitBytes(code, 0x62, 0x72, 0xfd, (byte)(0x48 | maskRegister), 0x7c, 0xc0); //vpbroadcastq zmm8,rax
-                                code = EmitBytes(code, 0x62, 0x72, 0xFD, (byte)(0x48 | maskRegister), 0x7C, 0xCA); //vpbroadcastq zmm9,rdx
-
-
-                                code = EmitBytes(code, 0x62, 0xd1, (byte)(0xFD - (instruction.Dst << 3)), (byte)(0x48 | maskRegister), 0xef, (byte)(0xC0 | (instruction.Dst << 3)));
-                                code = EmitBytes(code, 0x62, 0xd1, (byte)(0xFD - (nextInstruction.Value.Dst << 3)), (byte)(0x48 | maskRegister), 0xd4, (byte)(0xC1 | (nextInstruction.Value.Dst << 3)));
-
-                                i++;
-                            }
-                            else
-                            {
-                                //movabs rax, operand
-                                code = EmitBytes(code, 0x48, 0xb8);
-                                code = EmitU64(code, (ulong)instruction.Operand);
-
-                                code = EmitBytes(code, 0x62, 0x72, 0xfd, (byte)(0x48 | maskRegister), 0x7c, 0xc0); //vpbroadcastq zmm8,rax
-                                code = EmitBytes(code, 0x62, 0xd1, (byte)(0xFD - (instruction.Dst << 3)), (byte)(0x48 | maskRegister), 0xef, (byte)(0xC0 | (instruction.Dst << 3)));
-                            }
+                            constDataLoc += VectorSize;
                         }
                         break;
                 }
 
-                if (isBreak == 2)
+                if (isBreak == 1)
                 {
                     break;
                 }
             }
+
+            //code = EmitBytes(code, 0x62, 0xB1, 0xFD, 0x48, 0x6F, 0xC0);
 
             // Emit OS-specific epilogue
             if (OperatingSystem.IsWindows())
@@ -408,6 +377,10 @@ namespace DrillX.Compiler
                 code += avx512Epilogue_Linux.Length;
             }
 
+            ulong codeSize = (ulong)(code - codeStart);
+            ulong constDataSize = ((ulong)(constDataEnd - constDataStart));
+
+            Debug.Assert(codeSize + constDataSize <= CodeSize);
             return (delegate* unmanaged[Cdecl]<ulong*, void>)codeStart;
         }
     }

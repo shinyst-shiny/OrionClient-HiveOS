@@ -11,26 +11,15 @@ using System.Security;
 using System.ComponentModel;
 using Windows.Win32.System.Memory;
 using System.Diagnostics;
+using Equix.Compiler;
 
 namespace DrillX.Compiler
 {
-    public unsafe class X86Compiler
+    public unsafe class X86Compiler : BaseCompiler
     {
         [SuppressUnmanagedCodeSecurity]
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void CompiledGetHash(ulong* r);
-
-        public static readonly uint CodeSize = (uint)AlignSize(HashxProgramMaxSize * CompAvgInstrSize + CompReserveSize, CompPageSize);
-
-		private const int HashxProgramMaxSize = 512;
-		private const int CompReserveSize = 1024 * 8;
-		private const int CompAvgInstrSize = 8;
-		private const int CompPageSize = 4096;
-
-		private static int AlignSize(int pos, int align)
-		{
-			return ((((pos) - 1) / (align) + 1) * (align));
-        }
 
         public readonly static byte[] x86Prologue_Windows = new byte[]
         {
