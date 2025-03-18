@@ -66,7 +66,7 @@ namespace OrionClientLib.Hashers.CPU
                         continue;
                     }
 
-                    int solutionCount = solver.Solve_FullC_Avx512(program, solutions, solver.Heap, solver.ComputeSolutions);
+                    int solutionCount = solver.Solve_Avx512_C(program, solutions, solver.Heap, solver.ComputeSolutions);
 
                     program.DestroyCompiler();
                     program = null;
@@ -166,7 +166,7 @@ namespace OrionClientLib.Hashers.CPU
                         continue;
                     }
 
-                    int solutionCount = solver.Solve_FullC_Avx512(program, solutions, solver.Heap, solver.ComputeSolutions);
+                    int solutionCount = solver.Solve_Avx512_C(program, solutions, solver.Heap, solver.ComputeSolutions);
 
                     program.DestroyCompiler();
                     program = null;

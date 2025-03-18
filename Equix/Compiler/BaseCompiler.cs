@@ -11,7 +11,7 @@ namespace Equix.Compiler
         public static readonly uint CodeSize = (uint)AlignSize(HashxProgramMaxSize * CompAvgInstrSize + CompReserveSize, CompPageSize);
 
         protected const int HashxProgramMaxSize = 512;
-        protected const int CompReserveSize = 1024 * 20;
+        protected const int CompReserveSize = 1024 * 25;
         protected const int CompAvgInstrSize = 8;
         protected const int CompPageSize = 4096;
 

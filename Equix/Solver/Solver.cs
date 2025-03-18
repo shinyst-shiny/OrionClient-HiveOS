@@ -26,8 +26,8 @@ namespace DrillX.Solver
         [DllImport("libequix", EntryPoint = "equix_solver_full_avx2", CallingConvention = CallingConvention.StdCall)]
         static unsafe extern int C_Solve_Full_Avx2(void* func, byte* heap, EquixSolution* output, ulong* keyReg);
 
-        [DllImport("libequix", EntryPoint = "equix_solver_full_avx512", CallingConvention = CallingConvention.StdCall)]
-        static unsafe extern int C_Solve_Full_Avx512(void* func, byte* heap, EquixSolution* output, ulong* keyReg);
+        //[DllImport("libequix", EntryPoint = "equix_solver_full_avx512", CallingConvention = CallingConvention.StdCall)]
+        //static unsafe extern int C_Solve_Full_Avx512(void* func, byte* heap, EquixSolution* output, ulong* keyReg);
 
         public enum EquixResult { EquixPartialSum, EquixFinalSum, EquixOk };
 
@@ -545,18 +545,18 @@ namespace DrillX.Solver
             return C_Solve_Full_Avx2(program._compiledFunction, (byte*)heap, solutions, regs);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-        public unsafe int Solve_FullC_Avx512(HashX program, EquixSolution* solutions, nint heap, nint computeSolutions)
-        {
-            ulong* regs = (ulong*)computeSolutions;
+        //[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+        //public unsafe int Solve_FullC_Avx512(HashX program, EquixSolution* solutions, nint heap, nint computeSolutions)
+        //{
+        //    ulong* regs = (ulong*)computeSolutions;
 
-            regs[0] = program.RegisterKey.V0;
-            regs[1] = program.RegisterKey.V1;
-            regs[2] = program.RegisterKey.V2;
-            regs[3] = program.RegisterKey.V3;
+        //    regs[0] = program.RegisterKey.V0;
+        //    regs[1] = program.RegisterKey.V1;
+        //    regs[2] = program.RegisterKey.V2;
+        //    regs[3] = program.RegisterKey.V3;
 
-            return C_Solve_Full_Avx512(program._compiledFunction, (byte*)heap, solutions, regs);
-        }
+        //    return C_Solve_Full_Avx512(program._compiledFunction, (byte*)heap, solutions, regs);
+        //}
 
         [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
         public unsafe int Solve_Avx2_C(HashX program, EquixSolution* solutions, nint heap, nint computeSolutions)
