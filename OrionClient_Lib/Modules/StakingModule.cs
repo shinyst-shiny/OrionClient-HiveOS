@@ -29,6 +29,7 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -180,7 +181,7 @@ namespace OrionClientLib.Modules
 
             _stakeInfo = boosts.Select(x => new StakeInformation(x, wallet?.Account.PublicKey ?? new PublicKey(pubKey))).ToList();
 
-            var result = await SendWithRetry(() => _client.GetAccountInfoAsync(OreProgram.BoostDirectoryId, Solnet.Rpc.Types.Commitment.Processed));
+            var result = await SendWithRetry(() => _client.GetAccountInfoAsync(OreProgram.BoostConfig, Solnet.Rpc.Types.Commitment.Processed));
 
             if(result == null || !result.WasSuccessful)
             {
@@ -189,11 +190,11 @@ namespace OrionClientLib.Modules
 
             if(result != null)
             {
-                BoostDirectory directory = BoostDirectory.Deserialize(Convert.FromBase64String(result.Result.Value.Data[0]));
+                BoostConfig directory = BoostConfig.Deserialize(Convert.FromBase64String(result.Result.Value.Data[0]));
 
                 List<PublicKey> newBoosts = new List<PublicKey>();
 
-                for(int i = 0; i < (int)directory.ActiveBoosts; i++)
+                for(int i = 0; i < (int)directory.Length; i++)
                 {
                     PublicKey boost = directory.Boosts[i];
 
@@ -268,14 +269,14 @@ namespace OrionClientLib.Modules
             _errorMessage = String.Empty;
 
             displayPrompt.AddChoice(refresh);
-            displayPrompt.AddChoice(liveView);
+            //displayPrompt.AddChoice(liveView);
 
-            if (_historicalData.TotalTransactions > 0)
-            {
-                displayPrompt.AddChoice(hourlyView);
-            }
+            //if (_historicalData.TotalTransactions > 0)
+            //{
+            //    displayPrompt.AddChoice(hourlyView);
+            //}
 
-            displayPrompt.AddChoice(historical);
+            //displayPrompt.AddChoice(historical);
             displayPrompt.AddChoice(exit);
 
             string result = await displayPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
@@ -788,7 +789,7 @@ namespace OrionClientLib.Modules
                 List<SubscriptionState> states = new List<SubscriptionState>();
                 List<string> boostsWatching = new List<string>();
 
-                foreach (var stakingInfo in _stakeInfo.Where(x => x.PendingStake > 0 || x.UserStake > 0))
+                foreach (var stakingInfo in _stakeInfo.Where(x => x.UserStake > 0))
                 {
                     boostsWatching.Add(stakingInfo.Boost.Name);
 
@@ -803,12 +804,10 @@ namespace OrionClientLib.Modules
                         Stake stake = Stake.Deserialize(Convert.FromBase64String(info.Value.Data[0]));
 
                         double oldUserStake = stakingInfo.UserStake;
-                        double oldPendingStake = stakingInfo.PendingStake;
                         double oldRewards = stakingInfo.Rewards;
 
                         stakingInfo.UserStake = stake.Balance / Math.Pow(10, stakingInfo.Boost.Decimal);
-                        stakingInfo.PendingStake = stake.BalancePending / Math.Pow(10, stakingInfo.Boost.Decimal);
-                        stakingInfo.Rewards = stake.Rewards / OreProgram.OreDecimals;
+                        stakingInfo.Rewards = stake.CalculateRewards(stakingInfo.BoostInfo, stakingInfo.TotalStakers) / OreProgram.OreDecimals;
 
                         if(stakingInfo.Rewards > oldRewards)
                         {
@@ -840,14 +839,6 @@ namespace OrionClientLib.Modules
 
                         Proof proof = Proof.Deserialize(Convert.FromBase64String(info.Value.Data[0]));
 
-                        double oldUserPendingRewards = stakingInfo.UserPendingRewards;
-
-                        stakingInfo.PendingRewards = proof.Balance / OreProgram.OreDecimals;
-
-                        if(oldUserPendingRewards < stakingInfo.UserPendingRewards)
-                        {
-                            AddMessage($"[[{stakingInfo.Boost.Name}]] Received [yellow]{stakingInfo.UserPendingRewards - oldUserPendingRewards:0.00000000000}[/] ORE as pending rewards");
-                        }
                     }));
 
                     DateTime lockStart = default;
@@ -868,7 +859,8 @@ namespace OrionClientLib.Modules
                         stakingInfo.TotalBoostStake = boost.TotalDeposits / Math.Pow(10, stakingInfo.Boost.Decimal);
                         stakingInfo.TotalStakers = boost.TotalStakers;
                         stakingInfo.Multiplier = Math.Round(boost.Multiplier / 1000.0, 2);
-                        stakingInfo.Locked = boost.Locked > 0;
+                        stakingInfo.BoostInfo = boost;
+                        stakingInfo.Locked = false;
 
                         if(oldLocked != stakingInfo.Locked)
                         {
@@ -877,12 +869,12 @@ namespace OrionClientLib.Modules
                                 lockStart = DateTime.Now;
                             }
 
-                            AddMessage($"[[{stakingInfo.Boost.Name}]] Boost has been {(boost.Locked > 0 ? $"[red]locked[/] to initiate payouts" : $"[green]unlocked[/] to receive rewards. Checkpoint time: {PrettyFormatTime(DateTime.Now - lockStart)}")}");
+                            //AddMessage($"[[{stakingInfo.Boost.Name}]] Boost has been {(boost.Locked > 0 ? $"[red]locked[/] to initiate payouts" : $"[green]unlocked[/] to receive rewards. Checkpoint time: {PrettyFormatTime(DateTime.Now - lockStart)}")}");
                         }
 
                         if(oldMultiplier != stakingInfo.Multiplier)
                         {
-                            AddMessage($"[[{stakingInfo.Boost.Name}]] Multiplier has been changed to [cyan]{stakingInfo.Multiplier:0.00}x[/]");
+                            //AddMessage($"[[{stakingInfo.Boost.Name}]] Multiplier has been changed to [cyan]{stakingInfo.Multiplier:0.00}x[/]");
                         }
 
                         //TODO: seconds, new table with overall (profit, estimates, lo0ck time, checkpoint)
@@ -961,7 +953,7 @@ namespace OrionClientLib.Modules
             {
                 _stakingTable = new Table();
                 _stakingTable.Title($"Staking Information [[Ore: ${oreBoost.OreUSDValue:0.00}]]");
-                _stakingTable.AddColumns("LP", "Mult", "Stakers", "Total Stake", "Relative Yield", "User Stake", "Pending Stake", "Share", "Rewards", "Pending Rewards", "Global Rewards", "Next Checkpoint");
+                _stakingTable.AddColumns("LP", "Mult", "Stakers", "Total Stake", "Relative Yield", "User Stake", "Share", "Rewards");
                 _stakingTable.ShowRowSeparators = true;
                 foreach(var column in _stakingTable.Columns)
                 {
@@ -982,12 +974,8 @@ namespace OrionClientLib.Modules
                                         $"{stakeInfo.TotalBoostStake:0.###} (${stakeInfo.BoostTotalUSDValue:n2})",
                                         $"{relativeProfit:0.00}x",
                                         $"{stakeInfo.UserStake:0.###} (${stakeInfo.UserStakeUSDValue:n2})", 
-                                        $"{stakeInfo.PendingStake:0.###} (${stakeInfo.UserPendingStakeUSDValue:n2})",
                                         $"{stakeInfo.SharePercent:0.####}%",
-                                        WrapBooleanColor($"{stakeInfo.Rewards:n11} (${stakeInfo.RewardUSDValue:n2})", stakeInfo.Rewards > 0, Color.Green, null),
-                                        WrapBooleanColor($"{stakeInfo.UserPendingRewards:n11} (${stakeInfo.PendingUserRewardUSDValue:n2})", stakeInfo.UserPendingRewards > 0, Color.Yellow, null),
-                                        $"{stakeInfo.PendingRewards:n11}",
-                                        WrapBooleanColor(PrettyFormatTime(nextPayoutTime), stakeInfo.Locked, Color.Red, null)
+                                        WrapBooleanColor($"{stakeInfo.Rewards:n11} (${stakeInfo.RewardUSDValue:n2})", stakeInfo.Rewards > 0, Color.Green, null)
                                         );
                 }
             }
@@ -1009,12 +997,8 @@ namespace OrionClientLib.Modules
                     _stakingTable.UpdateCell(i, 3, $"{stakeInfo.TotalBoostStake:0.###} (${stakeInfo.BoostTotalUSDValue:n2})");
                     _stakingTable.UpdateCell(i, 4, $"{relativeProfit:0.00}x");
                     _stakingTable.UpdateCell(i, 5, $"{stakeInfo.UserStake:0.###} (${stakeInfo.UserStakeUSDValue:n2})");
-                    _stakingTable.UpdateCell(i, 6, $"{stakeInfo.PendingStake:0.###} (${stakeInfo.UserPendingStakeUSDValue:n2})");
-                    _stakingTable.UpdateCell(i, 7, $"{stakeInfo.SharePercent:0.####}%");
-                    _stakingTable.UpdateCell(i, 8, WrapBooleanColor($"{stakeInfo.Rewards:n11} (${stakeInfo.RewardUSDValue:n2})", stakeInfo.Rewards > 0, Color.Green, null));
-                    _stakingTable.UpdateCell(i, 9, WrapBooleanColor($"{stakeInfo.UserPendingRewards:n11} (${stakeInfo.PendingUserRewardUSDValue:n2})", stakeInfo.UserPendingRewards > 0, Color.Yellow, null));
-                    _stakingTable.UpdateCell(i, 10, $"{stakeInfo.PendingRewards:n11}");
-                    _stakingTable.UpdateCell(i, 11, WrapBooleanColor(PrettyFormatTime(nextPayoutTime), stakeInfo.Locked, Color.Red, null));
+                    _stakingTable.UpdateCell(i, 6, $"{stakeInfo.SharePercent:0.####}%");
+                    _stakingTable.UpdateCell(i, 7, WrapBooleanColor($"{stakeInfo.Rewards:n11} (${stakeInfo.RewardUSDValue:n2})", stakeInfo.Rewards > 0, Color.Green, null));
                 }
             }
 
@@ -1292,7 +1276,8 @@ namespace OrionClientLib.Modules
                     stakeInfo.TotalBoostStake = boost.TotalDeposits / Math.Pow(10, stakeInfo.Boost.Decimal);
                     stakeInfo.TotalStakers = boost.TotalStakers;
                     stakeInfo.Multiplier = boost.Multiplier / 1000.0;
-                    stakeInfo.Locked = boost.Locked > 0;
+                    stakeInfo.BoostInfo = boost;
+                    //stakeInfo.Locked = boost.Locked > 0;
 
                     if(poolType == BoostInformation.PoolType.Ore)
                     {
@@ -1305,7 +1290,7 @@ namespace OrionClientLib.Modules
                 {
                     Proof proof = Proof.Deserialize(Convert.FromBase64String(proofData.Data[0]));
 
-                    stakeInfo.PendingRewards = proof.Balance / OreProgram.OreDecimals;
+                    stakeInfo.ProofBalance = proof.Balance;
                 }
 
                 if (checkpointData != null)
@@ -1320,13 +1305,13 @@ namespace OrionClientLib.Modules
                     Stake stake = Stake.Deserialize(Convert.FromBase64String(stakeData.Data[0]));
 
                     stakeInfo.UserStake = stake.Balance / Math.Pow(10, stakeInfo.Boost.Decimal);
-                    stakeInfo.PendingStake = stake.BalancePending / Math.Pow(10, stakeInfo.Boost.Decimal);
                     stakeInfo.Rewards = stake.Rewards / OreProgram.OreDecimals;
+                    stakeInfo.Rewards = stake.CalculateRewards(stakeInfo.BoostInfo, stakeInfo.ProofBalance) / OreProgram.OreDecimals;
                 }
                 else
                 {
                     stakeInfo.UserStake = 0;
-                    stakeInfo.PendingStake = 0;
+                    //stakeInfo.PendingStake = 0;
                     stakeInfo.Rewards = 0;
                 }
             }

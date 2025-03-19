@@ -12,10 +12,11 @@ namespace OrionClientLib.CoinPrograms.Ore
     {
         public PublicKey Authority { get; private set; }
         public ulong Balance { get; private set; }
-        public ulong BalancePending { get; private set; }
         public PublicKey Boost { get; private set; }
-        public ulong Id { get; private set; }
-        public ulong LastDepositAt { get; private set; }
+        public DateTimeOffset LastClaimAt { get; private set; }
+        public DateTimeOffset LastDepositAt { get; private set; }
+        public DateTimeOffset LastWithdrawAt { get; private set; }
+        public Fraction LastRewardsFactor { get; private set; }
         public ulong Rewards { get; private set; }
 
         public static Stake Deserialize(ReadOnlySpan<byte> data)
@@ -24,12 +25,35 @@ namespace OrionClientLib.CoinPrograms.Ore
             {
                 Authority = data.GetPubKey(8),
                 Balance = data.GetU64(40),
-                BalancePending = data.GetU64(48),
-                Boost = data.GetPubKey(56),
-                Id = data.GetU64(88),
-                LastDepositAt = data.GetU64(96),
-                Rewards = data.GetU64(104)
+                Boost = data.GetPubKey(48),
+                LastClaimAt = DateTimeOffset.FromUnixTimeSeconds(data.GetS64(80)),
+                LastDepositAt = DateTimeOffset.FromUnixTimeSeconds(data.GetS64(88)),
+                LastWithdrawAt = DateTimeOffset.FromUnixTimeSeconds(data.GetS64(96)),
+                LastRewardsFactor = data.GetFraction(104),
+                Rewards = data.GetU64(120)
             };
+        }
+
+        public ulong CalculateRewards(Boost boost, ulong proofBalance)
+        {
+            decimal rewardFactor = boost.RewardsFactor.Value;
+            decimal lastRewardFactor = LastRewardsFactor.Value;
+
+            if(boost.TotalDeposits > 0)
+            {
+                rewardFactor += (decimal)proofBalance / boost.TotalDeposits;
+            }
+
+            if(rewardFactor > lastRewardFactor)
+            {
+                var accumulatedRewards = rewardFactor - lastRewardFactor;
+
+                var personalRewards = accumulatedRewards * Balance;
+
+                return Rewards + (ulong)personalRewards;
+            }
+
+            return Rewards;
         }
     }
 }

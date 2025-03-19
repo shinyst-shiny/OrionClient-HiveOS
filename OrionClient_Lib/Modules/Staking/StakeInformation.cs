@@ -1,5 +1,6 @@
 ﻿using OrionClientLib.CoinPrograms;
 using OrionClientLib.CoinPrograms.Ore;
+using Solnet.Programs.Utilities;
 using Solnet.Wallet;
 using System;
 using System.Collections.Generic;
@@ -12,6 +13,7 @@ namespace OrionClientLib.Modules.Staking
     public class StakeInformation
     {
         public BoostInformation Boost { get; private set; }
+        public Boost BoostInfo { get; set; }
         public PublicKey StakeAccount { get; private set; }
         public PublicKey Authority { get; private set; }
 
@@ -24,11 +26,10 @@ namespace OrionClientLib.Modules.Staking
 
         public double TotalBoostStake { get; set; }
         public double UserStake { get; set; }
-        public double PendingStake { get; set; }
         public double Rewards { get; set; }
-        public double PendingRewards { get; set; }
         public decimal OreUSDValue { get; set; }
         public decimal TokenBUSDValue { get; set; }
+        public ulong ProofBalance { get; set; }
 
         public ulong TotalStakers { get; set; }
         public DateTime LastUpdated { get; set; }
@@ -42,12 +43,9 @@ namespace OrionClientLib.Modules.Staking
 
         public decimal BoostTotalUSDValue => TradingVolumeLocked * BoostRatioStaked;
         public decimal UserStakeUSDValue => (decimal)(UserStake) * ShareUSDValue;
-        public decimal UserPendingStakeUSDValue => (decimal)(PendingStake) * ShareUSDValue;
         public double SharePercent => UserStake == 0 ? 0 : UserStake / TotalBoostStake * 100;
-        public decimal RewardUSDValue => OreUSDValue * (decimal)Rewards;
 
-        public double UserPendingRewards => SharePercent / 100 * PendingRewards;
-        public decimal PendingUserRewardUSDValue => OreUSDValue * (decimal)UserPendingRewards;
+        public decimal RewardUSDValue => OreUSDValue * (decimal)Rewards;
 
         public StakeInformation(BoostInformation boost, PublicKey authority)
         {

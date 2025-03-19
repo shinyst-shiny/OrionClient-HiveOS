@@ -47,19 +47,20 @@ namespace OrionClientLib.CoinPrograms
         public static PublicKey TreasuryATAId;
         public static PublicKey TreasuryOreATAId;
         public static PublicKey MintId;
-        public static PublicKey BoostDirectoryId;
+        //public static PublicKey BoostDirectoryId;
 
         public static PublicKey ProgramId = new PublicKey("oreV2ZymfyeXgNgBdqMkumTqqAprVqgBWQfoYkrtKWQ");
         public static readonly PublicKey NoopId = new PublicKey("noop8ytexvkpCuqbf6FB89BSuNemHtPRqaNC31GWivW");
-        public static readonly PublicKey BoostProgramId = new PublicKey("BoosTyJFPPtrqJTdi49nnztoEWDJXfDRhyb2fha6PPy");
+        public static readonly PublicKey BoostProgramId = new PublicKey("BoostzzkNfCA9D1qNuN5xZxB5ErbK4zQuBeTHGDpXT1");
         public static readonly PublicKey BoostAuthority = new PublicKey("HBUh9g46wk2X89CvaNN15UmsznP59rh6od1h8JwYAopk");
+        public static PublicKey BoostConfig;
         public static readonly PublicKey BoostCheckpointId = new PublicKey("6qWtSWTmWRgzmLMMpPAgzckKy73BkzXWqoZun6usqdCM");
 
         public static readonly List<BoostInformation> Boosts = new List<BoostInformation>()
         {
             new BoostInformation("oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp", 11, "Ore", BoostInformation.PoolType.Ore, null, "ore"),
             new BoostInformation("8H8rPiWW4iTFCfEkSnf7jpqeNpFfvdH9gLouAL3Fe2Zx", 6, "Ore-Sol (Kamino)", BoostInformation.PoolType.Kamino, "6TFdY15Mxty9sRCtzMXG8eHSbZy4oiAEQUvLQdz9YwEn", "solana"),
-            new BoostInformation("7G3dfZkSk1HpDGnyL37LMBbPEgT4Ca6vZmZPUyi2syWt", 6, "Ore-Hnt (Kamino)", BoostInformation.PoolType.Kamino, "9XsAPjk1yp4U6hKZj9r9szhcxBi3RidGuyxiC2Y8JtAe", "helium"),
+            //new BoostInformation("7G3dfZkSk1HpDGnyL37LMBbPEgT4Ca6vZmZPUyi2syWt", 6, "Ore-Hnt (Kamino)", BoostInformation.PoolType.Kamino, "9XsAPjk1yp4U6hKZj9r9szhcxBi3RidGuyxiC2Y8JtAe", "helium"),
             //Index 168 and 200 of LP pool data for vaults
             new BoostInformation("DrSS5RM7zUd9qjUEdDaf31vnDUSbCrMto6mjqTrHFifN", 11, "Ore-Sol (Meteora)", BoostInformation.PoolType.Meteora, "GgaDTFbqdgjoZz3FP7zrtofGwnRS4E6MCzmmD5Ni1Mxj", "solana", 
                 new BoostInformation.MeteoraExtraData("2k7V1NtM1krwh1sdt5wWqBRcvNQ5jzxj3J2rV78zdTsL", 
@@ -108,10 +109,13 @@ namespace OrionClientLib.CoinPrograms
 
             PublicKey.TryFindProgramAddress(new List<byte[]> { Encoding.UTF8.GetBytes("config") }, ProgramId, out b, out n);
             ConfigAddress = b;
+            
+            PublicKey.TryFindProgramAddress(new List<byte[]> { Encoding.UTF8.GetBytes("config") }, BoostProgramId, out b, out n);
+            BoostConfig = b;
 
 
-            PublicKey.TryFindProgramAddress(new List<byte[]> { Encoding.UTF8.GetBytes("directory") }, BoostProgramId, out b, out n);
-            BoostDirectoryId = b;
+            //PublicKey.TryFindProgramAddress(new List<byte[]> { Encoding.UTF8.GetBytes("directory") }, BoostProgramId, out b, out n);
+            //BoostDirectoryId = b;
 
             TreasuryATAId = AssociatedTokenAccountProgram.DeriveAssociatedTokenAccount(TreasuryId, MintId);
         }

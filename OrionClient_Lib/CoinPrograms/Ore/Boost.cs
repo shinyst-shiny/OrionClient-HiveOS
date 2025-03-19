@@ -10,25 +10,26 @@ namespace OrionClientLib.CoinPrograms.Ore
 {
     public class Boost
     {
-        public ulong Bump { get; private set; }
         public DateTimeOffset ExpiresAt { get; private set; }
-        public ulong Locked { get; private set; }
         public PublicKey Mint { get; private set; }
         public ulong Multiplier { get; private set; }
+        public Fraction RewardsFactor { get; private set; }
         public ulong TotalDeposits { get; private set; }
         public ulong TotalStakers { get; private set; }
+        public ulong WithdrawFee { get; private set; }
+        //1024 byte buffer
 
         public static Boost Deserialize(ReadOnlySpan<byte> data)
         {
             return new Boost
             {
-                Bump = data.GetU64(8),
-                ExpiresAt = DateTimeOffset.FromUnixTimeSeconds(data.GetS64(16)),
-                Locked = data.GetU64(24),
-                Mint = data.GetPubKey(32),
-                Multiplier = data.GetU64(64),
+                ExpiresAt = DateTimeOffset.FromUnixTimeSeconds(data.GetS64(8)),
+                Mint = data.GetPubKey(16),
+                Multiplier = data.GetU64(48),
+                RewardsFactor = data.GetFraction(56),
                 TotalDeposits = data.GetU64(72),
-                TotalStakers = data.GetU64(80)
+                TotalStakers = data.GetU64(80),
+                WithdrawFee = data.GetU64(88)
             };
         }
     }
