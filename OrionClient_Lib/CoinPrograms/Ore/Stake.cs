@@ -16,7 +16,7 @@ namespace OrionClientLib.CoinPrograms.Ore
         public DateTimeOffset LastClaimAt { get; private set; }
         public DateTimeOffset LastDepositAt { get; private set; }
         public DateTimeOffset LastWithdrawAt { get; private set; }
-        public Fraction LastRewardsFactor { get; private set; }
+        public I80F48Fraction LastRewardsFactor { get; private set; }
         public ulong Rewards { get; private set; }
 
         public static Stake Deserialize(ReadOnlySpan<byte> data)
@@ -29,22 +29,22 @@ namespace OrionClientLib.CoinPrograms.Ore
                 LastClaimAt = DateTimeOffset.FromUnixTimeSeconds(data.GetS64(80)),
                 LastDepositAt = DateTimeOffset.FromUnixTimeSeconds(data.GetS64(88)),
                 LastWithdrawAt = DateTimeOffset.FromUnixTimeSeconds(data.GetS64(96)),
-                LastRewardsFactor = data.GetFraction(104),
+                LastRewardsFactor = data.GetI80F48Fraction(104),
                 Rewards = data.GetU64(120)
             };
         }
 
         public ulong CalculateRewards(Boost boost, ulong proofBalance)
         {
-            decimal rewardFactor = boost.RewardsFactor.Value;
-            decimal lastRewardFactor = LastRewardsFactor.Value;
+            decimal rewardFactor = boost.RewardsFactor.ToDecimal();
+            decimal lastRewardFactor = LastRewardsFactor.ToDecimal();
 
-            if(boost.TotalDeposits > 0)
+            if (boost.TotalDeposits > 0)
             {
                 rewardFactor += (decimal)proofBalance / boost.TotalDeposits;
             }
 
-            if(rewardFactor > lastRewardFactor)
+            if (rewardFactor > lastRewardFactor)
             {
                 var accumulatedRewards = rewardFactor - lastRewardFactor;
 

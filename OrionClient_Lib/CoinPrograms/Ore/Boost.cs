@@ -13,7 +13,7 @@ namespace OrionClientLib.CoinPrograms.Ore
         public DateTimeOffset ExpiresAt { get; private set; }
         public PublicKey Mint { get; private set; }
         public ulong Multiplier { get; private set; }
-        public Fraction RewardsFactor { get; private set; }
+        public I80F48Fraction RewardsFactor { get; private set; }
         public ulong TotalDeposits { get; private set; }
         public ulong TotalStakers { get; private set; }
         public ulong WithdrawFee { get; private set; }
@@ -26,7 +26,7 @@ namespace OrionClientLib.CoinPrograms.Ore
                 ExpiresAt = DateTimeOffset.FromUnixTimeSeconds(data.GetS64(8)),
                 Mint = data.GetPubKey(16),
                 Multiplier = data.GetU64(48),
-                RewardsFactor = data.GetFraction(56),
+                RewardsFactor = data.GetI80F48Fraction(56),
                 TotalDeposits = data.GetU64(72),
                 TotalStakers = data.GetU64(80),
                 WithdrawFee = data.GetU64(88)
