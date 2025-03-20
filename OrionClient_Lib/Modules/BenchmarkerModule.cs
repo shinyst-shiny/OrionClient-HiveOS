@@ -107,6 +107,7 @@ namespace OrionClientLib.Modules
             if (_stop)
             {
                 await currentHasher.StopAsync();
+                ResetAffinity();
                 currentHasher.OnHashrateUpdate -= CurrentHasher_OnHashrateUpdate;
 
                 return null;
@@ -185,8 +186,8 @@ namespace OrionClientLib.Modules
                 {
                     _logger.Log(LogLevel.Info, $"Hasher: {currentHasherInfo.Hasher.Name}. " +
                         $"Average: {currentHasherInfo.CurrentRate.ChallengeSolutionsPerSecond}. " +
-                        $"Min: {currentHasherInfo.CurrentRate.SolutionsPerSecond}. " +
-                        $"Max: {currentHasherInfo.CurrentRate.SolutionsPerSecond}");
+                        $"Min: {currentHasherInfo.MinRate.SolutionsPerSecond}. " +
+                        $"Max: {currentHasherInfo.MaxRate.SolutionsPerSecond}");
                 }
 
                 if (_hasherIndex >= _chosenHashers.Count)
