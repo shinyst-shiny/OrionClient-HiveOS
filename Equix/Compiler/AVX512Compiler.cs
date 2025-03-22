@@ -156,8 +156,6 @@ namespace DrillX.Compiler
 
         public static delegate* unmanaged[Cdecl]<ulong*, void> HashCompileAVX512(Span<Instruction> instructions, byte* code)
         {
-            //int* lastSave = stackalloc int[8];
-
             #region Constant data
 
             byte* constDataStart = code + CodeSize;
@@ -227,7 +225,9 @@ namespace DrillX.Compiler
             byte* targetConstDataLoc = default;
             byte* branchStartLoc = null;
             int* lastSave = stackalloc int[8];
+            int* initialSave = stackalloc int[8];
             Span<int> lastSaveSpan = new Span<int>(lastSave, 8);
+            Span<int> initialSaveSpan = new Span<int>(initialSave, 8);
             bool isBranched = false;
 
             for (int i = 0; i < instructions.Length; i++)
@@ -252,13 +252,28 @@ namespace DrillX.Compiler
                         finalDst += 16;
                     }
 
-                    dst += 16;
-                    src += 16;
+                    int iSaveSrc = initialSave[src];
+                    int iSaveDst = initialSave[dst];
+
+                    if (iSaveSrc < i)
+                    {
+                        src += 16;
+                    }
+
+                    if (iSaveDst < i)
+                    {
+                        dst += 16;
+                    }
                 }
-                else
+                else if (instruction.Type != OpCode.Branch && targetStart != default)
                 {
-                    lastSave[dst] = i;
                     lastSave[src] = -1;
+                    lastSave[dst] = (i);
+
+                    if (initialSaveSpan[dst] == 0)
+                    {
+                        initialSaveSpan[dst] = i;
+                    }
                 }
 
                 switch (instruction.Type)
@@ -268,6 +283,8 @@ namespace DrillX.Compiler
                         targetStart = code;
                         targetConstDataLoc = constDataLoc;
                         lastSaveSpan.Fill(-1);
+                        initialSaveSpan.Fill(0x0);
+
                         break;
                     case OpCode.Branch:
                         if (targetStart != default)
@@ -287,14 +304,13 @@ namespace DrillX.Compiler
                             branchStartLoc = code;
 
                             //Store registers
-                            code = EmitInstruction(code, InstructionOpCode.Mov, zmm16, 0, zmm0);
-                            code = EmitInstruction(code, InstructionOpCode.Mov, zmm17, 0, zmm1);
-                            code = EmitInstruction(code, InstructionOpCode.Mov, zmm18, 0, zmm2);
-                            code = EmitInstruction(code, InstructionOpCode.Mov, zmm19, 0, zmm3);
-                            code = EmitInstruction(code, InstructionOpCode.Mov, zmm20, 0, zmm4);
-                            code = EmitInstruction(code, InstructionOpCode.Mov, zmm21, 0, zmm5);
-                            code = EmitInstruction(code, InstructionOpCode.Mov, zmm22, 0, zmm6);
-                            code = EmitInstruction(code, InstructionOpCode.Mov, zmm23, 0, zmm7);
+                            for (int z = 0; z < 8; z++)
+                            {
+                                if (initialSave[z] == 0)
+                                {
+                                    code = EmitInstruction(code, InstructionOpCode.Mov, z + 16, 0, z);
+                                }
+                            }
 
                             //Go back to target + 1
                             i -= 16;
@@ -308,25 +324,17 @@ namespace DrillX.Compiler
                             //Restore registers
                             for (int z = 0; z < 8; z++)
                             {
-                                if (lastSave[z] == -1)
+                                if ((lastSave[z]) == -1)
                                 {
-                                    code = EmitInstruction(code, InstructionOpCode.Blend, z, z, z + 16, mask: 2);
+                                    code = EmitBlend(code, z, z, z + 16, mask: 2);
                                 }
                             }
-
-                            //code = EmitInstruction(code, InstructionOpCode.Blend, zmm0, zmm0, zmm16, mask: 2);
-                            //code = EmitInstruction(code, InstructionOpCode.Blend, zmm1, zmm1, zmm17, mask: 2);
-                            //code = EmitInstruction(code, InstructionOpCode.Blend, zmm2, zmm2, zmm18, mask: 2);
-                            //code = EmitInstruction(code, InstructionOpCode.Blend, zmm3, zmm3, zmm19, mask: 2);
-                            //code = EmitInstruction(code, InstructionOpCode.Blend, zmm4, zmm4, zmm20, mask: 2);
-                            //code = EmitInstruction(code, InstructionOpCode.Blend, zmm5, zmm5, zmm21, mask: 2);
-                            //code = EmitInstruction(code, InstructionOpCode.Blend, zmm6, zmm6, zmm22, mask: 2);
-                            //code = EmitInstruction(code, InstructionOpCode.Blend, zmm7, zmm7, zmm23, mask: 2);
 
                             code = EmitBytes(code, 0xC5, 0xED, 0x42, 0xC9); //kandnb k1, k2, k1
 
                             EmitU32((branchStartLoc - 4), (uint)(code - branchStartLoc)); //Properly set jmp target
                             isBranched = false;
+                            //isBreak++;
                         }
                         break;
                     case OpCode.UMulH:
@@ -388,7 +396,7 @@ namespace DrillX.Compiler
                         break;
                     case OpCode.Mul:
                         //dst = dst * src
-                        code = EmitInstruction(code, InstructionOpCode.Mullo, finalDst, dst, src, mask: maskRegister);
+                        code = EmitMullo(code, finalDst, dst, src, mask: maskRegister);
                         break;
                     case OpCode.AddShift:
                         if (instruction.Operand == 0)
@@ -432,10 +440,10 @@ namespace DrillX.Compiler
                         break;
                 }
 
-                if (isBreak == 1)
-                {
-                    break;
-                }
+                //if (isBreak == 1)
+                //{
+                //    break;
+                //}
             }
 
             //Deal with ending siphash calculations to save on stores/loads
@@ -650,46 +658,57 @@ namespace DrillX.Compiler
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static byte* EmitShuffle(byte* code, int dst, int src, byte immediate, int mask = 0)
         {
-            code = EmitInstruction(code, InstructionOpCode.Shuffle, dst, 0, src, mask: mask);
+            code = EmitInstruction(code, InstructionOpCode.Shuffle, dst, 0, src, mask: mask, w: 0);
             code = EmitByte(code, immediate);
             return code;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static byte* EmitInstruction(byte* code, InstructionOpCode op, int dst, int src1, int src2, byte immediate = 0, int mask = 0, byte modrm = 0xC0)
+        static byte* EmitMullo(byte* code, int dst, int src1, int src2, int mask = 0)
+        {
+            code = EmitInstruction(code, InstructionOpCode.Mullo, dst, src1, src2, mask: mask, pp: 0x02);
+
+            return code;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static byte* EmitBlend(byte* code, int dst, int src1, int src2, int mask = 0)
+        {
+            code = EmitInstruction(code, InstructionOpCode.Blend, dst, src1, src2, mask: mask, pp: 0x02);
+
+            return code;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static byte* EmitInstruction(byte* code, InstructionOpCode op, int dst, int src1, int src2, byte immediate = 0, int mask = 0, byte modrm = 0xC0, byte w = 1, byte pp = 0x01)
         {
             byte R = (byte)(~(dst >> 3) & 3);
-            byte B = (byte)(~(src2 >> 3) & 3);
-            byte pp = op == InstructionOpCode.Mullo || op == InstructionOpCode.Blend ? (byte)0x02 : (byte)0x01;
 
-            byte evex1 = (byte)(((R & 1) << 7)
-                              | (B << 5)
+            int evex = 0x62;
+
+            evex |= (((R & 1) << 7)
+                              | ((~(src2 >> 3) & 3) << 5)
                               | ((R >> 1) << 4)
                               | pp
-                              );
+                              ) << 8;
 
-
-            byte w = op == InstructionOpCode.Shuffle ? (byte)0 : (byte)1;
 
             byte inv_vvvv = (byte)(~((src1 & 0xF)));
-            byte evex2 = (byte)((w << 7)
+            evex |= ((w << 7)
                               | ((inv_vvvv << 3) & 0x7F)
                               | (1 << 2)
-                              | 0x1);
+                              | 0x1) << 16;
 
 
             byte Vprime = (byte)((~(src1 >> 4) & 1));
-            byte evex3 = (byte)(((0) << 7)
+            evex |= (((0) << 7)
                               | (2 << 5)
                               | (0 << 4)
                               | (Vprime << 3)
-                              | mask);
+                              | mask) << 24;
 
             byte mm = (byte)(modrm | ((dst & 0x7) << 3) | (src2 & 0x7) | immediate << 4);
-            code = EmitByte(code, 0x62);
-            code = EmitByte(code, evex1);
-            code = EmitByte(code, evex2);
-            code = EmitByte(code, evex3);
+            code = EmitU32(code, (uint)evex);
             code = EmitByte(code, (byte)op);
             code = EmitByte(code, mm);
 
