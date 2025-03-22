@@ -194,7 +194,7 @@ namespace DrillX.Compiler
             if (OperatingSystem.IsLinux())
             {
                 // In Linux, first argument is in rdi, move it to rcx for consistency
-                code = EmitBytes(code, 0x48, 0x83, 0xEC, 0x40);
+                code = EmitBytes(code, 0x48, 0x89, 0xF9);
             }
 
             code = EmitBytes(code, avx512Prologue);
