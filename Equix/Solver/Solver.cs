@@ -572,10 +572,10 @@ namespace DrillX.Solver
         //Regs must be at least 72 ulong values. 8 for output, 8*8 for registers
         public unsafe int Solve_Avx512_C(HashX program, EquixSolution* solutions, nint heap, nint computeSolutions)
         {
-            for (int i = 0; i <= ushort.MaxValue; i += 8)
-            {
-                program.AsmCompiled_Avx512((ulong)i, (ulong*)computeSolutions + i);
-            }
+            //for (int i = 0; i <= ushort.MaxValue; i += 8)
+            //{
+                program.AsmCompiled_Avx512((ulong)0, (ulong*)computeSolutions);
+            //}
 
             return C_Solve((ulong*)computeSolutions, (byte*)heap, solutions);
         }
