@@ -338,9 +338,7 @@ namespace DrillX.Compiler
         public unsafe void RunAsmCompiled_AVX512(SipState key, ulong startInput, delegate* unmanaged[Cdecl]<ulong*, void> func, ulong* rrr)
         {
             var output = rrr;
-            ((SipState*)(output + 8))[0] = key;
-            Vector512<ulong> input = Vector512.Create(startInput, startInput + 1, startInput + 2, startInput + 3, startInput + 4, startInput + 5, startInput + 6, startInput + 7);
-            input.Store(output);
+            ((SipState*)(output))[0] = key;
             func(rrr);
         }
 
