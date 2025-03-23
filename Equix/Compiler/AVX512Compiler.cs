@@ -518,8 +518,6 @@ namespace DrillX.Compiler
             ulong codeSize = (ulong)(code - codeStart);
             ulong constDataSize = ((ulong)(constDataEnd - constDataStart));
 
-            var text = Convert.ToHexString(new Span<byte>(codeStart, (int)codeSize));
-
             Debug.Assert(codeSize + constDataSize <= CodeSize);
             return (delegate* unmanaged[Cdecl]<ulong*, void>)codeStart;
         }
