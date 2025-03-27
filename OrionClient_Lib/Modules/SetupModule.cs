@@ -93,6 +93,8 @@ namespace OrionClientLib.Modules
                 (Wallet solanaWallet, string publicKey) = await _settings.GetWalletAsync();
 
                 SelectionPrompt<string> selectionPrompt = new SelectionPrompt<string>();
+                selectionPrompt.WrapAround = true;
+
                 selectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nSetup solana wallet. Current: {publicKey ?? "??"}. Path: {(_settings.HasPrivateKey ? (_settings.KeyFile ?? "N/A") : "N/A")}");
 
                 if (!String.IsNullOrEmpty(publicKey))
@@ -133,6 +135,7 @@ namespace OrionClientLib.Modules
             (IHasher cpuHasher, IHasher gpuHasher) = _data.GetChosenHasher();
 
             SelectionPrompt<IHasher> selectionPrompt = new SelectionPrompt<IHasher>();
+            selectionPrompt.WrapAround = true;
             selectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nSelect CPU hashing implementation. Run benchmark to see hashrates");
             selectionPrompt.UseConverter((hasher) =>
             {
@@ -171,7 +174,8 @@ namespace OrionClientLib.Modules
         {
             (IHasher cpuHasher, IHasher gpuHasher) = _data.GetChosenHasher();
 
-            SelectionPrompt<IHasher> selectionPrompt = new SelectionPrompt<IHasher>();
+            SelectionPrompt<IHasher> selectionPrompt = new SelectionPrompt<IHasher>(); 
+            selectionPrompt.WrapAround = true;
             selectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nSelect GPU hashing implementation. Run benchmark to see hashrates{(!String.IsNullOrEmpty(_errorMessage) ? $"\n[red]Error: {_errorMessage}[/]\n" : String.Empty)}");
             selectionPrompt.UseConverter((hasher) =>
             {
@@ -224,6 +228,7 @@ namespace OrionClientLib.Modules
 
             //Allow device selection
             MultiSelectionPrompt<Device> deviceSelectionPrompt = new MultiSelectionPrompt<Device>();
+            deviceSelectionPrompt.WrapAround = true;
             deviceSelectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nSelect GPUs to use. Selecting different GPU types may cause performance issues\n[gray]Press escape to return to GPU implementation step[/]");
             deviceSelectionPrompt.UseConverter((device) =>
             {
@@ -345,6 +350,7 @@ namespace OrionClientLib.Modules
             choices.Add((-1, "[aqua]<-- Previous Step[/]"));
 
             SelectionPrompt<(int, string)> selectionPrompt = new SelectionPrompt<(int, string)>();
+            selectionPrompt.WrapAround = true;
             selectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nSelect total threads. Highest value recommended. Current: {_settings.CPUSetting.CPUThreads}");
             selectionPrompt.UseConverter((tuple) =>
             {
@@ -388,6 +394,7 @@ namespace OrionClientLib.Modules
             IPool chosenPool = _data.GetChosenPool();
             
             SelectionPrompt<IPool> selectionPrompt = new SelectionPrompt<IPool>();
+            selectionPrompt.WrapAround = true;
             selectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nPool Selection{(!String.IsNullOrEmpty(_errorMessage) ? $"\n[red]Error: {_errorMessage}[/]\n" : String.Empty)}");
             _errorMessage = String.Empty;
 
@@ -460,6 +467,7 @@ namespace OrionClientLib.Modules
             (Wallet wallet, string publicKey) = await _settings.GetWalletAsync();
 
             SelectionPrompt<int> selectionPrompt = new SelectionPrompt<int>();
+            selectionPrompt.WrapAround = true;
             selectionPrompt.Title($"Step: {_currentStep + 1}/{_steps.Count}\n\nAll settings can be manually changed in [b]{Settings.FilePath}[/]\n\nWallet: {publicKey ?? "??"}\nHasher: CPU - {cpuHasher?.Name ?? "N/A"} ({_settings.CPUSetting.CPUThreads} threads), GPU - {gpuHasher?.Name ?? "N/A"}\nPool: {chosenPool?.DisplayName ?? "None"}\n");
             selectionPrompt.EnableSearch();
             selectionPrompt.AddChoice(0);
@@ -519,6 +527,7 @@ namespace OrionClientLib.Modules
 
             Mnemonic mnemonic = new Mnemonic(WordList.English, WordCount.Twelve);
             SelectionPrompt<string> selectionPrompt = new SelectionPrompt<string>();
+            selectionPrompt.WrapAround = true;
             Wallet wallet = new Wallet(mnemonic);
 
             selectionPrompt.Title($"Public Key: {wallet.Account.PublicKey}\n\nKey phrase: [green]{String.Join(", ", mnemonic.Words)}[/].\nA file named '[bold]id.json[/]' will also be created in [bold]{executableDirectory}[/] that the client will use\n[red]Highly recommended to save a copy of each[/]");
@@ -553,8 +562,8 @@ namespace OrionClientLib.Modules
             }
 
             SelectionPrompt<int> selectionPrompt = new SelectionPrompt<int>();
+            selectionPrompt.WrapAround = true;
             selectionPrompt.Title(potentialWallets.Count == 0 ? "Found no wallet keys in default location for solana-cli or client" : $"Found {potentialWallets.Count} potential wallets");
-            selectionPrompt.WrapAround(false);
             selectionPrompt.EnableSearch();
             selectionPrompt.UseConverter((i) =>
             {

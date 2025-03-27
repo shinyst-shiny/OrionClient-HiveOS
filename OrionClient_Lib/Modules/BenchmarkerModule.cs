@@ -59,7 +59,7 @@ namespace OrionClientLib.Modules
         {
             MultiSelectionPrompt<IHasher> hasherPrompt = new MultiSelectionPrompt<IHasher>();
             hasherPrompt.Title = "Choose hashers to benchmark";
-
+            hasherPrompt.WrapAround = true;
             hasherPrompt.AddChoiceGroup(data.Hashers.First(x => x is DisabledCPUHasher), data.Hashers.Where(x => x is not DisabledHasher && x.HardwareType == IHasher.Hardware.CPU));
             hasherPrompt.AddChoiceGroup(data.Hashers.First(x => x is DisabledGPUHasher), data.Hashers.Where(x => x is not DisabledHasher && x.HardwareType == IHasher.Hardware.GPU && (!x.Experimental || data.Settings.GPUSetting.EnableExperimentalHashers)));
             hasherPrompt.UseConverter((hasher) =>

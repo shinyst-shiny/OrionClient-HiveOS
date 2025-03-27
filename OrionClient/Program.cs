@@ -343,6 +343,7 @@ namespace OrionClient
             }
 
             #endregion
+
             #region CPU
 
             if (cmdOptions.CPUThreads.HasValue)
@@ -615,6 +616,8 @@ namespace OrionClient
         private static async Task<IModule> DisplayModuleSelector(Data data)
         {
             SelectionPrompt<IModule> prompt = new SelectionPrompt<IModule>();
+            prompt.WrapAround = true;
+
             (Wallet wallet, string publicKey) = await _settings.GetWalletAsync();
             (IHasher cpuHasher, IHasher gpuHasher) = data.GetChosenHasher();
             IPool pool = data.GetChosenPool();

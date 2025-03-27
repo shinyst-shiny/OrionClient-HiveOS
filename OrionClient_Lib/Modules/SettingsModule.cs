@@ -147,6 +147,7 @@ namespace OrionClientLib.Modules
             async Task<string> HandleType(string message, string defaultOption, List<ISettingInfo> options)
             {
                 SelectionPrompt<ISettingInfo> selectionPrompt = new SelectionPrompt<ISettingInfo>();
+                selectionPrompt.WrapAround = true;
                 selectionPrompt.Title(message);
                 selectionPrompt.UseConverter((opt) =>
                 {
@@ -207,6 +208,7 @@ namespace OrionClientLib.Modules
                 if(validation is OptionSettingValidation<T> optionValidation)
                 {
                     SelectionPrompt<T> selectionPrompt = new SelectionPrompt<T>();
+                    selectionPrompt.WrapAround = true;
                     selectionPrompt.Title(message);
                     selectionPrompt.AddChoices(optionValidation.Options.OrderByDescending(x => x.Equals(defaultOption)));
                     selectionPrompt.UseConverter((v) =>
@@ -272,6 +274,7 @@ namespace OrionClientLib.Modules
             var allChanges = await _settings.GetChanges();
 
             SelectionPrompt<Details> selectionPrompt = new SelectionPrompt<Details>();
+            selectionPrompt.WrapAround = true;
 
             StringBuilder builder = new StringBuilder();
 
