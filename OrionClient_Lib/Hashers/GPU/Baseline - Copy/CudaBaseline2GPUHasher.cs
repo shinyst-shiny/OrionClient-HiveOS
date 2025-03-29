@@ -18,7 +18,7 @@ namespace OrionClientLib.Hashers.GPU.Baseline
     {
         public override string Name => "Cuda Baseline 2";
         public override string Description => "Baseline GPU hashing for Nvidia GPUs";
-        //public override bool DisplaySetting => false;
+        public override bool DisplaySetting => false;
 
         public override Action<ArrayView<Instruction>, ArrayView<SipState>, ArrayView<ulong>> HashxKernel()
         {
