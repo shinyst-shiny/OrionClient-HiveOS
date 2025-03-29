@@ -120,6 +120,7 @@ namespace OrionClientLib.Modules
                     $"\n\nValidate public keys are accurate prior to sending any funds{(!String.IsNullOrEmpty(lastError) ? $"\n\n[red]{lastError}[/]" : String.Empty)}");
 
                 const string run = "Run";
+                const string settings = "Settings";
                 const string view = "View Wallets";
                 const string setup = "Setup";
                 const string reload = "Reload Vanity File";
@@ -128,18 +129,25 @@ namespace OrionClientLib.Modules
                 if(_currentData.Settings.VanitySetting.GPUDevices?.Count > 0)
                 {
                     selectionPrompt.AddChoice(run);
+                    selectionPrompt.AddChoice(settings);
                 }
 
                 selectionPrompt.AddChoices(setup, view, reload, exit);
 
-                string choice = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
-
                 try
                 {
+                    string choice = await selectionPrompt.ShowAsync(AnsiConsole.Console, _cts.Token);
+
                     switch (choice)
                     {
                         case run:
                             return true;
+                        case settings:
+                            if(!await DisplaySettings())
+                            {
+                                return false;
+                            }
+                            break;
                         case view:
                             await ViewWallets();
                             break;
@@ -156,6 +164,15 @@ namespace OrionClientLib.Modules
                         case exit:
                             return false;
                     }
+
+                    if(_cts.IsCancellationRequested)
+                    {
+                        return false;
+                    }
+                }
+                catch(TaskCanceledException)
+                {
+                    return false;
                 }
                 catch(PromptAbortException)
                 {
@@ -163,6 +180,22 @@ namespace OrionClientLib.Modules
                     AnsiConsole.Clear();
                 }
             }
+        }
+
+        private async Task<bool> DisplaySettings()
+        {
+            try
+            {
+                SettingMenu menu = new SettingMenu(_currentData.Settings, _cts);
+                await menu.DisplaySettingMenu("Vanity Settings", _currentData.Settings.VanitySetting);
+            }
+            catch(PromptAbortException)
+            {
+            }
+
+            AnsiConsole.Clear();
+
+            return true;
         }
 
         private async Task SelectGPUs()
