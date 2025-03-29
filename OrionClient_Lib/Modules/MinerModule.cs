@@ -235,20 +235,23 @@ namespace OrionClientLib.Modules
                     CPUThreads = (cpuHasher as BaseCPUHasher)?.Threads ?? 0,
                     GPUBatchSize = (gpuHasher as BaseGPUHasher)?.BatchSize ?? 0,
                     GPUBlockSize = _currentData.Settings.GPUSetting.GPUBlockSize,
-                    GPUHasher = gpuHasher.Name,
+                    GPUHasher = gpuHasher?.Name ?? "Disabled",
                     Pool = pool.Name,
                     ProgramGenerationThreads = _currentData.Settings.GPUSetting.ProgramGenerationThreads <= 0 ? Environment.ProcessorCount : _currentData.Settings.GPUSetting.ProgramGenerationThreads,
                 };
 
-                var devices = GetDevicesInUse((IGPUHasher)gpuHasher);
-
-                for(int i =0; i < devices.Count; i++)
+                if (gpuHasher != null)
                 {
-                    miningStartEvent.Devices.Add(new MiningStartEvent.DeviceInformation
+                    var devices = GetDevicesInUse((IGPUHasher)gpuHasher);
+
+                    for (int i = 0; i < devices.Count; i++)
                     {
-                        Id = i,
-                        Name = devices[i].Name
-                    });
+                        miningStartEvent.Devices.Add(new MiningStartEvent.DeviceInformation
+                        {
+                            Id = i,
+                            Name = devices[i].Name
+                        });
+                    }
                 }
 
                 _currentData.EventHandler.AddEvent(miningStartEvent);
