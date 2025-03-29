@@ -262,10 +262,12 @@ namespace OrionClientLib.Modules
             _cts = cts;
         }
 
-        public async Task<(bool, string)> DisplaySettingMenu(string menuName = "Main Menu", object start = null)
+        //Add ability to display multiple menus
+        public async Task<(bool, string)> DisplaySettingMenu(string menuName = "Main Menu", params object[] menus)
         {
             bool reloadSettings = false;
-            start ??= _settings;
+
+            object start = menus.Length == 1 ? menus[0] : _settings;
 
             try
             {
@@ -274,7 +276,7 @@ namespace OrionClientLib.Modules
                     MenuName = menuName
                 };
 
-                List<Details> menu = GetSettingDetails(start, mainMenu);
+                List<Details> menu = GetSettingDetails(start, menus, mainMenu, true);
 
                 mainMenu.InnerSettings = menu;
 
@@ -591,7 +593,7 @@ namespace OrionClientLib.Modules
             return await selectionPrompt.ShowAsync(AnsiConsole.Console, token);
         }
 
-        private List<Details> GetSettingDetails(object obj, Details upperMenu = null)
+        private List<Details> GetSettingDetails(object obj, object[] menus, Details upperMenu = null, bool mainMenu = false)
         {
             List<Details> details = new List<Details>();
 
@@ -613,13 +615,35 @@ namespace OrionClientLib.Modules
                     Obj = obj
                 };
 
+                bool skip = false;
+
                 if (property.PropertyType != typeof(string) && property.PropertyType.IsClass)
                 {
                     newDetails.MenuName = attr.Name;
-                    newDetails.InnerSettings = GetSettingDetails(property.GetValue(obj), newDetails);
+                    var v = property.GetValue(obj);
+
+                    if(menus.Length > 0)
+                    {
+                        if(!menus.Contains(v))
+                        {
+                            skip = true;
+                        }
+                    }
+
+                    if (!skip)
+                    {
+                        newDetails.InnerSettings = GetSettingDetails(v, menus, newDetails);
+                    }
+                }
+                else if (mainMenu && menus.Length > 1)
+                {
+                    skip = true;
                 }
 
-                details.Add(newDetails);
+                if (!skip)
+                {
+                    details.Add(newDetails);
+                }
             }
 
             return details;
