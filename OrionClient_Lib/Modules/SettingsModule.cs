@@ -262,7 +262,6 @@ namespace OrionClientLib.Modules
             _cts = cts;
         }
 
-        //Add ability to display multiple menus
         public async Task<(bool, string)> DisplaySettingMenu(string menuName = "Main Menu", params object[] menus)
         {
             bool reloadSettings = false;

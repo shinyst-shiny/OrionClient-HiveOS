@@ -858,7 +858,7 @@ namespace OrionClientLib.Modules
 
                         stakingInfo.TotalBoostStake = boost.TotalDeposits / Math.Pow(10, stakingInfo.Boost.Decimal);
                         stakingInfo.TotalStakers = boost.TotalStakers;
-                        stakingInfo.Multiplier = Math.Round(boost.Multiplier / 1000.0, 2);
+                        stakingInfo.Multiplier = Math.Round(boost.Multiplier / 100.0, 2);
                         stakingInfo.BoostInfo = boost;
                         stakingInfo.Locked = false;
 
@@ -969,10 +969,10 @@ namespace OrionClientLib.Modules
 
 
                     _stakingTable.AddRow(WrapBooleanColor(stakeInfo.Boost.Name, stakeInfo.Enabled, null, Color.Red),
-                                        $"{stakeInfo.Multiplier:0.##}x",
+                                        $"{stakeInfo.Multiplier:0.##}%",
                                         stakeInfo.TotalStakers.ToString(),
                                         $"{stakeInfo.TotalBoostStake:0.###} (${stakeInfo.BoostTotalUSDValue:n2})",
-                                        $"{relativeProfit:0.00}x",
+                                        $"{relativeProfit / oreBoost.Multiplier:0.00}x",
                                         $"{stakeInfo.UserStake:0.###} (${stakeInfo.UserStakeUSDValue:n2})", 
                                         $"{stakeInfo.SharePercent:0.####}%",
                                         WrapBooleanColor($"{stakeInfo.Rewards:n11} (${stakeInfo.RewardUSDValue:n2})", stakeInfo.Rewards > 0, Color.Green, null)
@@ -992,10 +992,10 @@ namespace OrionClientLib.Modules
                     var relativeProfit = (double)oreBoost.BoostTotalUSDValue / ((double)stakeInfo.BoostTotalUSDValue / stakeInfo.Multiplier);
 
 
-                    _stakingTable.UpdateCell(i, 1, $"{stakeInfo.Multiplier:0.##}x");
+                    _stakingTable.UpdateCell(i, 1, $"{stakeInfo.Multiplier:0.##}%");
                     _stakingTable.UpdateCell(i, 2, stakeInfo.TotalStakers.ToString());
                     _stakingTable.UpdateCell(i, 3, $"{stakeInfo.TotalBoostStake:0.###} (${stakeInfo.BoostTotalUSDValue:n2})");
-                    _stakingTable.UpdateCell(i, 4, $"{relativeProfit:0.00}x");
+                    _stakingTable.UpdateCell(i, 4, $"{relativeProfit / oreBoost.Multiplier:0.00}");
                     _stakingTable.UpdateCell(i, 5, $"{stakeInfo.UserStake:0.###} (${stakeInfo.UserStakeUSDValue:n2})");
                     _stakingTable.UpdateCell(i, 6, $"{stakeInfo.SharePercent:0.####}%");
                     _stakingTable.UpdateCell(i, 7, WrapBooleanColor($"{stakeInfo.Rewards:n11} (${stakeInfo.RewardUSDValue:n2})", stakeInfo.Rewards > 0, Color.Green, null));
@@ -1275,7 +1275,7 @@ namespace OrionClientLib.Modules
 
                     stakeInfo.TotalBoostStake = boost.TotalDeposits / Math.Pow(10, stakeInfo.Boost.Decimal);
                     stakeInfo.TotalStakers = boost.TotalStakers;
-                    stakeInfo.Multiplier = boost.Multiplier / 1000.0;
+                    stakeInfo.Multiplier = boost.Multiplier / 100.0;
                     stakeInfo.BoostInfo = boost;
                     //stakeInfo.Locked = boost.Locked > 0;
 
