@@ -10,7 +10,7 @@ namespace OrionClientLib.Pools
     {
         public override string Name { get; } = "Ec1ipse Pool [[Unofficial]]";
         public override string DisplayName => Name;
-        public override bool DisplaySetting => true;
+        public override bool DisplaySetting => false;
         public override string ArgName => "ec1ipse";
 
         public override string Description => $"[green]{Coins}[/] pool using Ore-HQ pool implementation. 5% commission. Operators (discord): Ec1ipse | Kriptikz";
