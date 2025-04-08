@@ -34,26 +34,35 @@ namespace OrionClientLib.CoinPrograms.Ore
             };
         }
 
-        public ulong CalculateRewards(Boost boost, ulong proofBalance)
+        public ulong CalculateRewards(Boost boost, ulong proofBalance, BoostConfig boostConfig)
         {
-            decimal rewardFactor = boost.RewardsFactor.ToDecimal();
-            decimal lastRewardFactor = LastRewardsFactor.ToDecimal();
+            var rewards = Rewards;
 
-            if (boost.TotalDeposits > 0)
+            decimal configRewardsFactor = boostConfig.RewardsFactor.ToDecimal();
+            decimal boostRewardFactor = boost.RewardsFactor.ToDecimal();
+
+            if(proofBalance > 0 )
             {
-                rewardFactor += (decimal)proofBalance / boost.TotalDeposits;
+                configRewardsFactor += (decimal)proofBalance / boostConfig.TotalWeight;
             }
 
-            if (rewardFactor > lastRewardFactor)
+            if(configRewardsFactor > boost.LastRewardsFactor.ToDecimal())
             {
-                var accumulatedRewards = rewardFactor - lastRewardFactor;
+                var accumulatedRewards = configRewardsFactor - boost.LastRewardsFactor.ToDecimal();
+                var boostRewards = accumulatedRewards * boost.Weight;
+                boostRewardFactor += boostRewards / boost.TotalDeposits;
+            }
 
+            if(boostRewardFactor > LastRewardsFactor.ToDecimal())
+            {
+                var accumulatedRewards = boostRewardFactor - LastRewardsFactor.ToDecimal();
                 var personalRewards = accumulatedRewards * Balance;
 
-                return Rewards + (ulong)personalRewards;
+                rewards += (ulong)personalRewards;
+
             }
 
-            return Rewards;
+            return rewards;
         }
     }
 }

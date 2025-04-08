@@ -69,6 +69,8 @@ namespace OrionClientLib.Modules
         private Table _historicalTable;
         private HistoricalStakingData _historicalData = new HistoricalStakingData();
 
+        private BoostConfig _boostConfig;
+
         private string _historicalDataDirectory = Path.Combine(Utils.GetExecutableDirectory(), Settings.StakingViewSettings.Directory);
 
         public StakingModule()
@@ -807,7 +809,7 @@ namespace OrionClientLib.Modules
                         double oldRewards = stakingInfo.Rewards;
 
                         stakingInfo.UserStake = stake.Balance / Math.Pow(10, stakingInfo.Boost.Decimal);
-                        stakingInfo.Rewards = stake.CalculateRewards(stakingInfo.BoostInfo, stakingInfo.TotalStakers) / OreProgram.OreDecimals;
+                        stakingInfo.Rewards = stake.CalculateRewards(stakingInfo.BoostInfo, stakingInfo.TotalStakers, _boostConfig) / OreProgram.OreDecimals;
 
                         if(stakingInfo.Rewards > oldRewards)
                         {
@@ -858,7 +860,7 @@ namespace OrionClientLib.Modules
 
                         stakingInfo.TotalBoostStake = boost.TotalDeposits / Math.Pow(10, stakingInfo.Boost.Decimal);
                         stakingInfo.TotalStakers = boost.TotalStakers;
-                        stakingInfo.Multiplier = Math.Round(boost.Multiplier / 100.0, 2);
+                        stakingInfo.Multiplier = Math.Round(boost.Weight / 100.0, 2);
                         stakingInfo.BoostInfo = boost;
                         stakingInfo.Locked = false;
 
@@ -953,7 +955,7 @@ namespace OrionClientLib.Modules
             {
                 _stakingTable = new Table();
                 _stakingTable.Title($"Staking Information [[Ore: ${oreBoost.OreUSDValue:0.00}]]");
-                _stakingTable.AddColumns("LP", "Mult", "Stakers", "Total Stake", "Relative Yield", "User Stake", "Share", "Rewards");
+                _stakingTable.AddColumns("LP", "Weight", "Stakers", "Total Stake", "Relative Yield", "User Stake", "Share", "Rewards");
                 _stakingTable.ShowRowSeparators = true;
                 foreach(var column in _stakingTable.Columns)
                 {
@@ -1166,6 +1168,8 @@ namespace OrionClientLib.Modules
                 }
             }
 
+            accounts.Add(OreProgram.BoostConfig);
+
             var result = await SendWithRetry(() => _client.GetMultipleAccountsAsync(accounts, Solnet.Rpc.Types.Commitment.Confirmed));
 
             if(result == null)
@@ -1217,7 +1221,11 @@ namespace OrionClientLib.Modules
             int accountCount = 0;
             int i = 0;
 
-            while(accountCount < accounts.Count)
+            //Boost config first
+            _boostConfig = BoostConfig.Deserialize(Convert.FromBase64String(accountInfoList.Last().Data[0]));
+
+            //Staking values not entirely accurate
+            while (accountCount < (accounts.Count - 1))
             {
                 var stakeInfo = _stakeInfo[i++];
 
@@ -1275,7 +1283,7 @@ namespace OrionClientLib.Modules
 
                     stakeInfo.TotalBoostStake = boost.TotalDeposits / Math.Pow(10, stakeInfo.Boost.Decimal);
                     stakeInfo.TotalStakers = boost.TotalStakers;
-                    stakeInfo.Multiplier = boost.Multiplier / 100.0;
+                    stakeInfo.Multiplier = ((double)boost.Weight / _boostConfig.TotalWeight) * 100;
                     stakeInfo.BoostInfo = boost;
                     //stakeInfo.Locked = boost.Locked > 0;
 
@@ -1306,7 +1314,7 @@ namespace OrionClientLib.Modules
 
                     stakeInfo.UserStake = stake.Balance / Math.Pow(10, stakeInfo.Boost.Decimal);
                     stakeInfo.Rewards = stake.Rewards / OreProgram.OreDecimals;
-                    stakeInfo.Rewards = stake.CalculateRewards(stakeInfo.BoostInfo, stakeInfo.ProofBalance) / OreProgram.OreDecimals;
+                    stakeInfo.Rewards = stake.CalculateRewards(stakeInfo.BoostInfo, stakeInfo.ProofBalance, _boostConfig) / OreProgram.OreDecimals;
                 }
                 else
                 {
