@@ -170,7 +170,7 @@ namespace OrionClientLib.Modules
                         return false;
                     }
                 }
-                catch(TaskCanceledException)
+                catch(OperationCanceledException)
                 {
                     return false;
                 }
