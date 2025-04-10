@@ -570,10 +570,7 @@ namespace DrillX.Solver
         //Regs must be at least 72 ulong values. 8 for output, 8*8 for registers
         public unsafe int Solve_Avx512_C(HashX program, EquixSolution* solutions, nint heap, nint computeSolutions)
         {
-            //for (int i = 0; i <= ushort.MaxValue; i += 8)
-            //{
-                program.AsmCompiled_Avx512((ulong)0, (ulong*)computeSolutions);
-            //}
+            program.AsmCompiled_Avx512((ulong)0, (ulong*)computeSolutions);
 
             return Solve_Opt((ulong*)computeSolutions, (byte*)heap, solutions);
         }
@@ -688,27 +685,25 @@ namespace DrillX.Solver
             for (int i = 0; i < Radix.Total; i += 4)
             {
                 program.AsmCompiled_Avx2((ulong)i, values + i);
-
-                // First element
                 ushort bucket0 = (ushort)(values[i + 0] & 0x7FFF);
                 ushort bucket1 = (ushort)(values[i + 1] & 0x7FFF);
                 ushort bucket2 = (ushort)(values[i + 2] & 0x7FFF);
                 ushort bucket3 = (ushort)(values[i + 3] & 0x7FFF);
 
                 ushort loc0 = Math.Min((byte)7, counts[bucket0]);
-                tempCounts[bucket0 * 8 + (loc0)] = (ushort)(i + 0);
+                tempCounts[bucket0 * 8 + loc0] = (ushort)(i + 0);
                 counts[bucket0] = (byte)(loc0 + 1);
 
                 ushort loc1 = Math.Min((byte)7, counts[bucket1]);
-                tempCounts[bucket1 * 8 + (loc1)] = (ushort)(i + 1);
+                tempCounts[bucket1 * 8 + loc1] = (ushort)(i + 1);
                 counts[bucket1] = (byte)(loc1 + 1);
 
                 ushort loc2 = Math.Min((byte)7, counts[bucket2]);
-                tempCounts[bucket2 * 8 + (loc2)] = (ushort)(i + 2);
+                tempCounts[bucket2 * 8 + loc2] = (ushort)(i + 2);
                 counts[bucket2] = (byte)(loc2 + 1);
 
                 ushort loc3 = Math.Min((byte)7, counts[bucket3]);
-                tempCounts[bucket3 * 8 + (loc3)] = (ushort)(i + 3);
+                tempCounts[bucket3 * 8 + loc3] = (ushort)(i + 3);
                 counts[bucket3] = (byte)(loc3 + 1);
             }
 

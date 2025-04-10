@@ -115,7 +115,6 @@ namespace OrionClientLib.Hashers.CPU
             }
         }
 
-
         protected override void ExecuteThreadV2(ExecutionData data)
         {
             if (!_solverQueue.TryDequeue(out Solver solver))

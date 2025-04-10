@@ -251,7 +251,7 @@ namespace OrionClientLib.Hashers
 
                     _executing = true;
 
-                    if (this is NativeCPUHasherAVX2 || this is AVX512CPUHasher)
+                    if (this is NativeCPUHasherAVX2 || this is AVX512CPUHasher || this is HybridCPUHasherAVX2)
                     {
                         TimeSpan startTime = _sw.Elapsed;
                         int prevDifficulty = _info.DifficultyInfo.BestDifficulty;
