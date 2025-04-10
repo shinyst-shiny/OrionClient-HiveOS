@@ -65,6 +65,7 @@ namespace OrionClientLib.Pools
         protected string _errorMessage = String.Empty;
 
         private bool _sendingReadyUp = false;
+        private int _serverSentMineTransactions = 0;
 
         #region Overrides
 
@@ -101,10 +102,12 @@ namespace OrionClientLib.Pools
                     if (message == serverMineSend)
                     {
                         //"info" log with best difficulty submitted
-                        if (_bestDifficulty != null)
+                        if (_bestDifficulty != null && _serverSentMineTransactions == 0)
                         {
                             _logger.Log(LogLevel.Info, $"Challenge Id: {_bestDifficulty.ChallengeId}. Best Difficulty: {_bestDifficulty.BestDifficulty}. Best Nonce: {_bestDifficulty.BestNonce}");
                         }
+
+                        _serverSentMineTransactions++;
 
                         //Continue to attempt to send readyup message until successful
                         if (!_sendingReadyUp)
@@ -189,7 +192,7 @@ namespace OrionClientLib.Pools
                 _client ??= new HttpClient
                 {
                     BaseAddress = new Uri($"https://{WebsocketUrl.Host}"),
-                    Timeout = TimeSpan.FromSeconds(5)
+                    Timeout = TimeSpan.FromSeconds(10)
                 };
             }
 
@@ -941,6 +944,7 @@ namespace OrionClientLib.Pools
         {
             _currentBestDifficulty = 0;
             _bestDifficulty = null;
+            _serverSentMineTransactions = 0;
 
             OnChallengeUpdate?.Invoke(this, new NewChallengeInfo
             {
@@ -1019,7 +1023,7 @@ namespace OrionClientLib.Pools
 
             if(result)
             {
-                _logger.Log(LogLevel.Debug, $"Waiting for new challenge");
+                _logger.Log(LogLevel.Debug, $"Waiting for new challenge [{_serverSentMineTransactions}]");
 
                 return result;
             }

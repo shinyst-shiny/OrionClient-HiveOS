@@ -561,15 +561,10 @@ namespace DrillX.Solver
         //    return C_Solve_Full_Avx512(program._compiledFunction, (byte*)heap, solutions, regs);
         //}
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public unsafe int Solve_Avx2_C(HashX program, EquixSolution* solutions, nint heap, nint computeSolutions)
         {
-            for (int i = 0; i <= ushort.MaxValue; i += 4)
-            {
-                program.AsmCompiled_Avx2((ulong)i, (ulong*)computeSolutions + i);
-            }
-
-            return C_Solve((ulong*)computeSolutions, (byte*)heap, solutions);
+            return Solve_Opt_Com(program, (ulong*)computeSolutions, (byte*)heap, solutions);
         }
 
         //Regs must be at least 72 ulong values. 8 for output, 8*8 for registers
@@ -655,6 +650,21 @@ namespace DrillX.Solver
         #region Optimized
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
+        public unsafe int Solve_Opt_Com(HashX program, ulong* values, byte* heap, EquixSolution* solutions)
+        {
+            Radix* rs = (Radix*)heap;
+
+            ulong* stageA = values;
+            ulong* stageB = rs->Stage1;
+
+            int stage1Count = SortPass1_Com(program, stageA, rs->Counts, rs->TempCounts, stageB, rs->Stage1Indices, Radix.Total);
+            int stage2Count = SortPass2(stageB, rs->Counts, rs->TempCounts, stageA, stage1Count);
+            int sols = SortPass3(stageA, rs->Counts, rs->TempCounts, stageB, rs->Stage1Indices, solutions, stage2Count);
+
+            return sols;
+        }
+
         public unsafe int Solve_Opt(ulong* values, byte* heap, EquixSolution* solutions)
         {
             Radix* rs = (Radix*)heap;
@@ -663,21 +673,22 @@ namespace DrillX.Solver
             ulong* stageB = rs->Stage1;
 
             int stage1Count = SortPass1(stageA, rs->Counts, rs->TempCounts, stageB, rs->Stage1Indices, Radix.Total);
-            int stage2Count = SortPass2(stageB, rs->Counts, rs->TempCounts, stageA, rs->Stage2Indices, stage1Count);
-            int sols = SortPass3(stageA, rs->Counts, rs->TempCounts, stageB, rs->Stage1Indices, rs->Stage2Indices, solutions, stage2Count);
+            int stage2Count = SortPass2(stageB, rs->Counts, rs->TempCounts, stageA, stage1Count);
+            int sols = SortPass3(stageA, rs->Counts, rs->TempCounts, stageB, rs->Stage1Indices, solutions, stage2Count);
 
             return sols;
         }
 
-        //[MethodImpl(MethodImplOptions.AggressiveOptimization)]
 
-        private unsafe int SortPass1(ulong* values, byte* counts, ushort* tempCounts, ulong* tempStage, uint* stage1Indices, int totalNum)
+        private unsafe int SortPass1_Com(HashX program, ulong* values, byte* counts, ushort* tempCounts, ulong* tempStage, uint* stage1Indices, int totalNum)
         {
             Span<ushort> cc = new Span<ushort>(counts, Radix.Total / 2);
             cc.Fill(0);
 
             for (int i = 0; i < Radix.Total; i += 4)
             {
+                program.AsmCompiled_Avx2((ulong)i, values + i);
+
                 // First element
                 ushort bucket0 = (ushort)(values[i + 0] & 0x7FFF);
                 ushort bucket1 = (ushort)(values[i + 1] & 0x7FFF);
@@ -703,14 +714,20 @@ namespace DrillX.Solver
 
             var currentIndex = 0;
 
-            for (int bucketIdx = 1; bucketIdx < Radix.Total / 4; bucketIdx++)
+            for (int bucketIdx = 0; bucketIdx < Radix.Total / 4; bucketIdx++)
             {
 
                 int inverse = -bucketIdx & 0x7FFF;
                 var bucketACount = counts[bucketIdx];
+
+                if (bucketACount == 0)
+                {
+                    continue;
+                }
+
                 var bucketBCount = counts[inverse];
 
-                if (bucketACount == 0 || bucketBCount == 0)
+                if (bucketBCount == 0)
                 {
                     continue;
                 }
@@ -753,13 +770,17 @@ namespace DrillX.Solver
 
                         var fullIndices = Avx2.Xor(currentBucketAIndice.AsUInt32(), x);
 
-                        var test = Avx2.Add(bucketAValues, bucketBValuesLower);
-                        var test2 = Avx2.Add(bucketAValues, bucketBValuesUpper);
+                        var lowSumValues = Avx2.Add(bucketAValues, bucketBValuesLower);
+                        var highSumValues = Avx2.Add(bucketAValues, bucketBValuesUpper);
 
-                        Avx2.Store(tempStage + currentIndex, test);
-                        Avx2.Store(tempStage + currentIndex + 4, test2);
-
+                        Avx2.Store(tempStage + currentIndex, lowSumValues);
                         Avx2.Store(stage1Indices + currentIndex, fullIndices);
+
+                        if (bucketBCount > 4)
+                        {
+                            Avx2.Store(tempStage + currentIndex + 4, highSumValues);
+                        }
+
                         currentIndex += index;
 
                         if (currentIndex >= Radix.Total)
@@ -768,7 +789,7 @@ namespace DrillX.Solver
                             goto end;
 
 #else
-                        return Radix.Total;
+                            return Radix.Total;
 #endif
                         }
                     }
@@ -782,7 +803,7 @@ namespace DrillX.Solver
             int totalBad = 0;
 
             HashSet<(uint, uint)> pairs = new HashSet<(uint, uint)>();
-
+            
             for (int i = 0; i < stage1Isndices.Length; i++)
             {
                 var vv = stage1Isndices[i];
@@ -800,8 +821,8 @@ namespace DrillX.Solver
                     continue;
                 }
 
-                if (!pairs.Add((a, b)))
-                {
+                if(!pairs.Add((a, b)))
+                    {
 
                 }
             }
@@ -812,7 +833,159 @@ namespace DrillX.Solver
 
         }
 
-        private unsafe int SortPass2(ulong* values, byte* counts, ushort* tempCounts, ulong* tempStage, uint* stage1Indices, int totalNum)
+        //[MethodImpl(MethodImplOptions.AggressiveOptimization)]
+        private unsafe int SortPass1(ulong* values, byte* counts, ushort* tempCounts, ulong* tempStage, uint* stage1Indices, int totalNum)
+        {
+            Span<ushort> cc = new Span<ushort>(counts, Radix.Total / 2);
+            cc.Fill(0);
+
+            for (int i = 0; i < Radix.Total; i += 4)
+            {
+                // First element
+                ushort bucket0 = (ushort)(values[i + 0] & 0x7FFF);
+                ushort bucket1 = (ushort)(values[i + 1] & 0x7FFF);
+                ushort bucket2 = (ushort)(values[i + 2] & 0x7FFF);
+                ushort bucket3 = (ushort)(values[i + 3] & 0x7FFF);
+
+                ushort loc0 = Math.Min((byte)7, counts[bucket0]);
+                tempCounts[bucket0 * 8 + (loc0)] = (ushort)(i + 0);
+                counts[bucket0] = (byte)(loc0 + 1);
+
+                ushort loc1 = Math.Min((byte)7, counts[bucket1]);
+                tempCounts[bucket1 * 8 + (loc1)] = (ushort)(i + 1);
+                counts[bucket1] = (byte)(loc1 + 1);
+
+                ushort loc2 = Math.Min((byte)7, counts[bucket2]);
+                tempCounts[bucket2 * 8 + (loc2)] = (ushort)(i + 2);
+                counts[bucket2] = (byte)(loc2 + 1);
+
+                ushort loc3 = Math.Min((byte)7, counts[bucket3]);
+                tempCounts[bucket3 * 8 + (loc3)] = (ushort)(i + 3);
+                counts[bucket3] = (byte)(loc3 + 1);
+            }
+
+            var currentIndex = 0;
+
+            for (int bucketIdx = 0; bucketIdx < Radix.Total / 4; bucketIdx++)
+            {
+
+                int inverse = -bucketIdx & 0x7FFF;
+                var bucketACount = counts[bucketIdx];
+
+                if (bucketACount == 0)
+                {
+                    continue;
+                }
+
+                var bucketBCount = counts[inverse];
+
+                if (bucketBCount == 0)
+                {
+                    continue;
+                }
+
+                var bucketAIndex = bucketIdx;
+                var bucketBIndex = inverse;
+
+                if (bucketACount > bucketBCount)
+                {
+                    //Inverse buckets
+                    var temp = bucketBIndex;
+                    bucketBIndex = bucketAIndex;
+                    bucketAIndex = temp;
+
+                    temp = bucketACount;
+                    bucketACount = bucketBCount;
+                    bucketBCount = (byte)temp;
+                }
+
+                {
+                    var index = Math.Min((byte)8, bucketBCount);
+
+                    var b = Sse2.LoadAlignedVector128((byte*)(tempCounts + bucketBIndex * 8)).AsUInt16();
+                    var bucketBIndices = Avx2.ConvertToVector256Int32(b);
+                    var x = Avx2.ShiftLeftLogical(bucketBIndices, 16).AsUInt32();
+                    var bucketBValuesLower = Avx2.GatherVector256(values, bucketBIndices.GetLower(), 8);
+                    var bucketBValuesUpper = Vector256<ulong>.Zero;
+
+                    if (bucketBCount > 4)
+                    {
+                        bucketBValuesUpper = Avx2.GatherVector256(values, bucketBIndices.GetUpper(), 8);
+                    }
+
+                    for (int i = 0; i < bucketACount; i++)
+                    {
+                        var bucketAIndice = tempCounts[bucketAIndex * 8 + i];
+
+                        var bucketAValues = Vector256.Create((values[bucketAIndice]));
+                        var currentBucketAIndice = Vector256.Create((int)bucketAIndice);
+
+                        var fullIndices = Avx2.Xor(currentBucketAIndice.AsUInt32(), x);
+
+                        var lowSumValues = Avx2.Add(bucketAValues, bucketBValuesLower);
+                        var highSumValues = Avx2.Add(bucketAValues, bucketBValuesUpper);
+
+                        Avx2.Store(tempStage + currentIndex, lowSumValues);
+                        Avx2.Store(stage1Indices + currentIndex, fullIndices);
+
+                        if (bucketBCount > 4)
+                        {
+                            Avx2.Store(tempStage + currentIndex + 4, highSumValues);
+                        }
+
+                        currentIndex += index;
+
+                        if (currentIndex >= Radix.Total)
+                        {
+#if DEBUG
+                            goto end;
+
+#else
+                            return Radix.Total;
+#endif
+                        }
+                    }
+                }
+            }
+
+        end:
+
+#if DEBUG
+            var stage1Isndices = new Span<uint>(stage1Indices, currentIndex);
+            int totalBad = 0;
+
+            HashSet<(uint, uint)> pairs = new HashSet<(uint, uint)>();
+            
+            for (int i = 0; i < stage1Isndices.Length; i++)
+            {
+                var vv = stage1Isndices[i];
+
+                var a = vv & 0xFFFF;
+                var b = vv >> 16;
+
+                var valueA = values[a];
+                var valueB = values[b];
+
+                if (((valueA + valueB) & 0x7FFF) != 0)
+                {
+                    Console.WriteLine(++totalBad);
+
+                    continue;
+                }
+
+                if(!pairs.Add((a, b)))
+                    {
+
+                }
+            }
+
+#endif
+
+            return currentIndex;
+
+        }
+
+        private unsafe int SortPass2(ulong* values, byte* counts, ushort* tempCounts, ulong* tempStage, int totalNum)
         {
             Span<ushort> cc = new Span<ushort>(counts, Radix.Total / 2);
             cc.Fill(0);
@@ -856,13 +1029,21 @@ namespace DrillX.Solver
 
             var currentIndex = 0;
 
-            for (int bucketIdx = 1; bucketIdx < Radix.Total / 4; bucketIdx++)
+            var stageMask = Vector256.Create((1ul << 30) - 1);
+
+            for (int bucketIdx = 0; bucketIdx < Radix.Total / 4; bucketIdx++)
             {
                 int inverse = -bucketIdx & 0x7FFF;
                 var bucketACount = counts[bucketIdx];
+
+                if (bucketACount == 0)
+                {
+                    continue;
+                }
+
                 var bucketBCount = counts[inverse];
 
-                if (bucketACount == 0 || bucketBCount == 0)
+                if (bucketBCount == 0)
                 {
                     continue;
                 }
@@ -905,13 +1086,30 @@ namespace DrillX.Solver
 
                         var fullIndices = Avx2.Xor(currentBucketAIndice.AsUInt32(), x);
 
-                        var test = Avx2.Add(bucketAValues, bucketBValuesLower);
-                        var test2 = Avx2.Add(bucketAValues, bucketBValuesUpper);
+                        var lowSumValues = Avx2.Add(bucketAValues, bucketBValuesLower);
+                        var lowerIndices = Avx2.ConvertToVector256Int64(Avx2.ExtractVector128(fullIndices, 0)).AsUInt64();
+                        lowSumValues = Avx2.ShiftRightLogical(lowSumValues, 30);
+                        lowerIndices = Avx2.ShiftLeftLogical(lowerIndices, 32);
+                        var maskedLowSumValues = Avx2.And(lowSumValues, stageMask);
 
-                        Avx2.Store(tempStage + currentIndex, test);
-                        Avx2.Store(tempStage + currentIndex + 4, test2);
+                        var storeLowValues = Avx2.Or(lowerIndices, maskedLowSumValues);
 
-                        Avx2.Store(stage1Indices + currentIndex, fullIndices);
+                        Avx2.Store(tempStage + currentIndex, storeLowValues);
+
+                        if (bucketBCount > 4)
+                        {
+                            var highSumValues = Avx2.Add(bucketAValues, bucketBValuesUpper);
+                            var higherIndices = Avx2.ConvertToVector256Int64(Avx2.ExtractVector128(fullIndices, 1)).AsUInt64();
+                            highSumValues = Avx2.ShiftRightLogical(highSumValues, 30);
+                            var maskedHighSumValues = Avx2.And(highSumValues, stageMask);
+                            higherIndices = Avx2.ShiftLeftLogical(higherIndices, 32);
+
+                            var storeHighValue = Avx2.Or(higherIndices, maskedHighSumValues);
+
+
+                            Avx2.Store(tempStage + currentIndex + 4, storeHighValue);
+                        }
+
                         currentIndex += index;
 
                         if (currentIndex >= Radix.Total)
@@ -920,7 +1118,8 @@ namespace DrillX.Solver
                             goto end;
 
 #else
-                        return Radix.Total;
+
+                            return Radix.Total;
 #endif
                         }
                     }
@@ -929,41 +1128,10 @@ namespace DrillX.Solver
 
         end:
 
-#if DEBUG
-            var stage1Isndices = new Span<uint>(stage1Indices, currentIndex);
-            int totalBad = 0;
-
-            HashSet<(uint, uint)> pairs = new HashSet<(uint, uint)>();
-
-            for (int i = 0; i < stage1Isndices.Length; i++)
-            {
-                var vv = stage1Isndices[i];
-
-                var a = vv & 0xFFFF;
-                var b = vv >> 16;
-
-                var valueA = values[a];
-                var valueB = values[b];
-
-                //if (((valueA + valueB) & 0x7FFFFFFF) != 0)
-                //{
-                //    Console.WriteLine(++totalBad);
-
-                //    continue;
-                //}
-
-                if (!pairs.Add((a, b)))
-                {
-
-                }
-            }
-
-#endif
-
             return currentIndex;
         }
 
-        private unsafe int SortPass3(ulong* values, byte* counts, ushort* tempCounts, ulong* tempStage, uint* stage1Indices, uint* stage2Indices, EquixSolution* solutions, int totalNum)
+        private unsafe int SortPass3(ulong* values, byte* counts, ushort* tempCounts, ulong* tempStage, uint* stage1Indices, EquixSolution* solutions, int totalNum)
         {
             Span<ushort> cc = new Span<ushort>(counts, Radix.Total / 2);
             cc.Fill(0);
@@ -975,10 +1143,10 @@ namespace DrillX.Solver
             for (int i = 0; i < loopCount; i += 4)
             {
                 // First element
-                ushort bucket0 = (ushort)(values[i + 0] >> 30 & 0x7FFF);
-                ushort bucket1 = (ushort)(values[i + 1] >> 30 & 0x7FFF);
-                ushort bucket2 = (ushort)(values[i + 2] >> 30 & 0x7FFF);
-                ushort bucket3 = (ushort)(values[i + 3] >> 30 & 0x7FFF);
+                ushort bucket0 = (ushort)(values[i + 0] >> 0 & 0x7FFF);
+                ushort bucket1 = (ushort)(values[i + 1] >> 0 & 0x7FFF);
+                ushort bucket2 = (ushort)(values[i + 2] >> 0 & 0x7FFF);
+                ushort bucket3 = (ushort)(values[i + 3] >> 0 & 0x7FFF);
 
                 ushort loc0 = Math.Min((byte)7, counts[bucket0]);
                 tempCounts[bucket0 * 8 + (loc0)] = (ushort)(i + 0);
@@ -999,7 +1167,7 @@ namespace DrillX.Solver
 
             for (int i = loopCount; i < totalNum; i++)
             {
-                ushort bucket0 = (ushort)(values[i + 0] >> 30 & 0x7FFF);
+                ushort bucket0 = (ushort)(values[i + 0] >> 15 & 0x7FFF);
                 ushort loc0 = Math.Min((byte)7, counts[bucket0]);
                 tempCounts[bucket0 * 8 + (loc0)] = (ushort)(i + 0);
                 counts[bucket0] = (byte)(loc0 + 1);
@@ -1007,16 +1175,22 @@ namespace DrillX.Solver
 
             var currentIndex = 0;
 
-            Vector256<ulong> mask = Vector256.Create((1ul << 60) - 1);
+            Vector256<ulong> mask = Vector256.Create((1ul << 30) - 1);
             int totalSolutions = 0;
 
-            for (int bucketIdx = 1; bucketIdx < Radix.Total / 4; bucketIdx++)
+            for (int bucketIdx = 0; bucketIdx < Radix.Total / 4; bucketIdx++)
             {
                 int inverse = -bucketIdx & 0x7FFF;
                 var bucketACount = counts[bucketIdx];
+
+                if (bucketACount == 0)
+                {
+                    continue;
+                }
+
                 var bucketBCount = counts[inverse];
 
-                if (bucketACount == 0 || bucketBCount == 0)
+                if (bucketBCount == 0)
                 {
                     continue;
                 }
@@ -1054,7 +1228,8 @@ namespace DrillX.Solver
                     {
                         var bucketAIndice = tempCounts[bucketAIndex * 8 + i];
 
-                        var bucketAValues = Vector256.Create((values[bucketAIndice]));
+                        var bucketAScalarValue = values[bucketAIndice];
+                        var bucketAValues = Vector256.Create(bucketAScalarValue);
                         var currentBucketAIndice = Vector256.Create((int)bucketAIndice);
 
                         var lowSumValues = Avx2.Add(bucketAValues, bucketBValuesLower);
@@ -1068,7 +1243,7 @@ namespace DrillX.Solver
                         {
                             var zeroIndex = BitOperations.TrailingZeroCount(lowCheck) / 8;
 
-                            SaveIndices(bucketAIndice, (ushort)bucketBIndices[zeroIndex]);
+                            SaveIndices((uint)(bucketAScalarValue >> 32), (uint)(bucketBValuesLower[zeroIndex] >> 32));
 
                             if (totalSolutions >= 8)
                             {
@@ -1088,7 +1263,7 @@ namespace DrillX.Solver
                             {
                                 var zeroIndex = BitOperations.TrailingZeroCount(highCheck) / 8;
 
-                                SaveIndices(bucketAIndice, (ushort)bucketBIndices[zeroIndex + 4]);
+                                SaveIndices((uint)(bucketAScalarValue >> 32), (uint)(bucketBValuesUpper[zeroIndex] >> 32));
 
                                 if (totalSolutions >= 8)
                                 {
@@ -1097,16 +1272,13 @@ namespace DrillX.Solver
                             }
                         }
                         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                        void SaveIndices(ushort stage3IndiceA, ushort stage3IndiceB)
+                        void SaveIndices(uint stage3IndiceA, uint stage3IndiceB)
                         {
-                            var stage2IndicePairA = stage2Indices[stage3IndiceA];
-                            var stage2IndicePairB = stage2Indices[stage3IndiceB];
+                            var stage2IndicePairA_0 = stage3IndiceA & 0xFFFF;
+                            var stage2IndicePairA_1 = stage3IndiceA >> 16;
 
-                            var stage2IndicePairA_0 = stage2IndicePairA & 0xFFFF;
-                            var stage2IndicePairA_1 = stage2IndicePairA >> 16;
-
-                            var stage2IndicePairB_0 = stage2IndicePairB & 0xFFFF;
-                            var stage2IndicePairB_1 = stage2IndicePairB >> 16;
+                            var stage2IndicePairB_0 = stage3IndiceB & 0xFFFF;
+                            var stage2IndicePairB_1 = stage3IndiceB >> 16;
 
                             var stage1IndicePairA = stage1Indices[stage2IndicePairA_0];
                             var stage1IndicePairB = stage1Indices[stage2IndicePairA_1];
@@ -1144,37 +1316,6 @@ namespace DrillX.Solver
             }
 
         end:
-
-#if DEBUG
-            var stage1Isndices = new Span<uint>(stage1Indices, currentIndex);
-            int totalBad = 0;
-
-            HashSet<(uint, uint)> pairs = new HashSet<(uint, uint)>();
-
-            for (int i = 0; i < stage1Isndices.Length; i++)
-            {
-                var vv = stage1Isndices[i];
-
-                var a = vv & 0xFFFF;
-                var b = vv >> 16;
-
-                var valueA = values[a];
-                var valueB = values[b];
-
-                //if (((valueA + valueB) & 0x7FFFFFFF) != 0)
-                //{
-                //    Console.WriteLine(++totalBad);
-
-                //    continue;
-                //}
-
-                if (!pairs.Add((a, b)))
-                {
-
-                }
-            }
-
-#endif
 
             return totalSolutions;
         }

@@ -26,6 +26,4 @@ public unsafe struct Radix
 
     public fixed uint Stage1Indices[Total]; //32bit Stage1
     public fixed uint Buffer1[8];
-    public fixed uint Stage2Indices[Total];
-    public fixed uint Buffer3[8];
 }
