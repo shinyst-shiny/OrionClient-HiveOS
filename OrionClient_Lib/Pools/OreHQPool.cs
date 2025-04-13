@@ -191,7 +191,7 @@ namespace OrionClientLib.Pools
             {
                 _client ??= new HttpClient
                 {
-                    BaseAddress = new Uri($"https://{WebsocketUrl.Host}"),
+                    BaseAddress = new Uri($"{(_poolSettings.IsHttps == false ? "http" : "https")}://{WebsocketUrl.Host}"),
                     Timeout = TimeSpan.FromSeconds(10)
                 };
             }
@@ -1142,6 +1142,9 @@ namespace OrionClientLib.Pools
 
             [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
             public string CustomDomain { get; set; }
+
+            [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+            public bool? IsHttps { get; set; }
 
             //This is how many of the returned nonces will be used for the CPU
             public double CPUNonceRatio { get; set; } = 0.33;

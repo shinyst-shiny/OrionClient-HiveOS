@@ -52,7 +52,7 @@ namespace OrionClientLib.Pools
                     
                     if(!String.IsNullOrEmpty(_poolSettings.CustomDomain))
                     {
-                        textPrompt.DefaultValue(_poolSettings.CustomDomain);
+                        textPrompt.DefaultValue($"{(_poolSettings.IsHttps == false ? "http" : "https")}://{_poolSettings.CustomDomain}");
                     }
 
                     textPrompt.Validate((str) =>
@@ -96,12 +96,14 @@ namespace OrionClientLib.Pools
                     }
 
                     _poolSettings.CustomDomain = customDomain.Host;
+                    _poolSettings.IsHttps = customDomain.Scheme == "https";
+
                     await _poolSettings.SaveAsync();
 
                     //Initialize client
                     _client = new HttpClient
                     {
-                        BaseAddress = new Uri($"https://{WebsocketUrl.Host}"),
+                        BaseAddress = new Uri($"{(_poolSettings.IsHttps == false ? "http" : "https")}://{WebsocketUrl.Host}"),
                         Timeout = TimeSpan.FromSeconds(5)
                     };
                 }
