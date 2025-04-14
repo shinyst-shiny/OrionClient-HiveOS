@@ -132,7 +132,7 @@ namespace OrionClient
 
             _pools = new List<IPool>
             {
-                //new Ec1ipseOrePool(),
+                new Ec1ipseOrePool(),
                 new ShinystCoalPool(),
                 new CustomOreHQPool()
             };
