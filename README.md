@@ -3,7 +3,7 @@
 Ore/Coal mining client with expandable pool and hashing implementation support.
 
 # Standalone versions (no dependencies required)
-- https://github.com/SL-x-TnT/OrionClient/releases
+- https://github.com/shinyst-shiny/OrionClient-HiveOS/releases
   
 # Build From Source
 
